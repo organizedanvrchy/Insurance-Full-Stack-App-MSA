@@ -1,0 +1,263 @@
+<section class="page">
+  <header class="page-head">
+    <h1>Checkout</h1>
+    <a class="btn-sm" [routerLink]="['/my-policies', enrollmentId, 'payments']">Back to schedule</a>
+  </header>
+
+  <p class="simulated" role="note">
+    <strong>Simulated payment.</strong> No real money moves and no card details leave your browser.
+    Use the test cards below, or any wallet.
+  </p>
+
+  @if (loading()) {
+  <p class="muted">Loading…</p>
+  } @else if (enrollment(); as e) {
+  @if (installment(); as p) {
+  @if (p.paidDate) {
+  <div class="notice" role="status">This installment was paid on {{ p.paidDate | date: 'mediumDate' }}.</div>
+  } @else if (!isNextDue()) {
+  <div class="notice" role="status">Please pay your earlier installments first.</div>
+  } @else {
+  <div class="checkout">
+    <!-- Order summary -->
+    <aside class="summary-card" aria-label="Order summary">
+      <h2>Order summary</h2>
+      <dl class="summary">
+        <dt>Policy</dt>
+        <dd>{{ e.policyName }}</dd>
+        <dt>Installment</dt>
+        <dd>{{ installmentNumber() }} of {{ schedule().length }}</dd>
+        <dt>Due</dt>
+        <dd>{{ p.dueDate | date: 'mediumDate' }}</dd>
+      </dl>
+      <div class="total">
+        <span>Total</span>
+        <strong>{{ p.amount | currency }}</strong>
+      </div>
+      <p class="muted secure">
+        Payment processor: {{ provider.displayName }}. We keep only your card's brand and last 4 digits, never the
+        full number or security code.
+      </p>
+    </aside>
+
+    <div class="pay-panel">
+      <!-- Payment method tabs -->
+      <div class="methods" role="tablist" aria-label="Payment method">
+        @for (m of methods; track m.type) {
+        <button type="button" role="tab" class="method" [class.active]="method() === m.type"
+          [attr.aria-selected]="method() === m.type" (click)="selectMethod(m.type)">
+          {{ m.label }}
+        </button>
+        }
+      </div>
+
+      @if (declined(); as d) {
+      <div class="alert" role="alert">
+        <strong>Payment declined.</strong> {{ d.message }}
+        <span class="ref">Reference {{ d.reference }}</span>
+      </div>
+      }
+      @if (error()) {
+      <div class="alert" role="alert">{{ error() }}</div>
+      }
+
+      @if (method() === 'Card') {
+      <form class="form" [formGroup]="form" (ngSubmit)="payByCard()" novalidate>
+        <!-- Saved cards -->
+        @if (savedCards().length > 0) {
+        <fieldset class="saved">
+          <legend>Your saved cards</legend>
+          @for (m of savedCards(); track m.paymentMethodId) {
+          <label class="saved-option">
+            <input type="radio" name="savedMethod" [checked]="savedMethodId() === m.paymentMethodId"
+              (change)="savedMethodId.set(m.paymentMethodId)" />
+            <span class="card-badge" [attr.data-brand]="m.cardBrand">{{ brandLabels[m.cardBrand ?? ''] ?? m.cardBrand }}</span>
+            <span class="nowrap">•••• {{ m.cardLast4 }}</span>
+            <span class="muted nowrap">exp. {{ m.expMonth }}/{{ (m.expYear ?? 0) % 100 }}</span>
+            <button type="button" class="link-btn" (click)="removeSavedMethod(m)"
+              [attr.aria-label]="'Remove card ending ' + m.cardLast4">Remove</button>
+          </label>
+          }
+          <label class="saved-option">
+            <input type="radio" name="savedMethod" [checked]="savedMethodId() === null" (change)="savedMethodId.set(null)" />
+            <span>Use a new card</span>
+          </label>
+        </fieldset>
+        }
+
+        @if (savedMethodId() === null) {
+        <label class="field">
+          Name on card
+          <input formControlName="name" autocomplete="cc-name" />
+          @if (f.name.touched && f.name.invalid) {
+          <small class="err">Enter the name shown on the card.</small>
+          }
+        </label>
+
+        <label class="field">
+          Card number
+          <span class="card-input">
+            <input formControlName="number" inputmode="numeric" autocomplete="cc-number" placeholder="1234 1234 1234 1234"
+              (input)="onNumberInput()" />
+            @if (brand(); as b) {
+            <span class="card-badge" [attr.data-brand]="b">{{ brandLabels[b] }}</span>
+            }
+          </span>
+          @if (f.number.touched && f.number.errors?.['brand']) {
+          <small class="err">We accept Visa, Mastercard, American Express and Discover.</small>
+          } @else if (f.number.touched && f.number.invalid) {
+          <small class="err">Enter a valid card number.</small>
+          }
+        </label>
+
+        <div class="row">
+          <label class="field">
+            Expiry (MM/YY)
+            <input formControlName="expiry" inputmode="numeric" autocomplete="cc-exp" placeholder="MM/YY"
+              (input)="onExpiryInput()" />
+            @if (f.expiry.touched && f.expiry.invalid) {
+            <small class="err">Enter a future month and year.</small>
+            }
+          </label>
+          <label class="field">
+            Security code
+            <input formControlName="cvc" inputmode="numeric" autocomplete="cc-csc"
+              [placeholder]="brand() === 'amex' ? '4 digits' : '3 digits'" maxlength="4" />
+            @if (f.cvc.touched && f.cvc.invalid) {
+            <small class="err">{{ brand() === 'amex' ? '4' : '3' }} digits, on the {{ brand() === 'amex' ? 'front' : 'back' }} of the card.</small>
+            }
+          </label>
+        </div>
+
+        <fieldset class="billing">
+          <legend>Billing address</legend>
+          @if (addressFromProfile()) {
+          <small class="muted">Filled in from your profile. Change it if this card is billed elsewhere.</small>
+          }
+          <label class="field">
+            Street address
+            <input formControlName="street" autocomplete="billing address-line1" />
+            @if (f.street.touched && f.street.invalid) {
+            <small class="err">Enter the street address.</small>
+            }
+          </label>
+          <label class="field">
+            Apartment, suite, unit (optional)
+            <input formControlName="unit" autocomplete="billing address-line2" />
+          </label>
+          <div class="row three">
+            <label class="field">
+              City
+              <input formControlName="city" autocomplete="billing address-level2" />
+              @if (f.city.touched && f.city.invalid) {
+              <small class="err">Enter the city.</small>
+              }
+            </label>
+            <label class="field">
+              State
+              <select formControlName="state" autocomplete="billing address-level1">
+                <option value="" disabled>Choose…</option>
+                @for (s of states; track s.code) {
+                <option [value]="s.code">{{ s.name }}</option>
+                }
+              </select>
+              @if (f.state.touched && f.state.invalid) {
+              <small class="err">Choose a state.</small>
+              }
+            </label>
+            <label class="field">
+              ZIP code
+              <input formControlName="postalCode" inputmode="numeric" autocomplete="billing postal-code" />
+              @if (f.postalCode.touched && f.postalCode.invalid) {
+              <small class="err">5 digits.</small>
+              }
+            </label>
+          </div>
+        </fieldset>
+
+        <label class="check">
+          <input type="checkbox" formControlName="saveCard" />
+          Save this card for future payments
+        </label>
+        }
+
+        <button class="btn pay" type="submit" [disabled]="processing() !== 'idle'">
+          @switch (processing()) {
+          @case ('card') { Checking card… }
+          @case ('charging') { Processing payment… }
+          @default { Pay {{ p.amount | currency }} }
+          }
+        </button>
+
+        <details class="test-cards">
+          <summary>Test cards (simulation)</summary>
+          <p class="muted">Any future expiry date and any security code work. Click a card to use it.</p>
+          <ul>
+            @for (c of testCards; track c.number) {
+            <li>
+              <button type="button" class="link-btn" (click)="useTestCard(c.number)">{{ c.number }}</button>
+              <span class="muted">{{ c.label }}</span>
+            </li>
+            }
+          </ul>
+        </details>
+      </form>
+      } @else {
+      <!-- Wallets: the customer approves in the wallet's own window -->
+      <div class="form wallet">
+        <p>
+          You'll confirm the payment of <strong>{{ p.amount | currency }}</strong> in a
+          {{ methodLabel(method()) }} window.
+        </p>
+        <button type="button" class="btn pay"
+          [disabled]="processing() !== 'idle'" (click)="openWallet($any(method()))">
+          @if (processing() === 'charging') { Processing payment… } @else { Continue with {{ methodLabel(method()) }} }
+        </button>
+      </div>
+      }
+    </div>
+  </div>
+
+  <!-- Simulated wallet window -->
+  @if (walletPrompt(); as w) {
+  <div class="overlay" role="dialog" aria-modal="true" [attr.aria-label]="methodLabel(w) + ' (simulated)'">
+    <div class="wallet-window">
+      <header>
+        <strong>{{ methodLabel(w) }}</strong>
+        <span class="muted">simulated</span>
+      </header>
+      @switch (w) {
+      @case ('PayPal') {
+      <p>Logged in as <strong>{{ profile()?.email }}</strong></p>
+      <p class="muted">Pay with your PayPal balance</p>
+      }
+      @case ('Venmo') {
+      <p>Paying from <strong>{{ walletHandle() }}</strong></p>
+      <p class="muted">Venmo balance</p>
+      }
+      @default {
+      <p>Card in your wallet</p>
+      <p class="muted">Confirm with Face ID, Touch ID or your device PIN</p>
+      }
+      }
+      <div class="wallet-amount">
+        <span>{{ merchant }}</span>
+        <strong>{{ p.amount | currency }}</strong>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn-sm" [disabled]="processing() !== 'idle'" (click)="walletPrompt.set(null)">Cancel</button>
+        <button type="button" class="btn" [disabled]="processing() !== 'idle'" (click)="approveWallet()">
+          {{ processing() === 'wallet' ? 'Approving…' : 'Pay ' + (p.amount | currency) }}
+        </button>
+      </div>
+    </div>
+  </div>
+  }
+  }
+  } @else {
+  <div class="alert" role="alert">This installment was not found on this policy.</div>
+  }
+  } @else if (error()) {
+  <div class="alert" role="alert">{{ error() }}</div>
+  }
+</section>

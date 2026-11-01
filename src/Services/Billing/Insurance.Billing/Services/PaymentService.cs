@@ -1,20 +1,27 @@
 using Insurance.Billing.DTOs;
-using Insurance.Billing.Exceptions;
+using Insurance.Billing.Enums;
 using Insurance.Billing.Models;
 using Insurance.Billing.Repositories;
 using Insurance.Enrollments.Contracts;
+using Insurance.Identity.Contracts;
 
 namespace Insurance.Billing.Services;
 
+// Reading schedules and the payment log. Paying is CheckoutService.
 public class PaymentService : IPaymentService
 {
     private readonly IPaymentRepository _payments;
+    private readonly ITransactionRepository _transactions;
     private readonly IEnrollmentLookup _enrollments;
+    private readonly IUserDirectory _users;
 
-    public PaymentService(IPaymentRepository payments, IEnrollmentLookup enrollments)
+    public PaymentService(IPaymentRepository payments, ITransactionRepository transactions, IEnrollmentLookup enrollments,
+        IUserDirectory users)
     {
         _payments = payments;
+        _transactions = transactions;
         _enrollments = enrollments;
+        _users = users;
     }
 
     public async Task<List<PaymentDto>?> GetScheduleAsync(int enrollmentId, int userId, bool isAdmin)
@@ -29,34 +36,57 @@ public class PaymentService : IPaymentService
         return payments.Where(p => IsStillDue(p, enrollment)).Select(MapToDto).ToList();
     }
 
-    // Ownership and the enrollment's status come from the Enrollments service (HTTP). "Already paid" and
-    // "pay in order" are enforced again inside usp_Payment_Pay, with the row locked, against double clicks.
-    public async Task<PaymentDto> PayAsync(int paymentId, int userId)
+    // The payment log. With an enrollment: that policy's attempts (owner or admin). Without one: a customer sees
+    // their own attempts, an admin sees everyone's, with names from the Identity service.
+    public async Task<List<TransactionDto>?> GetTransactionsAsync(int userId, bool isAdmin, int? enrollmentId, TransactionStatus? status)
     {
-        var payment = await _payments.GetByIdAsync(paymentId);
-        var enrollment = payment is null ? null : await _enrollments.GetAsync(payment.EnrollmentId);
+        if (enrollmentId is { } id)
+        {
+            var enrollment = await _enrollments.GetAsync(id);
+            if (enrollment is null || (enrollment.UserId != userId && !isAdmin))
+                return null;
+        }
 
-        // Same answer for "doesn't exist" and "not yours", so ids can't be probed.
-        if (payment is null || enrollment is null || enrollment.UserId != userId || !IsStillDue(payment, enrollment))
-            throw new PaymentNotFoundException(paymentId);
+        var list = await _transactions.SearchAsync(enrollmentId, isAdmin ? null : userId, status);
+        var dtos = list.Select(MapToDto).ToList();
+        if (isAdmin) await AddCustomerNamesAsync(dtos, list);
+        return dtos;
+    }
 
-        if (payment.PaidDate is not null)
-            throw new PaymentConflictException("This installment has already been paid.");
+    // A receipt. Same null for "doesn't exist" and "not yours".
+    public async Task<TransactionDto?> GetTransactionAsync(int transactionId, int userId, bool isAdmin)
+    {
+        var t = await _transactions.GetByIdAsync(transactionId);
+        if (t is null || (t.UserId != userId && !isAdmin))
+            return null;
 
-        // An Active policy past its end date reads as Expired; its last installments can still be paid.
-        if (enrollment.Status is not (EnrollmentStatus.Active or EnrollmentStatus.Expired))
-            throw new PaymentConflictException("Payments can only be made on an active enrollment.");
+        var dto = MapToDto(t);
+        if (isAdmin) await AddCustomerNamesAsync(new List<TransactionDto> { dto }, new List<PaymentTransaction> { t });
+        return dto;
+    }
 
-        return MapToDto(await _payments.PayAsync(paymentId));
+    private async Task AddCustomerNamesAsync(List<TransactionDto> dtos, List<PaymentTransaction> source)
+    {
+        var users = await _users.GetManyAsync(source.Select(t => t.UserId));
+        for (var i = 0; i < dtos.Count; i++)
+        {
+            var user = users.GetValueOrDefault(source[i].UserId);
+            dtos[i].UserId = source[i].UserId;
+            dtos[i].CustomerName = user?.FullName;
+            dtos[i].CustomerEmail = user?.Email;
+        }
     }
 
     // Cancelling removes the unpaid installments, but that happens when this service receives EnrollmentCancelled,
     // a moment after the cancellation itself. Until then they are treated as already gone, so the customer sees
     // the same thing either way. Paid installments stay as history.
-    private static bool IsStillDue(Payment p, EnrollmentInfo enrollment) =>
+    internal static bool IsStillDue(Payment p, EnrollmentInfo enrollment) =>
         p.PaidDate is not null || enrollment.Status != EnrollmentStatus.Cancelled;
 
-    private static PaymentDto MapToDto(Payment p) => new()
+    // What the customer quotes to support: TXN-000042.
+    internal static string Reference(int transactionId) => $"TXN-{transactionId:D6}";
+
+    internal static PaymentDto MapToDto(Payment p) => new()
     {
         PaymentId = p.PaymentId,
         EnrollmentId = p.EnrollmentId,
@@ -64,5 +94,26 @@ public class PaymentService : IPaymentService
         Amount = p.Amount,
         PaidDate = p.PaidDate,
         Status = p.Status
+    };
+
+    internal static TransactionDto MapToDto(PaymentTransaction t) => new()
+    {
+        TransactionId = t.TransactionId,
+        Reference = Reference(t.TransactionId),
+        PaymentId = t.PaymentId,
+        EnrollmentId = t.EnrollmentId,
+        Amount = t.Amount,
+        Currency = t.Currency,
+        MethodType = t.MethodType,
+        CardBrand = t.CardBrand,
+        CardLast4 = t.CardLast4,
+        Provider = t.Provider,
+        ProviderChargeId = t.ProviderChargeId,
+        Status = t.Status,
+        DeclineCode = t.DeclineCode,
+        Message = t.Message,
+        BillingName = t.BillingName,
+        CreatedAt = t.CreatedAt,
+        CompletedAt = t.CompletedAt
     };
 }

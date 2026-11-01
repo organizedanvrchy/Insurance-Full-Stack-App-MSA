@@ -9,7 +9,7 @@ This document explains how the Online Insurance Management System is built and w
 3. [Microservices](#3-microservices)
 4. [Request flows](#4-request-flows)
 5. [Data model](#5-data-model)
-6. [Domain workflows](#6-domain-workflows)
+6. [Domain workflows](#6-domain-workflows), including [simulated payments](#64-simulated-payments)
 7. [Rating engine](#7-rating-engine)
 8. [Security](#8-security)
 9. [Error handling and the error-number registry](#9-error-handling-and-the-error-number-registry)
@@ -377,6 +377,46 @@ The allowed moves live in **one** place, the `ClaimStatusTransitions` class. The
 | Alert **DueSoon** | Active, nothing overdue, next unpaid installment due within **7 days** | `EnrollmentService` (`DueSoonDays` constant) |
 | Alert **None** | Anything else, including cancelled policies | `EnrollmentService` |
 
+### 6.4 Simulated payments
+
+Paying a premium works like a real card-processor integration, with a simulated processor behind one interface. Nothing else would change if a real processor (Stripe, Braintree, Adyen) replaced it.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant B as Browser (checkout page)
+    participant P as Payment provider library<br/>(simulated in the browser)
+    participant BI as Billing service
+    participant G as IPaymentGateway<br/>(MockPaymentGateway)
+    B->>P: card number, expiry, security code
+    P->>P: validate (brand, Luhn checksum, expiry, code length)
+    P-->>B: one-time token tok_mock_card_visa_4242_1230
+    B->>BI: POST /api/payments/{id}/pay {token, idempotencyKey}
+    BI->>BI: same key seen before? replay the first result
+    BI->>BI: check owner, active policy, already paid, pay in order
+    BI->>BI: record the attempt (Processing)
+    BI->>G: charge(amount, token, idempotencyKey)
+    G-->>BI: approved (charge id) or declined (reason)
+    BI->>BI: approved: installment Paid + attempt Succeeded, one transaction
+    BI-->>B: outcome, message, receipt
+```
+
+| Concept | How it is done here | Why a real system needs it |
+|---|---|---|
+| **Tokenization** | The card number and security code stay in the browser. `PaymentProvider` (Angular) turns them into a token; the API's request has no field for a card number, and the gateway rejects anything that isn't a token. | Keeps card data out of your servers and logs, which keeps most of PCI DSS out of scope. |
+| **Gateway abstraction** | `IPaymentGateway` in Billing (describe, charge, save for reuse, remove, refund), chosen by `Payments:Provider`. The Angular `PaymentProvider` is the browser half. | Switching processors means one new class on each side, not a rewrite. |
+| **Idempotency keys** | The browser makes a new key per attempt. The same key again (a retry after a timeout) returns the first result; the database enforces one attempt per key per customer, and the processor also deduplicates. | A network retry must never charge a customer twice. |
+| **Transaction log** | `billing.PaymentTransactions`: every attempt with status (Processing, Succeeded, Declined, Failed, Refunded), decline code, processor reference, brand and last 4 digits. | Support, disputes, accounting, and the customer's own history. |
+| **Check before charging** | Ownership, policy status, already paid and pay-in-order are checked before the processor is called; settling re-checks them under a lock. | Never take money that can't be applied. |
+| **Automatic refund** | If an approved charge can't be applied (another payment won a race), it is refunded and logged as Refunded; the customer gets the usual `409`. | The rare case where checks pass but the update fails. |
+| **Saved methods** | "Save this card" asks the processor for a reusable reference (`pm_...`), stored with brand, last 4 and expiry. Removing it removes it at the processor too. | One-click payments without ever storing a card number. |
+| **Declines are outcomes** | A decline is HTTP `200` with `outcome: Declined` and a reason the customer can act on; the attempt is in the log. | The request was valid; the bank said no. |
+| **Safe logs** | Each attempt is logged with its reference, outcome, brand and last 4 digits, never the token. | Logs are read by many people and kept for a long time. |
+
+The simulated processor decides outcomes like a processor's test mode, from the card's last 4 digits: `4242 4242 4242 4242` is approved, `4000 0000 0000 0002` is declined, `…9995` has insufficient funds, `…0069` is expired, `…0127` has a wrong security code, `…0119` is a processing error. Wallets (PayPal, Apple Pay, Google Pay, Venmo) open a simulated approval window and are approved. Name and billing address are filled in from the address given at sign-up (`core/utils/address.ts`).
+
+**Not simulated yet:** webhooks (real processors confirm some payments later, asynchronously), 3-D Secure challenges, disputes, and a reconciliation job for the rare charge that succeeds while the service crashes before recording it (it would stay `Processing`).
+
 ## 7. Rating engine
 
 Pricing is rule-based. Each plan type has its own strategy, and all share one contract.
@@ -525,10 +565,10 @@ Some rules read another service's data, so they are checked in a service's C# co
 | 50001 | Identity: `accounts.usp_User_Register` | Email already registered | `DuplicateEmailException` | 409 |
 | 50002 | Enrollments: `enrollments.usp_Enrollment_CreatePending` | Active enrollment already exists for this plan | `DuplicateEnrollmentException` | 409 |
 | (50003) | Service: `QuoteService`, `EnrollmentService` | Plan does not exist or was retired (quote: 404, enrolling from an old quote: 400) | `NotFoundException` / `BusinessRuleException` | 404 / 400 |
-| 50004 | Billing: `billing.usp_Payment_Pay`, and `PaymentService` for "not yours" | Payment not found, or not yours (deliberately the same message) | `PaymentNotFoundException` | 404 |
-| 50005 | Billing: `billing.usp_Payment_Pay` (and checked first by `PaymentService`) | Installment already paid | `PaymentConflictException` | 409 |
-| (50006) | Service: Billing's `PaymentService` | Enrollment is not active | `PaymentConflictException` | 409 |
-| 50007 | Billing: `billing.usp_Payment_Pay` | An earlier installment is still unpaid | `PaymentConflictException` | 409 |
+| 50004 | Billing: `billing.usp_Payment_Settle`, and `CheckoutService` for "not yours" | Payment not found, or not yours (deliberately the same message) | `PaymentNotFoundException` | 404 |
+| 50005 | Billing: `billing.usp_Payment_Settle` (and checked first by `CheckoutService`) | Installment already paid | `PaymentConflictException` | 409 |
+| (50006) | Service: Billing's `CheckoutService` | Enrollment is not active | `PaymentConflictException` | 409 |
+| 50007 | Billing: `billing.usp_Payment_Settle` (and checked first by `CheckoutService`, before charging) | An earlier installment is still unpaid | `PaymentConflictException` | 409 |
 | (50008) | Service: Claims' `ClaimService` | Enrollment not found, or not yours | `NotFoundException` | 404 |
 | (50009) | Service: Claims' `ClaimService` | Enrollment is not active | `ClaimConflictException` | 409 |
 | (50010) | Service: Claims' `ClaimService` | Incident date outside coverage, or in the future | `BusinessRuleException` | 400 |
@@ -563,7 +603,7 @@ Each service creates its own database from the scripts in its `Database/` folder
 | `InsuranceCatalog` | `catalog.Policies` (20 plans seeded by `002_seed_plans.sql`) | `usp_Policy_Create`, `usp_Policy_GetAll`, `usp_Policy_GetById`, `usp_Policy_GetMany`, `usp_Policy_Update`, `usp_Policy_Deactivate` |
 | `InsuranceQuotes` | `quotes.Quotes` | `usp_Quote_Create`, `usp_Quote_GetById`, `usp_Quote_Reserve`, `usp_Quote_Release`, `usp_Quote_MarkUsed` |
 | `InsuranceEnrollments` | `enrollments.Enrollments`, `enrollments.vw_EnrollmentDetails` (derived `Expired`), `dbo.OutboxMessages` | `usp_Enrollment_CreatePending`, `usp_Enrollment_Complete`, `usp_Enrollment_GetByUser`, `usp_Enrollment_GetById`, `usp_Enrollment_GetMany`, `usp_Enrollment_CountActiveByUser`, `usp_Enrollment_Cancel` |
-| `InsuranceBilling` | `billing.PremiumPayments`, `billing.vw_PaymentDetails` (derived `Overdue`, with the grace period) | `usp_Premium_CreateSchedule` (idempotent), `usp_Premium_RemoveUnpaid`, `usp_Premium_GetSummaries`, `usp_Payment_GetByEnrollment`, `usp_Payment_GetById`, `usp_Payment_Pay` |
+| `InsuranceBilling` | `billing.PremiumPayments`, `billing.vw_PaymentDetails` (derived `Overdue`, with the grace period), `billing.PaymentTransactions` (the payment log), `billing.SavedPaymentMethods` | `usp_Premium_CreateSchedule` (idempotent), `usp_Premium_RemoveUnpaid`, `usp_Premium_GetSummaries`, `usp_Payment_GetByEnrollment`, `usp_Payment_GetById`, `usp_Payment_Settle`, `usp_Transaction_Begin` / `_Complete` / `_GetById` / `_GetByKey` / `_Search`, `usp_SavedMethod_GetByUser` / `_GetById` / `_Add` / `_Delete` |
 | `InsuranceClaims` | `claims.Claims`, `claims.ClaimNumberSeq`, `claims.vw_ClaimDetails` | `usp_Claim_Submit`, `usp_Claim_GetByUser`, `usp_Claim_GetAll`, `usp_Claim_GetById`, `usp_Claim_Review`, `usp_Claim_CountByUser` |
 
 ## 11. Consistency: transactions, the saga and the outbox
@@ -576,7 +616,7 @@ A transaction never spans two services. Each service keeps its own invariants wi
 | Enroll | Enrollments: saga (section 4.2); `usp_Enrollment_CreatePending` | `UPDLOCK, HOLDLOCK` on the duplicate check, which counts Pending enrollments too. The row and `EnrollmentRequested` commit together through the outbox |
 | Create the schedule | Billing: `usp_Premium_CreateSchedule` | Does nothing if the schedule exists, so a redelivered event is harmless |
 | Cancel | Enrollments: `usp_Enrollment_Cancel` | The `WHERE` clause enforces ownership and `Active` status; `EnrollmentCancelled` commits with it through the outbox. Billing removes the unpaid installments when it receives it |
-| Pay | Billing: `PaymentService`; `usp_Payment_Pay` | Ownership and status come from the Enrollments service. The proc takes `UPDLOCK` on the payment, so two "Pay" clicks cannot both succeed, and re-checks "already paid" and ordering |
+| Pay | Billing: `CheckoutService`; `usp_Transaction_Begin`, then `usp_Payment_Settle` | One attempt per idempotency key (`UPDLOCK, HOLDLOCK` on the key). Every rule is checked before charging; after an approved charge, `usp_Payment_Settle` marks the installment paid and the attempt Succeeded in one transaction with `UPDLOCK` on the installment, re-checking "already paid" and ordering. If that fails, the charge is refunded (section 6.4) |
 | File a claim | Claims: `ClaimService`; `usp_Claim_Submit` | Eligibility from other services. The proc takes `UPDLOCK, HOLDLOCK` on the enrollment's approved claims while checking remaining coverage |
 | Review a claim | Claims: `usp_Claim_Review` | **Optimistic concurrency** through `WHERE Status = @FromStatus`. On approval, locks the enrollment's claims and re-checks remaining coverage against the plan coverage the service passes in |
 | Set customer active | Identity: `usp_Customer_SetActive` | A single `UPDATE`, restricted to `Role = 'Customer'` so admins cannot be deactivated through this path |
@@ -677,7 +717,9 @@ Unit tests (xUnit) target the layers that contain decisions, using small in-memo
 | `AuthService` | Hash stored (never plain text), normalized email, forced customer role, inactive users refused |
 | `EnrollmentService` | Start-date window edges, alert thresholds, ownership, cancellation, the saga (completed, still pending, failed), releasing the quote when the plan or the duplicate check refuses, degradation when Billing is down |
 | `ClaimService` | Workflow enforcement, reason required to reject, the `@FromStatus` guard, visibility rules, claim eligibility, composing names and plans from other services |
-| `PaymentService` | Ownership, already paid, cancelled, pending and expired policies |
+| `CheckoutService` | Approved, declined and failed payments, idempotent retries, rules checked before charging, automatic refunds, saved cards |
+| `MockPaymentGateway` | Test-card outcomes, expired cards, idempotent charges, malformed tokens |
+| `PaymentService` | Who sees schedules, the payment log and receipts |
 | `InternalQuotesController` | A quote can only be reserved for the caller |
 | Service boundaries | No service references another's implementation, and no service's SQL touches another service's schema |
 
