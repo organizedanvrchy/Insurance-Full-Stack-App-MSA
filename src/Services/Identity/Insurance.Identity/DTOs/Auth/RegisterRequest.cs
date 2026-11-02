@@ -16,7 +16,7 @@ public class RegisterRequest
     [Required, StringLength(45), RegularExpression(NamePattern, ErrorMessage = NameMessage)]
     public string LastName { get; set; } = string.Empty;
 
-    [Required, EmailAddress, StringLength(256)]
+    [Required, EmailAddress, RegularExpression(EmailRules.Pattern, ErrorMessage = EmailRules.Message), StringLength(256)]
     public string Email { get; set; } = string.Empty;
 
     [Required, StringLength(PasswordPolicy.MaxLength, ErrorMessage = "Password can be at most 72 characters."), StrongPassword]

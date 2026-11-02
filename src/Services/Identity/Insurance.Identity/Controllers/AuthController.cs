@@ -67,7 +67,7 @@ public class AuthController : ControllerBase
     // ---------------- Changing the email and the password ----------------
 
     // Takes effect at once; the new address must then be verified, and the old one is told.
-    // 400 wrong password or same address, 409 address taken, 429 too many emails.
+    // 400 invalid or same address, 409 address taken, 429 too many emails.
     [Authorize]
     [HttpPost("change-email")]
     [ProducesResponseType(typeof(UserDto), StatusCodes.Status200OK)]

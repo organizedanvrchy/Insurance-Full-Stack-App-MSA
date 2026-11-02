@@ -57,7 +57,8 @@ public class EmailVerificationServiceTests
         Assert.False(response.User.EmailVerified);
         var sent = Assert.Single(_events.OfType<EmailVerificationRequested>());
         Assert.Equal("jane.doe@example.com", sent.Email);
-        Assert.Equal(_clock.Now.UtcDateTime.AddHours(24), sent.ExpiresAtUtc);
+        Assert.Equal(_clock.Now.UtcDateTime.AddMinutes(15), sent.ExpiresAtUtc);
+        Assert.Equal(15, sent.ValidForMinutes);
     }
 
     [Theory]
@@ -131,7 +132,7 @@ public class EmailVerificationServiceTests
     public async Task An_expired_link_is_refused()
     {
         var user = await RegisterAsync();
-        _clock.Advance(TimeSpan.FromHours(24) + TimeSpan.FromSeconds(1));
+        _clock.Advance(TimeSpan.FromMinutes(15) + TimeSpan.FromSeconds(1));
 
         await Assert.ThrowsAsync<InvalidVerificationLinkException>(() => _sut.VerifyAsync(LastToken));
         Assert.False(user.EmailVerified);
@@ -179,10 +180,10 @@ public class EmailVerificationServiceTests
     }
 
     [Fact]
-    public async Task At_most_six_links_are_sent_in_a_day()
+    public async Task At_most_ten_links_are_sent_in_a_day()
     {
         var user = await RegisterAsync();               // 1
-        for (var i = 0; i < 5; i++)                     // 2..6
+        for (var i = 0; i < 9; i++)                     // 2..10
         {
             _clock.Advance(TimeSpan.FromMinutes(2));
             await _sut.ResendAsync(user.UserId);
@@ -193,7 +194,7 @@ public class EmailVerificationServiceTests
 
         _clock.Advance(TimeSpan.FromHours(24));         // a day later it works again
         await _sut.ResendAsync(user.UserId);
-        Assert.Equal(7, _events.OfType<EmailVerificationRequested>().Count());
+        Assert.Equal(11, _events.OfType<EmailVerificationRequested>().Count());
     }
 
     [Fact]
@@ -217,16 +218,22 @@ public class EmailVerificationServiceTests
         return user;
     }
 
-    private static ChangeEmailRequest Change(string email, string password = Password) =>
-        new() { NewEmail = email, CurrentPassword = password };
+    private static ChangeEmailRequest Change(string email) => new() { NewEmail = email };
 
-    [Fact]
-    public async Task Changing_email_needs_the_current_password()
+    [Theory]
+    [InlineData("", false)]
+    [InlineData("not-an-email", false)]
+    [InlineData("a@b", false)]                 // no domain ending: undeliverable
+    [InlineData("new@example.com", true)]
+    public void Changing_email_only_needs_a_valid_address(string email, bool valid)
     {
-        var user = await VerifiedUserAsync();
+        var request = new ChangeEmailRequest { NewEmail = email };
+        var results = new List<System.ComponentModel.DataAnnotations.ValidationResult>();
 
-        await Assert.ThrowsAsync<BusinessRuleException>(() => _sut.ChangeEmailAsync(user.UserId, Change("new@example.com", "wrong")));
-        Assert.Equal("jane.doe@example.com", user.Email);
+        var ok = System.ComponentModel.DataAnnotations.Validator.TryValidateObject(
+            request, new System.ComponentModel.DataAnnotations.ValidationContext(request), results, validateAllProperties: true);
+
+        Assert.Equal(valid, ok);
     }
 
     [Fact]
@@ -298,7 +305,7 @@ public class EmailVerificationServiceTests
     public async Task Email_changes_count_toward_the_daily_email_limit()
     {
         var user = await RegisterAsync();                          // 1 link
-        for (var i = 1; i <= 5; i++)                                // 5 more
+        for (var i = 1; i <= 9; i++)                                // 9 more
             await _sut.ChangeEmailAsync(user.UserId, Change($"new{i}@example.com"));
 
         await Assert.ThrowsAsync<TooManyRequestsException>(() => _sut.ChangeEmailAsync(user.UserId, Change("seventh@example.com")));

@@ -78,9 +78,6 @@ public class EmailVerificationService : IEmailVerificationService
     {
         var user = await GetActiveUserAsync(userId);
 
-        if (!BCrypt.Net.BCrypt.Verify(request.CurrentPassword, user.PasswordHash))
-            throw new BusinessRuleException("Your current password is incorrect.");
-
         var newEmail = request.NewEmail.Trim().ToLowerInvariant();
         if (newEmail == user.Email)
             throw new BusinessRuleException("That is already your email address.");
@@ -151,6 +148,7 @@ public class EmailVerificationService : IEmailVerificationService
         var expires = _clock.GetUtcNow().UtcDateTime.Add(_options.LinkLifetime);
 
         await _tokens.CreateAsync(user.UserId, user.Email, VerificationTokens.Hash(token), expires);
-        await _events.PublishAsync(new EmailVerificationRequested(user.UserId, user.FullName, user.Email, token, expires, afterEmailChange));
+        await _events.PublishAsync(new EmailVerificationRequested(user.UserId, user.FullName, user.Email, token, expires,
+            afterEmailChange, (int)Math.Round(_options.LinkLifetime.TotalMinutes)));
     }
 }

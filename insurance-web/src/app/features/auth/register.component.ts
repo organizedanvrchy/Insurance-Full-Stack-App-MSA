@@ -13,6 +13,7 @@ import { US_STATES } from '../../core/models/us-states';
 import { AuthService } from '../../core/services/auth.service';
 import { getErrorMessage } from '../../core/utils/http-error';
 import {
+  EMAIL_PATTERN,
   NAME_PATTERN,
   PASSWORD_MAX,
   PASSWORD_RULES,
@@ -49,7 +50,7 @@ export class RegisterComponent {
     {
       firstName: ['', [Validators.required, Validators.maxLength(45), Validators.pattern(NAME_PATTERN)]],
       lastName: ['', [Validators.required, Validators.maxLength(45), Validators.pattern(NAME_PATTERN)]],
-      email: ['', [Validators.required, Validators.email]],
+      email: ['', [Validators.required, Validators.email, Validators.pattern(EMAIL_PATTERN)]],
       phone: ['', [usPhone]],
       street: ['', [Validators.required, Validators.maxLength(100)]],
       unit: ['', [Validators.maxLength(40)]],

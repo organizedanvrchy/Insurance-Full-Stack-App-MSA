@@ -26,6 +26,13 @@ public class EmailTemplates
     /// <summary>A UTC timestamp as a date in the business time zone (see BusinessTime).</summary>
     public static string Date(DateTime utc) => BusinessTime.ToLocal(utc).ToString("MMMM d, yyyy", Us);
 
+    /// <summary>"9:00 AM EST": the time of a UTC timestamp in the business time zone.</summary>
+    public static string TimeText(DateTime utc)
+    {
+        var local = BusinessTime.ToLocal(utc);
+        return $"{local.ToString("h:mm tt", Us)} {BusinessTime.Abbreviation(local)}";
+    }
+
     /// <summary>"November 3, 2026 at 9:00 AM EST": a UTC timestamp in the business time zone.</summary>
     public static string DateTimeText(DateTime utc)
     {
@@ -46,26 +53,35 @@ public class EmailTemplates
     public RenderedEmail VerifyEmail(EmailVerificationRequested e)
     {
         var link = _links.VerifyEmail(e.Token);
-        var expires = DateTimeText(e.ExpiresAtUtc);
+        const string Paused = "You won't be able to enroll in any policies or file claims until you verify your email.";
+
+        // "This link works once and expires in 15 minutes, at 2:18 PM EST."
+        var expires = e.ValidForMinutes > 0
+            ? $"This link works once and expires in {e.ValidForMinutes} minutes, at {TimeText(e.ExpiresAtUtc)}."
+            : $"This link works once and expires on {DateTimeText(e.ExpiresAtUtc)}.";
+        var expired = "If it expires, sign in and send yourself a new one from your profile.";
 
         if (e.AfterEmailChange)
         {
-            return Email("Confirm your new email address", "One click to confirm the address you just changed to.")
-                .Heading("Confirm your new email address")
+            // Worded as something that happened to the account, not something the reader did: it may not have been them.
+            return Email("Your RAINsurance email address has been changed", "Confirm this is you.")
+                .Heading("Your email address has been changed")
                 .Paragraph($"Hi {FirstName(e.FullName)},")
-                .Paragraph($"You changed your RAINsurance sign-in email to {e.Email}. Please confirm it's yours. Until you do, you can still sign in with it and look around, but enrolling in a policy and filing claims are paused.")
-                .Button("Confirm my email", link)
-                .Small($"This link works once and expires on {expires}. If it expires, sign in and send a new one from your profile.")
-                .Small($"Didn't change your email? Contact us right away at {_links.SupportEmail}.")
+                .Paragraph($"The sign-in email for your RAINsurance account has been changed to {e.Email}. Confirm this is you.")
+                .Paragraph(Paused)
+                .Button("Confirm this is me", link)
+                .Small($"{expires} {expired}")
+                .Small($"Didn't expect this email? Contact us right away at {_links.SupportEmail}.")
                 .Build();
         }
 
         return Email("Verify your email address", "Confirm your email to start enrolling in policies.")
             .Heading("Welcome to RAINsurance")
             .Paragraph($"Hi {FirstName(e.FullName)},")
-            .Paragraph("Thanks for creating an account. Please confirm that this is your email address. You can browse plans and get quotes right away; enrolling in a policy and filing claims unlock once your email is verified.")
+            .Paragraph("Thanks for creating an account. Please confirm that this is your email address.")
+            .Paragraph(Paused)
             .Button("Verify my email", link)
-            .Small($"This link works once and expires on {expires}. If it expires, sign in and send a new one from your profile.")
+            .Small($"{expires} {expired}")
             .Small("Didn't create an account? You can safely ignore this email.")
             .Build();
     }
@@ -181,7 +197,7 @@ public class EmailTemplates
                 ("Policy", policyName),
                 ("Amount paid", Money(e.Amount)),
                 ("Paid with", e.PaymentMethod),
-                ("Paid on", Date(e.PaidDate)),
+                ("Paid on", DateTimeText(e.PaidAtUtc)),
                 ("Installment", $"{e.InstallmentNumber} of {e.InstallmentCount}"),
                 ("Covers premium due", Date(e.DueDate)),
                 ("Next payment", e.NextDueDate is { } next ? $"{Money(e.NextDueAmount ?? 0)} on {Date(next)}" : "None, you're fully paid up"));
@@ -209,7 +225,8 @@ public class EmailTemplates
                 ("Policy", policyName),
                 ("Amount", amount),
                 ("Payment method", e.PaymentMethod),
-                ("Premium due", Date(e.DueDate)))
+                ("Premium due", Date(e.DueDate)),
+                ("Attempted", DateTimeText(e.AttemptedAtUtc)))
             .Paragraph(next)
             .Button("Try again", _links.PaymentSchedule(e.EnrollmentId))
             .Small("Didn't try to make a payment? Please contact us.")

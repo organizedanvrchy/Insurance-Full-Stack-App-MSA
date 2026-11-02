@@ -39,7 +39,8 @@ public class TemplateTests
         Assert.Equal("Verify your email address", email.Subject);
         Assert.Contains("http://app.test/verify-email?token=abc_DEF-123", email.Html);
         Assert.Contains("http://app.test/verify-email?token=abc_DEF-123", email.Text);
-        Assert.Contains("November 3, 2026", email.Text);
+        Assert.Contains("expires on November 3, 2026 at 4:00 AM EST", email.Text);
+        Assert.Contains("You won't be able to enroll in any policies or file claims until you verify your email.", email.Text);
         Assert.Contains("Hi Jane,", email.Text);
     }
 
@@ -91,7 +92,7 @@ public class TemplateTests
         Assert.Contains("http://app.test/receipts/7", email.Text);     // the in-app receipt
         Assert.Contains("$89.99", email.Text);
         Assert.Contains("3 of 12", email.Text);
-        Assert.Contains("November 2, 2026", email.Text);                   // paid on
+        Assert.Matches(@"Paid on:\s+November \d+, 2026 at \d{1,2}:\d\d (AM|PM) E[SD]T", email.Text);   // date AND time
         Assert.Contains("$89.99 on December 1, 2026", email.Text);         // next payment
     }
 
@@ -215,12 +216,33 @@ public class TemplateTests
     }
 
     [Fact]
-    public void A_changed_address_gets_its_own_verification_wording()
+    public void A_changed_address_is_told_it_has_been_changed_not_that_they_changed_it()
     {
         var email = Render("verify-after-change");
 
-        Assert.Equal("Confirm your new email address", email.Subject);
+        Assert.Equal("Your RAINsurance email address has been changed", email.Subject);
+        Assert.Contains("has been changed to j@example.com. Confirm this is you.", email.Text);
+        Assert.Contains("You won't be able to enroll in any policies or file claims until you verify your email.", email.Text);
+        Assert.DoesNotContain("You changed", email.Text);
         Assert.DoesNotContain("Thanks for creating an account", email.Text);
+    }
+
+    [Fact]
+    public void Verification_links_say_how_many_minutes_they_last()
+    {
+        var e = new EmailVerificationRequested(1, "Jane Doe", "j@example.com", "t",
+            new DateTime(2026, 11, 2, 19, 18, 0, DateTimeKind.Utc), ValidForMinutes: 15);
+
+        Assert.Contains("expires in 15 minutes, at 2:18 PM EST", _templates.VerifyEmail(e).Text);
+    }
+
+    [Fact]
+    public void A_declined_payment_says_when_it_was_attempted()
+    {
+        var e = new PaymentDeclined(7, "TXN-000007", 42, 10, 1, 4, 9m, new DateOnly(2026, 11, 2), "PayPal", "No.", false,
+            new DateTime(2026, 11, 2, 19, 3, 0, DateTimeKind.Utc));
+
+        Assert.Contains("November 2, 2026 at 2:03 PM EST", _templates.PaymentDeclined("Jane Doe", e, "Gold").Text);
     }
 
     [Fact]

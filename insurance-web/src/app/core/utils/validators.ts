@@ -28,6 +28,9 @@ export const strongPassword: ValidatorFn = (c: AbstractControl): ValidationError
 export const NAME_PATTERN = /^[\p{L}\p{M}][\p{L}\p{M}'’.\- ]*$/u;
 export const ZIP_PATTERN = /^\d{5}(-\d{4})?$/;
 
+/** name@domain.tld. Angular's Validators.email alone accepts "a@b". Same rule as the API's EmailRules. */
+export const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/;
+
 // ---- US phone (keep in sync with Api/Validation/PhoneNumbers.cs) ----
 
 /** Returns "(203) 555-0141" for a valid US number in a common format, or null. */

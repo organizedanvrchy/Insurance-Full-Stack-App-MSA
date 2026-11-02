@@ -3,14 +3,15 @@ using Insurance.Identity.Validation;
 
 namespace Insurance.Identity.DTOs;
 
-/// <summary>POST /api/auth/change-email. The current password proves it's the account's owner.</summary>
+/// <summary>
+/// POST /api/auth/change-email. Only the new address: being signed in is enough. The old address is told, and the new
+/// one must be verified before the customer can enroll or file claims.
+/// </summary>
 public class ChangeEmailRequest
 {
-    [Required, EmailAddress, StringLength(256)]
+    [Required(ErrorMessage = "Enter your new email address."), EmailAddress(ErrorMessage = EmailRules.Message),
+     RegularExpression(EmailRules.Pattern, ErrorMessage = EmailRules.Message), StringLength(256)]
     public string NewEmail { get; set; } = string.Empty;
-
-    [Required]
-    public string CurrentPassword { get; set; } = string.Empty;
 }
 
 /// <summary>POST /api/auth/change-password. The new password follows the same rules as at sign-up.</summary>

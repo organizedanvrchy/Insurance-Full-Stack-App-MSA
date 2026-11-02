@@ -6,7 +6,6 @@ export interface VerifyEmailResponse {
 
 export interface ChangeEmailRequest {
   newEmail: string;
-  currentPassword: string;
 }
 
 export interface ChangePasswordRequest {

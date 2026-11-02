@@ -11,7 +11,8 @@ public record CustomerRegistered(int UserId, bool PaymentReminders);
 
 /// <summary>
 /// Send a verification link to Email. Token goes in the link; only its hash is stored.
-/// AfterEmailChange: the customer just changed to this address (rather than signing up with it).
+/// AfterEmailChange: the account was just changed to this address (rather than signing up with it).
+/// ValidForMinutes: how long the link works, for the email's wording.
 /// </summary>
 public record EmailVerificationRequested(
     int UserId,
@@ -19,7 +20,8 @@ public record EmailVerificationRequested(
     string Email,
     string Token,
     DateTime ExpiresAtUtc,
-    bool AfterEmailChange = false);
+    bool AfterEmailChange = false,
+    int ValidForMinutes = 0);
 
 /// <summary>The sign-in email was changed. OldEmail is told, in case it wasn't the account's owner.</summary>
 public record EmailChanged(int UserId, string FullName, string OldEmail, string NewEmail, DateTime ChangedAtUtc);

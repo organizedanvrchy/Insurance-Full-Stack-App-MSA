@@ -15,7 +15,7 @@
           }
         </div>
       </div>
-      @if (!changeOpen()) {
+      @if (step() === 'closed') {
         <button type="button" class="btn-sm" (click)="openChange()">Change email</button>
       }
     </div>
@@ -36,12 +36,13 @@
       <div class="alert" role="alert">{{ e }}</div>
     }
 
-    <!-- ============ Change email ============ -->
-    @if (changeOpen()) {
-      <form class="change" [formGroup]="changeForm" (ngSubmit)="submitChange()" novalidate>
+    <!-- ============ Change email: the new address, then "Are you sure?" ============ -->
+    @if (step() === 'edit') {
+      <form class="change" [formGroup]="changeForm" (ngSubmit)="review()" novalidate>
         <p class="muted">
-          You'll sign in with the new address straight away. We'll send it a verification link (enrolling and
-          filing claims pause until you click it), and let your current address know about the change.
+          You'll sign in with the new address straight away. We'll send it a verification link, and you won't be
+          able to enroll in policies or file claims until you click it. Your current address will be told about the
+          change.
         </p>
 
         @if (changeError(); as e) {
@@ -51,26 +52,30 @@
         <label class="field">
           New email address
           <input type="email" formControlName="newEmail" autocomplete="email" />
-          @if (c.newEmail.touched && c.newEmail.invalid) {
-            <small class="err">Enter a valid email address.</small>
-          }
-        </label>
-
-        <label class="field">
-          Current password
-          <input type="password" formControlName="currentPassword" autocomplete="current-password" />
-          @if (c.currentPassword.touched && c.currentPassword.invalid) {
-            <small class="err">Enter your current password to confirm it's you.</small>
+          @if (newEmail.touched && newEmail.invalid) {
+            <small class="err">Enter a valid email address, like name&#64;example.com.</small>
           }
         </label>
 
         <div class="form-actions">
           <button type="button" class="btn-sm" (click)="closeChange()">Cancel</button>
-          <button type="submit" class="btn-sm primary" [disabled]="changing()">
-            {{ changing() ? 'Changing…' : 'Change email' }}
-          </button>
+          <button type="submit" class="btn-sm primary">Change email</button>
         </div>
       </form>
+    } @else if (step() === 'confirm') {
+      <div class="change" role="alertdialog" aria-labelledby="confirm-title" aria-describedby="confirm-text">
+        <p id="confirm-title"><strong>Are you sure?</strong></p>
+        <p id="confirm-text">
+          Change your email from <strong>{{ u.email }}</strong> to <strong>{{ newEmail.value.trim() }}</strong>?
+          You'll need to verify the new address before you can enroll in policies or file claims.
+        </p>
+        <div class="form-actions">
+          <button type="button" class="btn-sm" [disabled]="changing()" (click)="step.set('edit')">Go back</button>
+          <button type="button" class="btn-sm primary" [disabled]="changing()" (click)="confirmChange()">
+            {{ changing() ? 'Changing…' : 'Yes, change my email' }}
+          </button>
+        </div>
+      </div>
     }
 
     <!-- ============ Preferences (customers) ============ -->
@@ -102,26 +107,6 @@
           Always sent: payment receipts, declined-payment notices, policy confirmations, claim updates
           and your verification email.
         </p>
-      </div>
-
-      <!-- ============ History ============ -->
-      <div class="history">
-        <h3>Recent emails</h3>
-        @if (!historyLoaded()) {
-          <p class="muted">Loading…</p>
-        } @else {
-          <ul>
-            @for (e of history(); track e.emailId) {
-              <li>
-                <span class="badge info">{{ kindLabel(e.kind) }}</span>
-                <span class="subject">{{ e.subject }}</span>
-                <time class="muted" [attr.datetime]="e.sentAt">{{ e.sentAt | date: 'mediumDate' }}</time>
-              </li>
-            } @empty {
-              <li class="muted">No emails yet.</li>
-            }
-          </ul>
-        }
       </div>
     }
   }

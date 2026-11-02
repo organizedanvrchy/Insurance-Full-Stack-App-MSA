@@ -58,7 +58,7 @@ The backend is a set of **microservices**: seven ASP.NET Core services, each wit
 
 ### Customers
 - Register, sign in and sign out. Passwords are hashed with BCrypt and sessions use JWTs.
-- **Change their email or password** from the profile page, confirming with the current password. A new email works at once but has to be verified, and the old address gets a "was this you?" email; a password change is announced by email too.
+- **Change their email or password** from the profile page. A new email only needs to be a valid address and an "Are you sure?" confirmation; it works at once but has to be verified, and the old address gets a "was this you?" email. Changing the password needs the current one and the new one twice; it's announced by email too.
 - **Verify their email address** from a link sent at sign-up. Until then they can browse and get quotes, but not enroll or file claims.
 - **Choose their emails:** a "Email me payment reminders" box on the sign-up form, changeable any time on the profile page.
 - Browse the plan catalog and filter by type.
@@ -70,7 +70,7 @@ The backend is a set of **microservices**: seven ASP.NET Core services, each wit
 - **Payment alerts:** a "payment due soon" or "payment overdue" badge on each policy.
 - **File claims** with incident date, amount and description. Eligibility is validated against the policy.
 - Track claims through the review workflow and read the reviewer's notes.
-- **Email notifications:** a receipt for every payment and a notice when one is declined; reminders 3 days before a premium is due, on the due date, when it becomes overdue, and 5 and 10 days after that; claim received and every claim status change; policy activated or cancelled. Payment reminders are opt-in/out at sign-up and on the profile page, which also lists recent emails.
+- **Email notifications:** a receipt for every payment and a notice when one is declined; reminders 3 days before a premium is due, on the due date, when it becomes overdue, and 5 and 10 days after that; claim received and every claim status change; policy activated or cancelled. Payment reminders are opt-in/out at sign-up and on the profile page.
 
 ### Administrators
 - Create, edit and deactivate plans. Deactivated plans disappear for customers but remain on existing policies.
@@ -164,7 +164,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the enrollment saga, the ou
 | Enrollment | Start date from yesterday (time-zone slack) to 90 days ahead. One active enrollment per plan per customer. The premium is copied from the quote, so later plan price changes never alter existing policies. |
 | Payments | Installments must be paid **in order**. An unpaid installment becomes **Overdue** more than **5 days** past its due date. A payment alert shows when the next due date is within **7 days**. Every successful payment is emailed as a receipt, and every declined or failed one as a notice. |
 | Reminders | Emailed 3 days before the due date, on the due date, the day the installment turns Overdue, then 5 and 10 days after that. Each one at most once per installment. Customers choose at sign-up (on by default) and can change it on their profile; receipts, declines, claim and account emails always go out. |
-| Email verification | New accounts must confirm their email before **enrolling** or **filing a claim** (`403` until then). Links are single-use, expire after 24 hours, and only their hash is stored. Resending is limited to one per minute and six a day. |
+| Email verification | New accounts must confirm their email before **enrolling** or **filing a claim** (`403` until then). Links are single-use, expire after **15 minutes**, and only their hash is stored. Resending is limited to one per minute and ten a day. |
 | Claims | Active policy only. The incident must fall inside the coverage period and not be in the future. No overdue premiums. The amount cannot exceed the remaining coverage (policy coverage minus approved and paid claims). |
 | Claim workflow | Submitted, Under review, then Approved or Rejected, then (approved only) Paid. A rejection needs a reason. Concurrent edits are detected. |
 | Accounts | Deactivated accounts cannot sign in and existing tokens stop working. Admin accounts cannot be deactivated from the UI. |
@@ -273,7 +273,7 @@ Every setting can also be given as an environment variable (`:` becomes `__`), w
 | `BusinessTimeZone` | Every service | The insurer's time zone (IANA id, default `America/New_York`, i.e. EST/EDT): what "today" means for due dates, overdue premiums, coverage and claims, and the zone emails show times in |
 | `Email:SkipDomains` | Notifications | Recipient domains never emailed (e.g. `demo.example` against a real mail server) |
 | `Reminders:Enabled`, `Interval` | Billing | The payment reminder job (default on, every hour) |
-| `EmailVerification:LinkLifetime`, `ResendCooldown`, `MaxEmailsPerDay` | Identity | Defaults 24 hours, 1 minute, 6 |
+| `EmailVerification:LinkLifetime`, `ResendCooldown`, `MaxEmailsPerDay` | Identity | Defaults 15 minutes, 1 minute, 10 |
 | `Services:<Name>` | Callers of another service | Base address of that service's internal API, for example `Services:Catalog` |
 | `ReverseProxy:Clusters:<name>:Destinations:d1:Address` | Gateway | Where each service runs |
 | `Cors:AllowedOrigins` | Gateway | Frontend origins allowed to call the API |
@@ -293,7 +293,7 @@ Every endpoint is reached through the gateway at `/api`. Each service documents 
 | | `GET /api/auth/me` | Signed in |
 | | `POST /api/auth/verify-email` | Public (the token from the emailed link) |
 | | `POST /api/auth/resend-verification` | Signed in |
-| | `POST /api/auth/change-email` | Signed in (`newEmail`, `currentPassword`; the new address must then be verified) |
+| | `POST /api/auth/change-email` | Signed in (`newEmail`; the new address must then be verified) |
 | | `POST /api/auth/change-password` | Signed in (`currentPassword`, `newPassword`, `confirmNewPassword`) |
 | **Policies** (Catalog) | `GET /api/policies` | Signed in (`?includeInactive=true` for admins) |
 | | `GET /api/policies/{id}` | Signed in |
@@ -316,7 +316,7 @@ Every endpoint is reached through the gateway at `/api`. Each service documents 
 | | `GET /api/claims/{id}` | Owner or admin |
 | | `PUT /api/claims/{id}/review` | Admin |
 | **Notifications** (Notifications) | `GET /api/notifications/preferences`, `PUT /api/notifications/preferences` | Customer |
-| | `GET /api/notifications/history?take=` | Customer (own emails) |
+| | `GET /api/notifications/history?take=` | Customer (own emails; not shown in the app, kept for future admin screens) |
 | **Customers** (gateway BFF) | `GET /api/admin/customers?search=&isActive=` | Admin |
 | | `PUT /api/admin/customers/{id}/active` | Admin |
 
