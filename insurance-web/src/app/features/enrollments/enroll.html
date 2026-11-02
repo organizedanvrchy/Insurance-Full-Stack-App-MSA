@@ -67,10 +67,16 @@
 
     <div class="form-actions">
       <button class="btn-sm" type="button" (click)="editAnswers()">Change my answers</button>
-      <button class="btn" type="button" [disabled]="saving()" (click)="enroll(qt)">
+      <button class="btn" type="button" [disabled]="saving() || auth.needsEmailVerification()" (click)="enroll(qt)">
         {{ saving() ? 'Enrolling…' : 'Enroll now' }}
       </button>
     </div>
+    @if (auth.needsEmailVerification()) {
+    <p class="muted" role="note">
+      Verify your email address to enroll. Your quote stays valid until
+      {{ qt.expiresAt | date: 'mediumDate' }}, so you can come back to it.
+    </p>
+    }
   </div>
   } @else {
   <!-- STAGE 1: the questionnaire (built from the API's question list) -->

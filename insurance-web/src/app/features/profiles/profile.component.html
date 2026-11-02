@@ -27,7 +27,12 @@
       <dl class="details">
         <div>
           <dt>Email</dt>
-          <dd>{{ p.email }}</dd>
+          <dd>
+            {{ auth.user()?.email ?? p.email }}
+            @if (auth.user()?.emailVerified === false) {
+            <span class="badge amber">Not verified</span>
+            }
+          </dd>
         </div>
         <div>
           <dt>Phone</dt>
@@ -158,4 +163,7 @@
   </section>
   }
   }
+
+  <!-- ============ Email settings (always shown, so /profile#email-settings links work while data loads) ============ -->
+  <app-email-settings />
 </section>

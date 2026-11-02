@@ -29,6 +29,15 @@ export class AuthService {
     return user !== null && user.role === 'Customer' && user.emailVerified === false;
   });
 
+  constructor() {
+    // Keep tabs in step: verifying in the tab the email link opened updates the banner in every other tab.
+    window.addEventListener('storage', (e) => {
+      if (e.key !== USER_KEY) return;
+      if (e.newValue === null) this._user.set(null);
+      else this._user.set(JSON.parse(e.newValue) as User);
+    });
+  }
+
   get token(): string | null {
     return localStorage.getItem(TOKEN_KEY);
   }

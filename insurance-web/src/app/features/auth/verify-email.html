@@ -1,0 +1,44 @@
+<main class="auth-page">
+  <app-theme-toggle class="theme-corner" />
+
+  <div class="card" aria-live="polite">
+    <app-brand-logo />
+
+    @switch (state()) {
+      @case ('verifying') {
+        <h1>Verifying your email…</h1>
+        <p class="muted">This only takes a moment.</p>
+      }
+      @case ('verified') {
+        <h1>Email verified</h1>
+        <p>
+          Thanks! <strong>{{ email() }}</strong> is confirmed. You can now enroll in policies and file
+          claims.
+        </p>
+      }
+      @case ('changed') {
+        <h1>Email address updated</h1>
+        <p>
+          Your account now uses <strong>{{ email() }}</strong>. Use it the next time you sign in.
+        </p>
+      }
+      @case ('failed') {
+        <h1>We couldn't verify your email</h1>
+        <div class="alert" role="alert">{{ error() }}</div>
+        <p class="muted">
+          Links work once and expire after 24 hours. Sign in and send yourself a new one from your
+          profile.
+        </p>
+      }
+    }
+
+    @if (state() !== 'verifying') {
+      @if (auth.isLoggedIn()) {
+        <a class="btn" routerLink="/dashboard">Go to dashboard</a>
+        <a class="alt" routerLink="/profile" fragment="email-settings">Email settings</a>
+      } @else {
+        <a class="btn" routerLink="/login">Sign in</a>
+      }
+    }
+  </div>
+</main>

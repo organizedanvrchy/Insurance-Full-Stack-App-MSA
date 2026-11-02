@@ -58,6 +58,11 @@
             <span class="badge" [class.off]="!c.isActive">
               {{ c.isActive ? 'Active' : 'Inactive' }}
             </span>
+            @if (!c.emailVerified) {
+            <span class="badge amber" title="Hasn't confirmed their email address yet: can't enroll or file claims">
+              Email not verified
+            </span>
+            }
           </td>
           <td class="actions">
             <button type="button" class="btn-sm" [class.danger]="c.isActive" [disabled]="busyId() === c.userId"

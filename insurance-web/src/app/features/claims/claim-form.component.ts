@@ -2,6 +2,7 @@ import { CurrencyPipe, DatePipe } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { AuthService } from '../../core/services/auth.service';
 import { ClaimService } from '../../core/services/claim.service';
 import { EnrollmentService } from '../../core/services/enrollment.service';
 import { getErrorMessage } from '../../core/utils/http-error';
@@ -18,6 +19,7 @@ export class ClaimFormComponent {
   private router = inject(Router);
   private enrollmentsApi = inject(EnrollmentService);
   private claimsApi = inject(ClaimService);
+  auth = inject(AuthService);
 
   private readonly enrollmentId = Number(this.route.snapshot.paramMap.get('id'));
   private readonly today = new Date().toLocaleDateString('en-CA');   // local YYYY-MM-DD

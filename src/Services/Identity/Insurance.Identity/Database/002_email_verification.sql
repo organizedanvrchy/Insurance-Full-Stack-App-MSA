@@ -123,14 +123,15 @@ BEGIN
 END
 GO
 
-/* For the resend limit: when the last link was sent, and how many in the last 24 hours. */
+/* For the resend limits: when the newest link that is still waiting to be used was sent (the cooldown only
+   applies while one is outstanding), and how many links were sent in the last 24 hours (the daily cap). */
 CREATE OR ALTER PROCEDURE accounts.usp_EmailToken_GetRecent
     @UserId INT
 AS
 BEGIN
     SET NOCOUNT ON;
-    SELECT MAX(CreatedAt) AS LastCreatedAt,
-           COUNT(*)       AS CountLastDay
+    SELECT MAX(CASE WHEN UsedAt IS NULL THEN CreatedAt END) AS LastCreatedAt,
+           COUNT(*)                                         AS CountLastDay
     FROM accounts.EmailVerificationTokens
     WHERE UserId = @UserId AND CreatedAt > DATEADD(HOUR, -24, SYSUTCDATETIME());
 END

@@ -168,6 +168,16 @@ public class EmailVerificationServiceTests
     }
 
     [Fact]
+    public async Task Asking_for_a_change_link_twice_in_a_row_is_rate_limited()
+    {
+        var user = await VerifiedUserAsync();
+        await _sut.RequestEmailChangeAsync(user.UserId, Change("new@example.com"));
+
+        await Assert.ThrowsAsync<TooManyRequestsException>(() =>
+            _sut.RequestEmailChangeAsync(user.UserId, Change("other@example.com")));
+    }
+
+    [Fact]
     public async Task At_most_six_links_are_sent_in_a_day()
     {
         var user = await RegisterAsync();               // 1
@@ -191,8 +201,17 @@ public class EmailVerificationServiceTests
     {
         var user = await RegisterAsync();
         await _sut.VerifyAsync(LastToken);
-        _clock.Advance(TimeSpan.FromMinutes(5));
         return user;
+    }
+
+    [Fact]
+    public async Task Changing_email_right_after_verifying_is_not_held_back_by_the_cooldown()
+    {
+        var user = await VerifiedUserAsync();          // the registration link was sent seconds ago, but it's used
+
+        await _sut.RequestEmailChangeAsync(user.UserId, Change("new@example.com"));
+
+        Assert.Equal("new@example.com", user.PendingEmail);
     }
 
     private static ChangeEmailRequest Change(string email, string password = Password) =>
@@ -286,7 +305,7 @@ public class EmailVerificationServiceTests
     {
         var user = await VerifiedUserAsync();
         await _sut.RequestEmailChangeAsync(user.UserId, Change("new@example.com"));
-        _clock.Advance(TimeSpan.FromMinutes(2));
+        _clock.Advance(TimeSpan.FromMinutes(2));     // the new link is still waiting, so the cooldown applies
 
         await _sut.ResendAsync(user.UserId);
 

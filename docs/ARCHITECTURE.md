@@ -64,35 +64,39 @@ flowchart TD
         EN["Enrollments<br/>policies, saga"]
         BI["Billing<br/>premium payments"]
         CL["Claims<br/>claims workflow"]
+        NO["Notifications<br/>emails, preferences"]
     end
     GW --> Services
     Services <--> BUS[["Event bus: RabbitMQ (MassTransit)"]]
+    NO --> SMTP[["SMTP server (Mailpit in development)"]]
 ```
 
 ### 3.1 Responsibilities and data
 
 | Service | Database | Owns | Public routes (through the gateway) |
 |---|---|---|---|
-| **Identity** | `InsuranceIdentity` | Users, password hashes, JWT issuing | `/api/auth/*` |
+| **Identity** | `InsuranceIdentity` | Users, password hashes, JWT issuing, email verification links (hashed) | `/api/auth/*` |
 | **Catalog** | `InsuranceCatalog` | Plans and base rates | `/api/policies/*` |
 | **Quotes** | `InsuranceQuotes` | Rating engine, quotes and their reservations | `/api/quotes/*` |
 | **Enrollments** | `InsuranceEnrollments` | Policies held by customers, the enrollment saga, the outbox | `/api/enrollments/*` |
-| **Billing** | `InsuranceBilling` | Premium schedules and payments | `/api/enrollments/{id}/payments`, `/api/payments/*` |
-| **Claims** | `InsuranceClaims` | Claims and the review workflow | `/api/claims/*` |
+| **Billing** | `InsuranceBilling` | Premium schedules and payments, which payment reminders were sent, the outbox | `/api/enrollments/{id}/payments`, `/api/payments/*` |
+| **Claims** | `InsuranceClaims` | Claims and the review workflow, the outbox | `/api/claims/*` |
+| **Notifications** | `InsuranceNotifications` | Every email sent (for exactly-once sending and history), customers' email preferences | `/api/notifications/*` |
 | **Gateway + BFF** | none | Routing, the active-account check, composition | `/api/admin/customers` (composed) |
 
 ### 3.2 How services talk
 
-**Synchronous queries (HTTP).** When a service needs another's data to answer a request, it calls that service's **internal API** (`/internal/*`) through a typed client shipped in the owner's `*.Contracts` project. The caller's JWT is forwarded, so the called service applies its own authorization to the same user. The gateway never routes `/internal`, so these endpoints are reachable only inside the network. A `400`/`404`/`409` from the called service comes back as the same typed exception, so the original message reaches the customer unchanged.
+**Synchronous queries (HTTP).** When a service needs another's data to answer a request, it calls that service's **internal API** (`/internal/*`) through a typed client shipped in the owner's `*.Contracts` project. The caller's JWT is forwarded, so the called service applies its own authorization to the same user. Message consumers and background jobs have no caller: they send a short-lived **service token** instead (signed with the same key, role `Service`, no user id, so it passes `[Authorize]` on internal endpoints but can't act as a customer or admin, and the gateway rejects it). An anonymous request never borrows the service token. The gateway never routes `/internal`, so these endpoints are reachable only inside the network. A `400`/`403`/`404`/`409`/`429` from the called service comes back as the same typed exception, so the original message reaches the customer unchanged.
 
 | Caller | Asks | For |
 |---|---|---|
 | Gateway | Identity | Is this account still active, with the same role? (every request) |
 | Gateway (BFF) | Identity, Enrollments, Claims | The admin customer list with policy and claim counts |
 | Quotes | Catalog | The plan's base rate and type, when pricing |
-| Enrollments | Quotes, Catalog, Billing | Reserving the quote; the plan's term and status; payment progress on policy cards |
-| Billing | Enrollments | Who owns an enrollment and whether it is active, when paying |
-| Claims | Enrollments, Billing, Catalog, Identity | Eligibility (owner, status, dates, overdue premiums, coverage); names on claim screens |
+| Enrollments | Identity, Quotes, Catalog, Billing | Is the customer's email verified; reserving the quote; the plan's term and status; payment progress on policy cards |
+| Billing | Enrollments | Who owns an enrollment and whether it is active, when paying and when sending reminders (service token) |
+| Claims | Enrollments, Billing, Catalog, Identity | Eligibility (verified email, owner, status, dates, overdue premiums, coverage); names on claim screens |
+| Notifications | Identity, Enrollments, Catalog | The recipient's name, address and status; plan names and policy dates for the email (service token) |
 
 **Asynchronous events (RabbitMQ through MassTransit).** When something that happened in one service requires another to change its own data, the first publishes an event, and the second reacts in its own transaction. Each subscribing service has its own queue, failed deliveries are retried (100 ms to 15 s), and every consumer is idempotent because delivery is at least once.
 
@@ -101,9 +105,29 @@ flowchart TD
 | `EnrollmentRequested` | Enrollments (outbox) | Billing | Creates the premium schedule, then publishes `PremiumScheduleCreated` |
 | `PremiumScheduleCreated` | Billing | Enrollments | Saga: Pending to Active, then publishes `EnrollmentActivated` |
 | `Fault<EnrollmentRequested>` | MassTransit, after Billing's last retry | Enrollments | Saga: Pending to Failed, then publishes `EnrollmentFailed` |
-| `EnrollmentActivated` | Enrollments | Quotes | The reserved quote becomes used for good |
+| `EnrollmentActivated` | Enrollments | Quotes, Notifications | The reserved quote becomes used for good; the customer gets a "your policy is active" email |
 | `EnrollmentFailed` | Enrollments | Quotes, Billing | Compensation: the quote is released, any schedule removed |
-| `EnrollmentCancelled` | Enrollments (outbox) | Billing | Unpaid installments are removed; paid ones stay as history |
+| `EnrollmentCancelled` | Enrollments (outbox) | Billing, Notifications | Unpaid installments are removed; paid ones stay as history. The customer gets a confirmation email |
+| `EmailVerificationRequested` | Identity (direct, see below) | Notifications | Emails the verification link to the address being verified |
+| `EmailChangeRequested`, `EmailChanged` | Identity (direct) | Notifications | Heads-up and confirmation to the **old** address |
+| `PaymentReceived` | Billing (outbox) | Notifications | Payment receipt email |
+| `PaymentReminderDue` | Billing (outbox, from the hourly reminder job) | Notifications | Reminder email, unless the customer turned reminders off |
+| `ClaimSubmitted`, `ClaimStatusChanged` | Claims (outbox) | Notifications | "Claim received" and one email per status the claim reaches |
+
+Identity publishes its events straight to the bus rather than through an outbox, because `EmailVerificationRequested` carries the one-time token for the link and the token must never be written to a database. If that publish fails, the account change still stands and the customer presses "Resend".
+
+### 3.2.1 Email notifications
+
+The Notifications service only listens: no service waits for it, references it (`NotificationsBoundaryTests`), or fails because of it. For each event it builds a `Notification` with a key unique to that email (`receipt:{paymentId}`, `reminder:{paymentId}:{stage}`, `claim-status:{claimId}:{status}`, `policy-activated:{enrollmentId}`, or the message id for Identity's events) and hands it to `NotificationDispatcher`, which:
+
+1. Claims the key in `notifications.Emails` (`usp_Email_Begin`). A key already `Sent` or `Skipped` means a repeated event: nothing is sent.
+2. Looks up the recipient (Identity). Unknown or deactivated accounts are `Skipped`, as are payment reminders for customers who turned them off, and addresses in `Email:SkipDomains`.
+3. Renders the email (`EmailTemplates`, HTML + plain text, every value HTML-encoded) and sends it over SMTP with MailKit.
+4. Records `Sent`, or `Failed` with the error and rethrows, so MassTransit retries the event (and finally parks it in the `_error` queue).
+
+**Payment reminders** come from `PaymentReminderJob` in Billing, which runs hourly. `ReminderSchedule` decides, per unpaid installment, which stage is due today: `DueSoon` (3 days before), `DueToday`, `Overdue` (the day after the grace period, from `billing.ufn_OverdueGraceDays`, the same rule as the overdue badge and the claim block), `OverdueSecondNotice` (+5 days) and `OverdueFinalNotice` (+10 days). A stage is sent on its day or the day after, never later, so a first deployment or an outage doesn't produce a burst of stale reminders. Each (installment, stage) is inserted into `billing.PaymentReminders` together with its event (outbox) before anything is published, so several Billing instances never send the same reminder twice.
+
+**Email verification** (Identity): registering creates an unverified account and a link token (32 random bytes; only its SHA-256 hash is stored, single-use, 24-hour expiry, replaced by any newer link). Until the link is used, `EmailVerificationRules.EnsureEmailVerifiedAsync` makes Enrollments and Claims answer `403` to enrolling and filing claims; it asks Identity on each such request, so verifying takes effect immediately without a new token. Changing the email needs the current password and stores the new address in `PendingEmail`; only using the link sent to that address switches the account to it. Resending is limited to one per minute while a link is outstanding and six a day. Accounts that existed before verification was introduced were marked verified by the migration.
 
 ### 3.3 What keeps them independent
 
@@ -508,9 +532,11 @@ All error bodies follow RFC 7807 `ProblemDetails`, with `status` and `title`. Mo
 
 | Exception (base type in bold) | Status | Typical meaning |
 |---|:---:|---|
-| **`BusinessRuleException`** | 400 | A rule rejected the input (dates, amounts, answers, an underwriting decline) |
+| **`BusinessRuleException`**, and `InvalidVerificationLinkException` | 400 | A rule rejected the input (dates, amounts, answers, an underwriting decline, a used or expired verification link) |
+| **`ForbiddenException`**, and `EmailNotVerifiedException` | 403 | Signed in, but not allowed yet (the email address isn't verified) |
 | **`NotFoundException`**, and `PaymentNotFoundException` | 404 | Does not exist, or is not yours |
 | **`ConflictException`**, and `DuplicateEmailException`, `DuplicateEnrollmentException`, `PaymentConflictException`, `ClaimConflictException` | 409 | The request conflicts with the current state |
+| **`TooManyRequestsException`** | 429 | Too many verification emails asked for |
 | `HttpRequestException` | 503 | Another service this request needs is down or failed |
 | Anything else | 500 | Unexpected failure |
 
@@ -522,7 +548,7 @@ Some rules read another service's data, so they are checked in a service's C# co
 
 | No. | Raised by | Meaning | Exception | HTTP |
 |---:|---|---|---|:---:|
-| 50001 | Identity: `accounts.usp_User_Register` | Email already registered | `DuplicateEmailException` | 409 |
+| 50001 | Identity: `accounts.usp_User_Register`, `usp_User_SetPendingEmail`, `usp_EmailToken_Consume` | Email already registered (also when changing to, or confirming, an address another account uses) | `DuplicateEmailException` | 409 |
 | 50002 | Enrollments: `enrollments.usp_Enrollment_CreatePending` | Active enrollment already exists for this plan | `DuplicateEnrollmentException` | 409 |
 | (50003) | Service: `QuoteService`, `EnrollmentService` | Plan does not exist or was retired (quote: 404, enrolling from an old quote: 400) | `NotFoundException` / `BusinessRuleException` | 404 / 400 |
 | 50004 | Billing: `billing.usp_Payment_Pay`, and `PaymentService` for "not yours" | Payment not found, or not yours (deliberately the same message) | `PaymentNotFoundException` | 404 |
@@ -541,16 +567,18 @@ Some rules read another service's data, so they are checked in a service's C# co
 | 50017 | Quotes: `quotes.usp_Quote_Reserve` | Quote has expired | `BusinessRuleException` | 400 |
 | 50018 | Quotes: `quotes.usp_Quote_Reserve` | Quote already used, or held by an enrollment in progress | `ConflictException` | 409 |
 | 50019 | Claims: `claims.usp_Claim_Review` | Approving without `@CoverageAmount` (a bug in the caller, never a user error) | none | 500 |
+| 50020 | Identity: `accounts.usp_EmailToken_Consume` | Verification link unknown, expired, already used, replaced, or its email change was cancelled | `InvalidVerificationLinkException` | 400 |
+| (50021) | Service: Enrollments' `EnrollmentService`, Claims' `ClaimService` (`EnsureEmailVerifiedAsync`) | Email address not verified yet | `EmailNotVerifiedException` | 403 |
 | 50100 | `deploy/seed/demo-data.sql` | Required plans missing (script only, never raised by the API) | none | none |
 
 **SQL Server engine errors also handled:** `2601` and `2627` (unique index or constraint violation), which `UserRepository` maps to `DuplicateEmailException` so two simultaneous sign-ups with the same email still get a clean `409`.
 
 **Adding a new error number**
 
-1. Take the next unused number (**50020**).
+1. Take the next unused number (**50022**).
 2. `THROW` it in the service's stored procedure with a user-friendly message.
 3. Add a `catch (SqlException ex) when (ex.Number == 50019)` in the repository that throws a typed exception.
-4. If the exception is new, derive it from `BusinessRuleException`, `NotFoundException` or `ConflictException`.
+4. If the exception is new, derive it from `BusinessRuleException`, `ForbiddenException`, `NotFoundException`, `ConflictException` or `TooManyRequestsException`.
 5. Add a row to this table and test the path in Swagger.
 
 ## 10. Database object catalog
@@ -559,12 +587,13 @@ Each service creates its own database from the scripts in its `Database/` folder
 
 | Database (service) | Tables and views | Stored procedures |
 |---|---|---|
-| `InsuranceIdentity` | `accounts.Users` | `usp_User_Register`, `usp_User_GetByEmail`, `usp_User_GetById`, `usp_User_GetMany`, `usp_Customer_GetAll`, `usp_Customer_SetActive` |
+| `InsuranceIdentity` | `accounts.Users` (with `EmailVerifiedAt`, `PendingEmail`), `accounts.EmailVerificationTokens` (hashes only) | `usp_User_Register`, `usp_User_GetByEmail`, `usp_User_GetById`, `usp_User_GetMany`, `usp_User_SetPendingEmail`, `usp_Customer_GetAll`, `usp_Customer_SetActive`, `usp_EmailToken_Create`, `usp_EmailToken_GetRecent`, `usp_EmailToken_Consume` |
 | `InsuranceCatalog` | `catalog.Policies` (20 plans seeded by `002_seed_plans.sql`) | `usp_Policy_Create`, `usp_Policy_GetAll`, `usp_Policy_GetById`, `usp_Policy_GetMany`, `usp_Policy_Update`, `usp_Policy_Deactivate` |
 | `InsuranceQuotes` | `quotes.Quotes` | `usp_Quote_Create`, `usp_Quote_GetById`, `usp_Quote_Reserve`, `usp_Quote_Release`, `usp_Quote_MarkUsed` |
 | `InsuranceEnrollments` | `enrollments.Enrollments`, `enrollments.vw_EnrollmentDetails` (derived `Expired`), `dbo.OutboxMessages` | `usp_Enrollment_CreatePending`, `usp_Enrollment_Complete`, `usp_Enrollment_GetByUser`, `usp_Enrollment_GetById`, `usp_Enrollment_GetMany`, `usp_Enrollment_CountActiveByUser`, `usp_Enrollment_Cancel` |
-| `InsuranceBilling` | `billing.PremiumPayments`, `billing.vw_PaymentDetails` (derived `Overdue`, with the grace period) | `usp_Premium_CreateSchedule` (idempotent), `usp_Premium_RemoveUnpaid`, `usp_Premium_GetSummaries`, `usp_Payment_GetByEnrollment`, `usp_Payment_GetById`, `usp_Payment_Pay` |
-| `InsuranceClaims` | `claims.Claims`, `claims.ClaimNumberSeq`, `claims.vw_ClaimDetails` | `usp_Claim_Submit`, `usp_Claim_GetByUser`, `usp_Claim_GetAll`, `usp_Claim_GetById`, `usp_Claim_Review`, `usp_Claim_CountByUser` |
+| `InsuranceBilling` | `billing.PremiumPayments`, `billing.vw_PaymentDetails` (derived `Overdue`), `billing.ufn_OverdueGraceDays` (the grace period, in one place), `billing.PaymentReminders`, `dbo.OutboxMessages` | `usp_Premium_CreateSchedule` (idempotent), `usp_Premium_RemoveUnpaid`, `usp_Premium_GetSummaries`, `usp_Payment_GetByEnrollment`, `usp_Payment_GetById`, `usp_Payment_Pay`, `usp_Payment_GetReceiptInfo`, `usp_Reminder_GetCandidates`, `usp_Reminder_Record` |
+| `InsuranceClaims` | `claims.Claims`, `claims.ClaimNumberSeq`, `claims.vw_ClaimDetails`, `dbo.OutboxMessages` | `usp_Claim_Submit`, `usp_Claim_GetByUser`, `usp_Claim_GetAll`, `usp_Claim_GetById`, `usp_Claim_Review`, `usp_Claim_CountByUser` |
+| `InsuranceNotifications` | `notifications.Emails` (one row per email: key, status, recipient, subject), `notifications.Preferences` | `usp_Email_Begin`, `usp_Email_Complete`, `usp_Email_GetRecentByUser`, `usp_Preferences_Get`, `usp_Preferences_Set` |
 
 ## 11. Consistency: transactions, the saga and the outbox
 
@@ -580,10 +609,13 @@ A transaction never spans two services. Each service keeps its own invariants wi
 | File a claim | Claims: `ClaimService`; `usp_Claim_Submit` | Eligibility from other services. The proc takes `UPDLOCK, HOLDLOCK` on the enrollment's approved claims while checking remaining coverage |
 | Review a claim | Claims: `usp_Claim_Review` | **Optimistic concurrency** through `WHERE Status = @FromStatus`. On approval, locks the enrollment's claims and re-checks remaining coverage against the plan coverage the service passes in |
 | Set customer active | Identity: `usp_Customer_SetActive` | A single `UPDATE`, restricted to `Role = 'Customer'` so admins cannot be deactivated through this path |
+| Verify an email | Identity: `usp_EmailToken_Consume` | `UPDLOCK` on the token and the user; a link works exactly once, and an email change re-checks that the address is still free |
+| Send a reminder | Billing: `usp_Reminder_Record` | Primary key (installment, stage) plus `UPDLOCK, HOLDLOCK`; the row and `PaymentReminderDue` commit together through the outbox |
+| Send an email | Notifications: `usp_Email_Begin` | Unique `NotificationKey`, claimed under `UPDLOCK, HOLDLOCK`; a repeated event finds the email already sent |
 
 Every multi-statement procedure uses `SET XACT_ABORT ON`, so a runtime error rolls the whole transaction back.
 
-**Transactional outbox.** Publishing an event right after a database commit can go wrong in two ways: the process can die between the commit and the publish (the event is lost and the saga hangs), or the publish can succeed for a change that then rolls back. So the Enrollments service writes its events to `dbo.OutboxMessages` **in the same transaction** as the change, and `OutboxDispatcher` (a background service) publishes them to RabbitMQ and marks them published. It is woken right after each commit, and polls every 2 seconds in case it missed a signal. `READPAST` locking lets several instances of the service share the outbox without publishing a message twice at the same time.
+**Transactional outbox.** Publishing an event right after a database commit can go wrong in two ways: the process can die between the commit and the publish (the event is lost and the saga hangs), or the publish can succeed for a change that then rolls back. So the Enrollments, Billing and Claims services write their events to `dbo.OutboxMessages` **in the same transaction** as the change, and `OutboxDispatcher` (a background service) publishes them to RabbitMQ and marks them published. It is woken right after each commit, and polls every 2 seconds in case it missed a signal. `READPAST` locking lets several instances of the service share the outbox without publishing a message twice at the same time.
 
 **At-least-once delivery, idempotent consumers.** The outbox and MassTransit's retries mean a message can arrive twice, never zero times. Every consumer is written so that a second delivery changes nothing: creating a schedule that exists does nothing, completing a completed saga returns the same row, marking a used quote as used again is a no-op.
 

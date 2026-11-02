@@ -7,11 +7,12 @@ import { AuthService } from '../core/services/auth.service';
 import { initialsOf } from '../core/utils/initials';
 import { BrandLogoComponent } from '../shared/components/brand-logo.component';
 import { ThemeToggleComponent } from '../shared/components/theme-toggle.component';
+import { VerifyEmailBannerComponent } from '../shared/components/verify-email-banner.component';
 
 // Wraps every logged-in page: nav bar on top, the current page in <router-outlet />.
 @Component({
   selector: 'app-shell',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, ThemeToggleComponent, BrandLogoComponent],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, ThemeToggleComponent, BrandLogoComponent, VerifyEmailBannerComponent],
   templateUrl: "shell.html",
   styleUrl: "./shell-component.css",
 })
@@ -42,6 +43,9 @@ export class ShellComponent {
   }));
 
   constructor() {
+    // The stored user can be stale (e.g. verified their email on another device): reload it once per visit.
+    this.auth.refreshUser();
+
     // Close any open menu after navigating
     this.router.events
       .pipe(filter((e) => e instanceof NavigationEnd), takeUntilDestroyed())

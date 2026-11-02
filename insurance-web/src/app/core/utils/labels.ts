@@ -1,3 +1,4 @@
+import { NotificationKind } from '../models/notification/notification';
 import { ClaimStatus } from '../models/enums';
 
 /** "UnderReview" -> "Under review" */
@@ -28,3 +29,24 @@ export const CLAIM_ACTION_LABELS: Record<ClaimStatus, string> = {
   Rejected: 'Reject',
   Paid: 'Mark as paid',
 };
+
+/** What each kind of email is about, for the "Recent emails" list on the profile page. */
+export function notificationKindLabel(kind: NotificationKind): string {
+  switch (kind) {
+    case 'VerifyEmail':
+      return 'Verification';
+    case 'EmailChangeRequested':
+    case 'EmailChanged':
+      return 'Account';
+    case 'PolicyActivated':
+    case 'PolicyCancelled':
+      return 'Policy';
+    case 'ClaimSubmitted':
+    case 'ClaimStatusChanged':
+      return 'Claim';
+    case 'PaymentReceipt':
+      return 'Receipt';
+    case 'PaymentReminder':
+      return 'Reminder';
+  }
+}

@@ -15,7 +15,8 @@ public interface IEmailTokenRepository
     Task<ConsumedEmailToken> ConsumeAsync(string tokenHash);
 }
 
-public record RecentEmailTokens(DateTime? LastCreatedAtUtc, int CountLastDay);
+/// <summary>LastPendingCreatedAtUtc: the newest link not used yet (null if none). CountLastDay: every link sent in 24 hours.</summary>
+public record RecentEmailTokens(DateTime? LastPendingCreatedAtUtc, int CountLastDay);
 
 /// <summary>What using a link did. User is the account as it is now; PreviousEmail is the address before.</summary>
 public record ConsumedEmailToken(EmailVerificationPurpose Purpose, string PreviousEmail, User User);

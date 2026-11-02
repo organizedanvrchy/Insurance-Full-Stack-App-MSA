@@ -122,16 +122,17 @@ public class EmailVerificationService : IEmailVerificationService
         return user;
     }
 
-    // Stops a script (or an impatient double click) from flooding someone's inbox.
+    // Stops a script (or an impatient double click) from flooding someone's inbox. The cooldown only applies while
+    // a link sent moments ago is still waiting to be used; the daily cap counts every link.
     private async Task EnforceLimitAsync(int userId)
     {
         var recent = await _tokens.GetRecentAsync(userId);
         var now = _clock.GetUtcNow().UtcDateTime;
 
-        if (recent.LastCreatedAtUtc is { } last && now - last < _options.ResendCooldown)
+        if (recent.LastPendingCreatedAtUtc is { } last && now - last < _options.ResendCooldown)
         {
             var wait = (int)Math.Ceiling((_options.ResendCooldown - (now - last)).TotalSeconds);
-            throw new TooManyRequestsException($"We just sent you an email. Please wait {wait} seconds before asking for another.");
+            throw new TooManyRequestsException($"We just sent you a link. Please wait {wait} seconds before asking for another email.");
         }
 
         if (recent.CountLastDay >= _options.MaxEmailsPerDay)

@@ -92,7 +92,8 @@ public class FakeEmailTokenRepository : IEmailTokenRepository
     public Task<RecentEmailTokens> GetRecentAsync(int userId)
     {
         var recent = Rows.Where(r => r.UserId == userId && r.CreatedAt > Now.AddHours(-24)).ToList();
-        return Task.FromResult(new RecentEmailTokens(recent.Count == 0 ? null : recent.Max(r => r.CreatedAt), recent.Count));
+        var pending = recent.Where(r => !r.Used).ToList();
+        return Task.FromResult(new RecentEmailTokens(pending.Count == 0 ? null : pending.Max(r => r.CreatedAt), recent.Count));
     }
 
     public Task<ConsumedEmailToken> ConsumeAsync(string tokenHash)
