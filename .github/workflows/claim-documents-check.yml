@@ -1,0 +1,53 @@
+# TEMPORARY: verifies feature/claim-documents. Removed before the pull request is opened.
+name: claim-documents-check
+on:
+  push:
+    branches: [ci/claim-documents-merge-check]
+permissions:
+  contents: read
+jobs:
+  dotnet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet test Insurance.sln
+  angular:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: insurance-web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npx ng build
+      - run: npx ng test --watch=false
+  end-to-end:
+    runs-on: ubuntu-24.04
+    env:
+      SA_PASSWORD: Check_Claim_Docs_123!
+      JWT_KEY: check-claim-documents-key-0123456789abcdef
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose -f deploy/docker-compose.yml up --build -d
+      - run: bash .github/workflows/claim-documents-e2e.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Browser check
+        run: |
+          docker compose -f deploy/docker-compose.yml exec -T sqlserver /opt/mssql-tools18/bin/sqlcmd -C -b -S localhost -U sa -P "$SA_PASSWORD" -i /seed/demo-data.sql
+          cd insurance-web && npm ci
+          npx ng serve --port 4200 > /tmp/ng.log 2>&1 &
+          for i in $(seq 1 60); do curl -s -o /dev/null localhost:4200 && break; sleep 2; done
+          mkdir -p /tmp/ui && cp ../.github/workflows/claim-documents-ui.mjs /tmp/ui/ && cd /tmp/ui
+          npm init -y >/dev/null && npm i playwright@1.56.1 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+          node claim-documents-ui.mjs
+      - if: always()
+        run: docker compose -f deploy/docker-compose.yml logs --tail=80 claims gateway
