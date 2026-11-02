@@ -7,7 +7,6 @@ public interface IPaymentRepository
 {
     Task<List<Payment>> GetByEnrollmentAsync(int enrollmentId);
     Task<Payment?> GetByIdAsync(int paymentId);
-    Task<Payment> PayAsync(int paymentId);   // throws PaymentNotFound / PaymentConflict
 
     Task CreateScheduleAsync(int enrollmentId, DateOnly startDate, int termMonths, decimal monthlyPremium);
     Task RemoveUnpaidAsync(int enrollmentId);

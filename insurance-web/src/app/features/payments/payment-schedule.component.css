@@ -6,3 +6,12 @@ card and the installments table.
 .schedule {
   margin-top: 1rem;
 }
+
+.history-title {
+  margin: 2rem 0 0.25rem;
+  font-size: 1.2rem;
+}
+
+.nowrap {
+  white-space: nowrap;
+}

@@ -1,0 +1,66 @@
+<section class="page narrow">
+  @if (transaction(); as t) {
+  <div class="receipt">
+    <header class="receipt-head">
+      @if (t.status === 'Succeeded') {
+      <span class="status-icon ok" aria-hidden="true">✓</span>
+      <h1>Payment received</h1>
+      <p class="muted">Thank you{{ t.billingName ? ', ' + t.billingName : '' }}. Keep this receipt for your records.</p>
+      } @else {
+      <span class="status-icon bad" aria-hidden="true">!</span>
+      <h1>Payment {{ t.status === 'Refunded' ? 'refunded' : 'not completed' }}</h1>
+      <p class="muted">{{ t.message }}</p>
+      }
+    </header>
+
+    <div class="amount">{{ t.amount | currency: t.currency }}</div>
+
+    <dl class="summary">
+      <dt>Reference</dt>
+      <dd><strong>{{ t.reference }}</strong></dd>
+      <dt>Status</dt>
+      <dd>
+        <span class="badge" [class.warn]="t.status === 'Declined' || t.status === 'Failed'"
+          [class.amber]="t.status === 'Refunded'">{{ t.status }}</span>
+      </dd>
+      <dt>Date</dt>
+      <dd>{{ (t.completedAt ?? t.createdAt) | date: 'medium' }}</dd>
+      @if (enrollment(); as e) {
+      <dt>Policy</dt>
+      <dd>{{ e.policyName }}</dd>
+      }
+      <dt>Paid with</dt>
+      <dd>{{ methodText(t) }}</dd>
+      @if (t.billingName) {
+      <dt>Billed to</dt>
+      <dd>{{ t.billingName }}</dd>
+      }
+      @if (auth.isAdmin() && t.customerName) {
+      <dt>Customer</dt>
+      <dd>{{ t.customerName }} ({{ t.customerEmail }})</dd>
+      }
+      <dt>Processor</dt>
+      <dd>{{ t.provider }} · {{ t.providerChargeId ?? 'no charge' }}</dd>
+      @if (t.declineCode) {
+      <dt>Reason code</dt>
+      <dd><code>{{ t.declineCode }}</code></dd>
+      }
+    </dl>
+
+    <p class="muted fine-print">Simulated payment: no real money was moved.</p>
+
+    <div class="form-actions no-print">
+      @if (auth.isAdmin()) {
+      <a class="btn-sm" routerLink="/admin/payments">Back to payment log</a>
+      } @else {
+      <a class="btn-sm" [routerLink]="['/my-policies', t.enrollmentId, 'payments']">Back to schedule</a>
+      }
+      <button type="button" class="btn-sm primary" (click)="print()">Print receipt</button>
+    </div>
+  </div>
+  } @else if (error()) {
+  <div class="alert" role="alert">{{ error() }}</div>
+  } @else {
+  <p class="muted">Loading…</p>
+  }
+</section>
