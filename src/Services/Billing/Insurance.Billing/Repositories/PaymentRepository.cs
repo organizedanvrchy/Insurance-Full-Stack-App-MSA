@@ -1,7 +1,6 @@
 using System.Data;
 using Insurance.Billing.Contracts;
 using Insurance.Billing.Enums;
-using Insurance.Billing.Exceptions;
 using Insurance.Billing.Models;
 using Insurance.BuildingBlocks.Data;
 using Microsoft.Data.SqlClient;
@@ -35,32 +34,6 @@ public class PaymentRepository : IPaymentRepository
         await conn.OpenAsync();
         await using var reader = await cmd.ExecuteReaderAsync();
         return await reader.ReadAsync() ? Map(reader) : null;
-    }
-
-    public async Task<Payment> PayAsync(int paymentId)
-    {
-        await using var conn = _db.Create();
-        await using var cmd = conn.StoredProc("billing.usp_Payment_Pay");
-        cmd.AddParam("@PaymentId", SqlDbType.Int, paymentId);
-
-        await conn.OpenAsync();
-        try
-        {
-            await using var reader = await cmd.ExecuteReaderAsync();
-            if (!await reader.ReadAsync())
-                throw new InvalidOperationException("usp_Payment_Pay returned no row.");
-            return Map(reader);
-        }
-        catch (SqlException ex) when (ex.Number == 50004)
-        {
-            throw new PaymentNotFoundException(paymentId);
-        }
-        // 50005 already paid, 50007 earlier installment unpaid.
-        // The proc's THROW message is already user-friendly, so we pass it along.
-        catch (SqlException ex) when (ex.Number is 50005 or 50007)
-        {
-            throw new PaymentConflictException(ex.Message);
-        }
     }
 
     public async Task CreateScheduleAsync(int enrollmentId, DateOnly startDate, int termMonths, decimal monthlyPremium)
@@ -107,7 +80,8 @@ public class PaymentRepository : IPaymentRepository
         return summaries;
     }
 
-    private static Payment Map(SqlDataReader r) => new()
+    // Also used by TransactionRepository, which reads the same row after settling a payment.
+    internal static Payment Map(SqlDataReader r) => new()
     {
         PaymentId = r.GetInt32(r.GetOrdinal("PaymentId")),
         EnrollmentId = r.GetInt32(r.GetOrdinal("EnrollmentId")),

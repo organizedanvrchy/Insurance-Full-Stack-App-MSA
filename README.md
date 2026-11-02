@@ -60,6 +60,8 @@ The backend is a set of **microservices**: six ASP.NET Core services, each with 
 - **Get a personalized quote:** the API supplies the questions for each plan type, and the form is built dynamically from them. The result shows the base rate, every rating factor, the monthly price, the total over the term and the quote's expiry date.
 - Enroll from a quote with a chosen start date, and cancel a policy.
 - **Pay premiums** in order from a payment schedule, with paid, pending and overdue states.
+- **Simulated checkout:** pay by credit/debit card, PayPal, Apple Pay, Google Pay or Venmo. Card numbers are validated (brand, checksum, expiry, security code) and turned into a token in the browser; the server never sees them. Name and billing address are filled in from sign-up, cards can be saved for later, and every attempt gets a printable receipt.
+- **Payment history:** every attempt on a policy, including declined ones, with the reason the customer was given.
 - **Payment alerts:** a "payment due soon" or "payment overdue" badge on each policy.
 - **File claims** with incident date, amount and description. Eligibility is validated against the policy.
 - Track claims through the review workflow and read the reviewer's notes.
@@ -68,6 +70,7 @@ The backend is a set of **microservices**: six ASP.NET Core services, each with 
 - Create, edit and deactivate plans. Deactivated plans disappear for customers but remain on existing policies.
 - **Claims review queue** with a status filter. Buttons show only the legal next step, and a rejection requires a reason.
 - **Customer management:** search, filter by status, see active-policy and claim counts, and deactivate or reactivate accounts (takes effect on the customer's next request).
+- **Payment log:** every payment attempt from every customer, filterable by status, with amounts collected, declines and refunds.
 
 ### Platform
 - Role-based authorization (`Customer`, `Admin`), with ownership checks on every record.
@@ -253,6 +256,8 @@ Every setting can also be given as an environment variable (`:` becomes `__`), w
 | `ReverseProxy:Clusters:<name>:Destinations:d1:Address` | Gateway | Where each service runs |
 | `Cors:AllowedOrigins` | Gateway | Frontend origins allowed to call the API |
 | `Enrollment:SagaTimeout` | Enrollments | How long `POST /api/enrollments` waits for the saga before answering `202` (default 10 seconds) |
+| `Payments:Provider` | Billing | Which payment processor to use. Only `Mock` (the simulation) exists; a real one is a new `IPaymentGateway` class |
+| `Payments:Mock:LatencyMs` | Billing | How long the simulated processor takes to answer (default 700 ms) |
 | `apiUrl` | `insurance-web/src/environments/environment.development.ts` (dev) and `environment.ts` (production build) | The gateway's address |
 
 ## API overview
@@ -275,7 +280,10 @@ Every endpoint is reached through the gateway at `/api`. Each service documents 
 | | `POST /api/enrollments` | Customer (`201`, or `202` while the saga is still running) |
 | | `PUT /api/enrollments/{id}/cancel` | Owner |
 | **Payments** (Billing) | `GET /api/enrollments/{id}/payments` | Owner or admin |
-| | `POST /api/payments/{id}/pay` | Customer (owner) |
+| | `POST /api/payments/{id}/pay` | Customer (owner). Body: a payment-method token or a saved method, and an idempotency key. Answers `200` with `outcome: Succeeded` (a receipt) or `Declined` (the reason) |
+| | `GET /api/payments/transactions?enrollmentId=&status=` | The payment log: one policy (owner or admin), your own attempts, or everyone's (admin) |
+| | `GET /api/payments/transactions/{id}` | A receipt (the customer who paid, or an admin) |
+| | `GET /api/payment-methods`, `DELETE /api/payment-methods/{id}` | Customer: saved payment methods (brand, last 4 digits, expiry) |
 | **Claims** (Claims) | `POST /api/claims` | Customer |
 | | `GET /api/claims/mine` | Customer |
 | | `GET /api/claims?status=` | Admin |
@@ -301,11 +309,19 @@ dotnet test Insurance.sln
 | `AuthServiceTests` | Password hashing, email normalizing, role forcing, inactive users |
 | `EnrollmentServiceTests` | Start-date window, payment alerts, ownership, cancellation, the enrollment saga (completed, still running, failed, quote released), degradation when Billing is down |
 | `ClaimServiceTests` | Review rules, the concurrency guard, claim visibility, claim eligibility, names and plans from other services |
-| `PaymentServiceTests` | Ownership, already paid, cancelled, pending and expired policies |
+| `CheckoutServiceTests` | Approved, declined and failed payments; retries never charge twice; every rule checked before charging; automatic refund when an approved charge can't be applied; saved cards |
+| `MockPaymentGatewayTests` | Test cards and their decline reasons, expired cards, idempotent charges, malformed tokens |
+| `PaymentServiceTests` | Who sees schedules, the payment log and receipts; cancelled policies |
 | `InternalQuotesControllerTests` | A quote can only be reserved for the caller |
 | `ServiceBoundaryTests` | No service references another's implementation, and no service's SQL touches another service's schema |
 
-The stored procedures, the saga over RabbitMQ and the gateway were verified end to end with Docker Compose: a scripted run of 95 requests returns the same responses as the original single API, and the saga recovers when Billing is stopped and restarted, and compensates when Billing keeps failing.
+An end-to-end test drives the whole running system through the gateway, the way the Angular app does: accounts, quotes, the enrollment saga, payments (declines, retries, receipts), claims, the admin screens and cancellation. With the stack running (`docker compose -f deploy/docker-compose.yml up --build -d`):
+
+```bash
+python tests/e2e/e2e_test.py
+```
+
+The stored procedures, the saga over RabbitMQ and the gateway were also verified end to end with Docker Compose: a scripted run of 95 requests returns the same responses as the original single API, and the saga recovers when Billing is stopped and restarted, and compensates when Billing keeps failing.
 
 ## Project structure
 
@@ -352,7 +368,7 @@ The previous single-API deployment used one database. Its data is not migrated a
 
 ## Known limitations
 
-- **Simulated payments.** There is no payment gateway. "Pay" records a payment. Cancelling a policy removes its unpaid installments instead of voiding them.
+- **Simulated payments.** The payment processor is a simulation (`MockPaymentGateway`): no money moves. Everything around it is built as for a real processor (tokens instead of card numbers, idempotency keys, a transaction log, refunds, saved methods), so connecting one is a new `IPaymentGateway` class plus its browser library. Not yet simulated: webhooks for asynchronous confirmations, 3-D Secure, disputes, and a reconciliation job for a charge that succeeds while the service crashes before recording it. Cancelling a policy removes its unpaid installments instead of voiding them.
 - **Illustrative pricing.** Rating multipliers are hard-coded in the strategy classes. They are not actuarial data and cannot be edited from the UI.
 - **UTC date rules.** "Today" is evaluated in UTC, with slack in the enrollment window and a grace period on overdue premiums to cover time-zone differences.
 - **Token storage.** The JWT is kept in `localStorage` with no refresh-token flow. Production systems often use httpOnly cookies.
