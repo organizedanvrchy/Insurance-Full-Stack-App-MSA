@@ -4,15 +4,20 @@
   @if (auth.user(); as u) {
     <!-- ============ Address ============ -->
     <div class="address">
-      <span class="label">Email address</span>
-      <div class="value">
-        <strong>{{ u.email }}</strong>
-        @if (u.emailVerified) {
-          <span class="badge">Verified</span>
-        } @else {
-          <span class="badge amber">Not verified</span>
-        }
+      <div>
+        <span class="label">Email address</span>
+        <div class="value">
+          <strong>{{ u.email }}</strong>
+          @if (u.emailVerified) {
+            <span class="badge">Verified</span>
+          } @else {
+            <span class="badge amber">Not verified</span>
+          }
+        </div>
       </div>
+      @if (!changeOpen()) {
+        <button type="button" class="btn-sm" (click)="openChange()">Change email</button>
+      }
     </div>
 
     @if (!u.emailVerified) {
@@ -29,6 +34,43 @@
     }
     @if (verifyError(); as e) {
       <div class="alert" role="alert">{{ e }}</div>
+    }
+
+    <!-- ============ Change email ============ -->
+    @if (changeOpen()) {
+      <form class="change" [formGroup]="changeForm" (ngSubmit)="submitChange()" novalidate>
+        <p class="muted">
+          You'll sign in with the new address straight away. We'll send it a verification link (enrolling and
+          filing claims pause until you click it), and let your current address know about the change.
+        </p>
+
+        @if (changeError(); as e) {
+          <div class="alert" role="alert">{{ e }}</div>
+        }
+
+        <label class="field">
+          New email address
+          <input type="email" formControlName="newEmail" autocomplete="email" />
+          @if (c.newEmail.touched && c.newEmail.invalid) {
+            <small class="err">Enter a valid email address.</small>
+          }
+        </label>
+
+        <label class="field">
+          Current password
+          <input type="password" formControlName="currentPassword" autocomplete="current-password" />
+          @if (c.currentPassword.touched && c.currentPassword.invalid) {
+            <small class="err">Enter your current password to confirm it's you.</small>
+          }
+        </label>
+
+        <div class="form-actions">
+          <button type="button" class="btn-sm" (click)="closeChange()">Cancel</button>
+          <button type="submit" class="btn-sm primary" [disabled]="changing()">
+            {{ changing() ? 'Changing…' : 'Change email' }}
+          </button>
+        </div>
+      </form>
     }
 
     <!-- ============ Preferences (customers) ============ -->

@@ -1,3 +1,4 @@
+using Insurance.BuildingBlocks.Time;
 using Microsoft.Extensions.Options;
 
 namespace Insurance.Billing.Services.Reminders;
@@ -40,7 +41,7 @@ public class PaymentReminderJob : BackgroundService
             {
                 await using var scope = _scopes.CreateAsyncScope();
                 var reminders = scope.ServiceProvider.GetRequiredService<IPaymentReminderService>();
-                await reminders.SendDueRemindersAsync(DateOnly.FromDateTime(_clock.GetUtcNow().UtcDateTime), stoppingToken);
+                await reminders.SendDueRemindersAsync(BusinessTime.TodayAt(_clock.GetUtcNow()), stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

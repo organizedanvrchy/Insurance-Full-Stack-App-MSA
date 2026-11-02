@@ -10,7 +10,7 @@ namespace Insurance.Billing.Tests;
 
 public class PaymentServiceTests
 {
-    private static DateOnly Today => DateOnly.FromDateTime(DateTime.UtcNow);
+    private static DateOnly Today => Insurance.BuildingBlocks.Time.BusinessTime.Today;
 
     private readonly FakePaymentRepository _repo = new();
     private readonly FakeTransactionRepository _transactions;

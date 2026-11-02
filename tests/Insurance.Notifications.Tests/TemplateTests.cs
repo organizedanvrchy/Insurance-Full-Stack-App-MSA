@@ -1,4 +1,5 @@
 using Insurance.Billing.Contracts;
+using Insurance.BuildingBlocks.Time;
 using Insurance.Claims.Contracts;
 using Insurance.Identity.Contracts;
 using Insurance.Notifications.Templates;
@@ -154,5 +155,99 @@ public class TemplateTests
     public void Greets_customers_by_first_name(string fullName, string expected)
     {
         Assert.Equal(expected, EmailTemplates.FirstName(fullName));
+    }
+
+    // ---------------- Every email ----------------
+
+    public static TheoryData<string> AllEmails() => new(new[]
+    {
+        "verify", "verify-after-change", "email-changed", "password-changed", "policy-active", "policy-cancelled",
+        "claim-received", "claim-status", "receipt", "declined", "reminder"
+    });
+
+    private RenderedEmail Render(string name)
+    {
+        var due = new DateOnly(2026, 11, 20);
+        var policy = new PolicySummary("Gold Health Plan", 50_000m, due, due.AddYears(1));
+        return name switch
+        {
+            "verify" => _templates.VerifyEmail(new EmailVerificationRequested(1, "Jane Doe", "j@example.com", "t", DateTime.UtcNow)),
+            "verify-after-change" => _templates.VerifyEmail(new EmailVerificationRequested(1, "Jane Doe", "j@example.com", "t", DateTime.UtcNow, true)),
+            "email-changed" => _templates.EmailChanged(new EmailChanged(1, "Jane Doe", "old@example.com", "new@example.com", DateTime.UtcNow)),
+            "password-changed" => _templates.PasswordChanged(new PasswordChanged(1, "Jane Doe", "j@example.com", DateTime.UtcNow)),
+            "policy-active" => _templates.PolicyActivated("Jane Doe", policy),
+            "policy-cancelled" => _templates.PolicyCancelled("Jane Doe", policy),
+            "claim-received" => _templates.ClaimSubmitted("Jane Doe", new ClaimSubmitted(1, "CLM-1", 1, 10, due, 500m, DateTime.UtcNow), "Gold"),
+            "claim-status" => _templates.ClaimStatusChanged("Jane Doe", new ClaimStatusChanged(1, "CLM-1", 1, 10, 500m, ClaimStatus.Submitted, ClaimStatus.UnderReview, null, DateTime.UtcNow), "Gold"),
+            "receipt" => _templates.PaymentReceipt("Jane Doe", new PaymentReceived(42, 7, "TXN-000007", 10, 1, 4, 9m, due, due, DateTime.UtcNow, "PayPal", 1, 12, null, null), "Gold"),
+            "declined" => _templates.PaymentDeclined("Jane Doe", new PaymentDeclined(7, "TXN-000007", 42, 10, 1, 4, 9m, due, "PayPal", "No.", false, DateTime.UtcNow), "Gold"),
+            _ => _templates.PaymentReminder("Jane Doe", Reminder(PaymentReminderStage.DueToday), "Gold")
+        };
+    }
+
+    [Theory]
+    [MemberData(nameof(AllEmails))]
+    public void Every_email_says_it_is_automated_and_where_to_get_help(string name)
+    {
+        var email = Render(name);
+
+        Assert.Contains("This is an automated message. Please don't reply to this email", email.Text);
+        Assert.Contains("support@rainsurance.example", email.Text);
+        Assert.Contains("This is an automated message.", email.Html);
+        Assert.Contains("mailto:support@rainsurance.example", email.Html);
+    }
+
+    [Fact]
+    public void The_policy_email_no_longer_promises_reminders()
+    {
+        Assert.DoesNotContain("We'll remind you", Render("policy-active").Text);
+    }
+
+    [Fact]
+    public void The_old_address_is_asked_whether_the_change_was_theirs()
+    {
+        var email = Render("email-changed");
+
+        Assert.Equal("Your RAINsurance email address was changed", email.Subject);
+        Assert.Contains("from old@example.com to new@example.com", email.Text);
+        Assert.Contains("If you made this change, you can ignore this email.", email.Text);
+        Assert.Contains("Didn't make this change? Contact support immediately at support@rainsurance.example", email.Text);
+    }
+
+    [Fact]
+    public void A_changed_address_gets_its_own_verification_wording()
+    {
+        var email = Render("verify-after-change");
+
+        Assert.Equal("Confirm your new email address", email.Subject);
+        Assert.DoesNotContain("Thanks for creating an account", email.Text);
+    }
+
+    [Fact]
+    public void A_password_change_is_reported_with_a_warning()
+    {
+        var email = Render("password-changed");
+
+        Assert.Equal("Your RAINsurance password was changed", email.Subject);
+        Assert.Contains("Contact support immediately", email.Text);
+    }
+
+    // ---------------- Business time zone ----------------
+
+    [Fact]
+    public void Times_are_written_in_eastern_time()
+    {
+        // 03:30 UTC on Nov 3 is still Nov 2 in New York (EST, UTC-5); in July it's EDT (UTC-4).
+        Assert.Equal("November 2, 2026 at 10:30 PM EST", EmailTemplates.DateTimeText(new DateTime(2026, 11, 3, 3, 30, 0, DateTimeKind.Utc)));
+        Assert.Equal("July 4, 2026 at 8:00 AM EDT", EmailTemplates.DateTimeText(new DateTime(2026, 7, 4, 12, 0, 0, DateTimeKind.Utc)));
+        Assert.Equal("November 2, 2026", EmailTemplates.Date(new DateTime(2026, 11, 3, 3, 30, 0, DateTimeKind.Utc)));
+    }
+
+    [Fact]
+    public void Today_follows_the_business_time_zone_not_utc()
+    {
+        Assert.Equal(new DateOnly(2026, 11, 2), BusinessTime.TodayAt(new DateTimeOffset(2026, 11, 3, 3, 30, 0, TimeSpan.Zero)));
+        Assert.Equal(new DateOnly(2026, 11, 3), BusinessTime.TodayAt(new DateTimeOffset(2026, 11, 3, 5, 30, 0, TimeSpan.Zero)));
+        Assert.Equal("Eastern Standard Time", BusinessTime.SqlServerZoneName);
     }
 }

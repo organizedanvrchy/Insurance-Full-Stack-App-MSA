@@ -1,4 +1,8 @@
+using Insurance.BuildingBlocks.Exceptions;
 using Insurance.BuildingBlocks.Security;
+using Insurance.Identity.Contracts;
+using Insurance.Identity.Messaging;
+using Microsoft.Extensions.Logging;
 using Insurance.Identity.DTOs;
 using Insurance.Identity.Models;
 using Insurance.Identity.Repositories;
@@ -13,12 +17,17 @@ public class AuthService : IAuthService
     private readonly IUserRepository _users;
     private readonly ITokenService _tokens;
     private readonly IEmailVerificationService _verification;
+    private readonly IIdentityEvents _events;
+    private readonly ILogger<AuthService> _logger;
 
-    public AuthService(IUserRepository users, ITokenService tokens, IEmailVerificationService verification)
+    public AuthService(IUserRepository users, ITokenService tokens, IEmailVerificationService verification,
+        IIdentityEvents events, ILogger<AuthService> logger)
     {
         _users = users;
         _tokens = tokens;
         _verification = verification;
+        _events = events;
+        _logger = logger;
     }
 
     public async Task<AuthResponse> RegisterAsync(RegisterRequest request)
@@ -57,6 +66,31 @@ public class AuthService : IAuthService
     {
         var user = await _users.GetByIdAsync(userId);
         return user is null || !user.IsActive ? null : MapToDto(user);
+    }
+
+    public async Task ChangePasswordAsync(int userId, ChangePasswordRequest request)
+    {
+        var user = await _users.GetByIdAsync(userId);
+        if (user is null || !user.IsActive)
+            throw new NotFoundException("Account not found.");
+
+        if (!BCrypt.Net.BCrypt.Verify(request.CurrentPassword, user.PasswordHash))
+            throw new BusinessRuleException("Your current password is incorrect.");
+
+        if (BCrypt.Net.BCrypt.Verify(request.NewPassword, user.PasswordHash))
+            throw new BusinessRuleException("Choose a new password that is different from your current one.");
+
+        await _users.ChangePasswordAsync(user.UserId, BCrypt.Net.BCrypt.HashPassword(request.NewPassword));
+
+        // A security notice to the account's email, in case it wasn't its owner. Never fails the change.
+        try
+        {
+            await _events.PublishAsync(new PasswordChanged(user.UserId, user.FullName, user.Email, DateTime.UtcNow));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not publish PasswordChanged for user {UserId}.", user.UserId);
+        }
     }
 
     private AuthResponse BuildResponse(User user)

@@ -1,3 +1,4 @@
+using Insurance.BuildingBlocks.Time;
 using System.Collections.Concurrent;
 using Insurance.Billing.Enums;
 using Microsoft.Extensions.Options;
@@ -90,7 +91,7 @@ public class MockPaymentGateway : IPaymentGateway
         if (method.Type != PaymentMethodType.Card)
             return Approved();   // wallets are approved by the customer in the wallet's own window
 
-        var today = DateTime.UtcNow;
+        var today = BusinessTime.Now;   // a card is valid through the end of its expiry month, in the insurer's time zone
         if (method.ExpYear < today.Year || (method.ExpYear == today.Year && method.ExpMonth < today.Month))
             return new ChargeResult(false, null, "expired_card", "Your card has expired.");
 

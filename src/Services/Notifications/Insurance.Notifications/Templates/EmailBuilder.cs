@@ -25,11 +25,15 @@ public sealed class EmailBuilder
     private readonly StringBuilder _text = new();
     private string? _footerNote;
 
+    private readonly string _supportEmail;
+
     /// <param name="preheader">The preview line most inboxes show next to the subject.</param>
-    public EmailBuilder(string subject, string preheader)
+    /// <param name="supportEmail">Where to write instead of replying (every email is automated).</param>
+    public EmailBuilder(string subject, string preheader, string supportEmail = "support@rainsurance.example")
     {
         _subject = subject;
         _preheader = preheader;
+        _supportEmail = supportEmail;
     }
 
     private static string E(string value) => WebUtility.HtmlEncode(value);
@@ -60,7 +64,8 @@ public sealed class EmailBuilder
               </td></tr>
             </table>
             """);
-        _text.AppendLine($"{title}: {text}").AppendLine();
+        var separator = title.EndsWith('?') || title.EndsWith('!') ? " " : ": ";
+        _text.AppendLine($"{title}{separator}{text}").AppendLine();
         return this;
     }
 
@@ -116,6 +121,8 @@ public sealed class EmailBuilder
     public RenderedEmail Build()
     {
         var footerNote = _footerNote is null ? "" : $"<p style=\"margin:0 0 8px;\">{_footerNote}</p>";
+        var support = E(_supportEmail);
+        var automated = $"<p style=\"margin:0 0 8px;\"><strong>This is an automated message. Please don't reply to this email</strong>: replies aren't read. If you need help, contact <a href=\"mailto:{support}\" style=\"color:{Muted};\">{support}</a>.</p>";
         var html = $"""
             <!doctype html>
             <html lang="en">
@@ -130,6 +137,7 @@ public sealed class EmailBuilder
                     </td></tr>
                     <tr><td style="padding:28px;">{_html}</td></tr>
                     <tr><td style="padding:18px 28px;border-top:1px solid {Border};font-size:12px;line-height:1.5;color:{Muted};">
+                      {automated}
                       {footerNote}
                       <p style="margin:0;">You're receiving this email because you have a {Brand} account. {Brand} is a fictional insurer created for a portfolio project.</p>
                     </td></tr>
@@ -140,7 +148,9 @@ public sealed class EmailBuilder
             </html>
             """;
 
-        var text = _text.ToString().TrimEnd() + $"\n\n--\n{Brand}. A fictional insurer created for a portfolio project.\n";
+        var text = _text.ToString().TrimEnd()
+            + $"\n\n--\nThis is an automated message. Please don't reply to this email: replies aren't read. If you need help, contact {_supportEmail}.\n"
+            + $"{Brand}. A fictional insurer created for a portfolio project.\n";
         return new RenderedEmail(_subject, html, text);
     }
 }

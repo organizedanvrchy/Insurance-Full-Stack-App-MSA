@@ -7,7 +7,11 @@ import { User } from '../models/auth/user';
 import { RegisterRequest } from '../models/auth/registerRequest';
 import { AuthResponse } from '../models/auth/authResponse';
 import { LoginRequest } from '../models/auth/loginRequest';
-import { VerifyEmailResponse } from '../models/auth/emailVerification';
+import {
+  ChangeEmailRequest,
+  ChangePasswordRequest,
+  VerifyEmailResponse,
+} from '../models/auth/emailVerification';
 
 const TOKEN_KEY = 'ins_token';
 const USER_KEY = 'ins_user';
@@ -65,6 +69,19 @@ export class AuthService {
 
   resendVerification(): Observable<void> {
     return this.http.post<void>(`${API_URL}/auth/resend-verification`, {});
+  }
+
+  // ---------------- Changing the email and password ----------------
+
+  /** Takes effect at once; the new address is unverified until its link is used, and the old one is told. */
+  changeEmail(req: ChangeEmailRequest): Observable<User> {
+    return this.http
+      .post<User>(`${API_URL}/auth/change-email`, req)
+      .pipe(tap((user) => this.updateUser(user)));
+  }
+
+  changePassword(req: ChangePasswordRequest): Observable<void> {
+    return this.http.post<void>(`${API_URL}/auth/change-password`, req);
   }
 
   /**

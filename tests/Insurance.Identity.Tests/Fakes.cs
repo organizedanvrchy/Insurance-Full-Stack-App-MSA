@@ -38,6 +38,28 @@ public class FakeUserRepository : IUserRepository
     public Task<List<UserAccount>> GetManyAsync(IEnumerable<int> userIds) =>
         Task.FromResult(Users.Where(u => userIds.Contains(u.UserId))
             .Select(u => new UserAccount(u.UserId, u.FullName, u.Email, u.Role, u.IsActive, u.EmailVerified)).ToList());
+
+    // Like usp_User_ChangeEmail: refuses a taken address; the new one is unverified and old links stop working.
+    public FakeEmailTokenRepository? Tokens { get; set; }
+
+    public Task<string> ChangeEmailAsync(int userId, string newEmail)
+    {
+        if (Users.Any(u => u.UserId != userId && u.Email == newEmail))
+            throw new DuplicateEmailException(newEmail);
+
+        var user = Users.Single(u => u.UserId == userId);
+        var old = user.Email;
+        user.Email = newEmail;
+        user.EmailVerifiedAt = null;
+        Tokens?.Rows.Where(r => r.UserId == userId).ToList().ForEach(r => r.Used = true);
+        return Task.FromResult(old);
+    }
+
+    public Task ChangePasswordAsync(int userId, string passwordHash)
+    {
+        Users.Single(u => u.UserId == userId).PasswordHash = passwordHash;
+        return Task.CompletedTask;
+    }
 }
 
 /// <summary>Mimics accounts.usp_EmailToken_* (create, recent count, consume) in memory.</summary>
@@ -61,6 +83,7 @@ public class FakeEmailTokenRepository : IEmailTokenRepository
     {
         _users = users;
         _clock = clock;
+        users.Tokens = this;
     }
 
     private DateTime Now => _clock.GetUtcNow().UtcDateTime;

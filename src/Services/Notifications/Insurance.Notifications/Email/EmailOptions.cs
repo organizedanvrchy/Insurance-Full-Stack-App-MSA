@@ -16,6 +16,12 @@ public class EmailOptions
     public string FromAddress { get; set; } = "no-reply@rainsurance.example";
     public string FromName { get; set; } = "RAINsurance";
 
+    /// <summary>
+    /// Where customers can get help. Shown in every email's "automated message, don't reply" notice, because the
+    /// From address is not monitored.
+    /// </summary>
+    public string SupportEmail { get; set; } = "support@rainsurance.example";
+
     /// <summary>Where the Angular app lives; links in emails point here.</summary>
     public string AppBaseUrl { get; set; } = "http://localhost:4200";
 

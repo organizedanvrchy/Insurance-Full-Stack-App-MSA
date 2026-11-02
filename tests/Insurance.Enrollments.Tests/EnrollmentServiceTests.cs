@@ -15,7 +15,7 @@ namespace Insurance.Enrollments.Tests;
 
 public class EnrollmentServiceTests
 {
-    private static DateOnly Today => DateOnly.FromDateTime(DateTime.UtcNow);
+    private static DateOnly Today => Insurance.BuildingBlocks.Time.BusinessTime.Today;
 
     private readonly FakeEnrollmentRepository _repo = new();
     private readonly FakeQuoteReservations _quotes = new();

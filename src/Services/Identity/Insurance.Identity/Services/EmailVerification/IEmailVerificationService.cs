@@ -16,4 +16,10 @@ public interface IEmailVerificationService
 
     /// <summary>Emails a fresh link. 409 if already verified, 429 if asked too often.</summary>
     Task ResendAsync(int userId);
+
+    /// <summary>
+    /// Changes the sign-in email (current password required). The new address is unverified until its link is used,
+    /// and the old address is told. 400 wrong password / same address, 409 address taken, 429 too many emails.
+    /// </summary>
+    Task<UserDto> ChangeEmailAsync(int userId, ChangeEmailRequest request);
 }

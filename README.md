@@ -58,6 +58,7 @@ The backend is a set of **microservices**: seven ASP.NET Core services, each wit
 
 ### Customers
 - Register, sign in and sign out. Passwords are hashed with BCrypt and sessions use JWTs.
+- **Change their email or password** from the profile page, confirming with the current password. A new email works at once but has to be verified, and the old address gets a "was this you?" email; a password change is announced by email too.
 - **Verify their email address** from a link sent at sign-up. Until then they can browse and get quotes, but not enroll or file claims.
 - **Choose their emails:** a "Email me payment reminders" box on the sign-up form, changeable any time on the profile page.
 - Browse the plan catalog and filter by type.
@@ -268,6 +269,8 @@ Every setting can also be given as an environment variable (`:` becomes `__`), w
 | `Email:Host`, `Port`, `Security`, `Username`, `Password` | Notifications | The SMTP server. `Security` is `None` (Mailpit), `StartTls` (port 587) or `SslOnConnect` (port 465). **Password in user secrets or `.env` only.** An empty `Host` logs emails instead of sending them |
 | `Email:FromAddress`, `FromName` | Notifications | The sender |
 | `Email:AppBaseUrl` | Notifications | The Angular app's address; links in emails point there |
+| `Email:SupportEmail` | Notifications | Where customers get help. Every email says it's automated ("don't reply") and points here |
+| `BusinessTimeZone` | Every service | The insurer's time zone (IANA id, default `America/New_York`, i.e. EST/EDT): what "today" means for due dates, overdue premiums, coverage and claims, and the zone emails show times in |
 | `Email:SkipDomains` | Notifications | Recipient domains never emailed (e.g. `demo.example` against a real mail server) |
 | `Reminders:Enabled`, `Interval` | Billing | The payment reminder job (default on, every hour) |
 | `EmailVerification:LinkLifetime`, `ResendCooldown`, `MaxEmailsPerDay` | Identity | Defaults 24 hours, 1 minute, 6 |
@@ -290,6 +293,8 @@ Every endpoint is reached through the gateway at `/api`. Each service documents 
 | | `GET /api/auth/me` | Signed in |
 | | `POST /api/auth/verify-email` | Public (the token from the emailed link) |
 | | `POST /api/auth/resend-verification` | Signed in |
+| | `POST /api/auth/change-email` | Signed in (`newEmail`, `currentPassword`; the new address must then be verified) |
+| | `POST /api/auth/change-password` | Signed in (`currentPassword`, `newPassword`, `confirmNewPassword`) |
 | **Policies** (Catalog) | `GET /api/policies` | Signed in (`?includeInactive=true` for admins) |
 | | `GET /api/policies/{id}` | Signed in |
 | | `POST /api/policies`, `PUT /api/policies/{id}`, `DELETE /api/policies/{id}` | Admin (delete is a soft delete) |
@@ -330,14 +335,14 @@ dotnet test Insurance.sln
 | `RatingStrategyTests` | Prices for every policy type, underwriting declines, answer validation |
 | `ClaimStatusTransitionsTests` | Every allowed and blocked workflow move |
 | `AuthServiceTests` | Password hashing, email normalizing, role forcing, inactive users |
-| `EmailVerificationServiceTests` | Verification links (hashing, single use, expiry, replacement), resend limits, email changes (password, conflicts, confirm, cancel) |
+| `EmailVerificationServiceTests` | Verification links (hashing, single use, expiry, replacement), resend limits, the sign-up email choice, changing the email (password, conflicts, re-verification, notice to the old address) and the password |
 | `EnrollmentServiceTests` | Start-date window, payment alerts, ownership, cancellation, the enrollment saga (completed, still running, failed, quote released), degradation when Billing is down |
 | `ClaimServiceTests` | Review rules, the concurrency guard, claim visibility, claim eligibility, names and plans from other services |
 | `CheckoutServiceTests` | Approved, declined and failed payments; retries never charge twice; every rule checked before charging; automatic refund when an approved charge can't be applied; saved cards; the receipt and declined emails saved with each outcome |
 | `MockPaymentGatewayTests` | Test cards and their decline reasons, expired cards, idempotent charges, malformed tokens |
 | `PaymentServiceTests` | Who sees schedules, the payment log and receipts; cancelled policies |
 | `ReminderScheduleTests`, `PaymentReminderServiceTests` | Which reminder goes out on which day, no repeats or stale reminders, only for policies in force |
-| `TemplateTests` | Every email's subject and content, HTML encoding of customer text, links into the app |
+| `TemplateTests` | Every email's subject and content, the "automated message" notice on all of them, HTML encoding of customer text, links into the app, times in Eastern time |
 | `NotificationDispatcherTests`, `ConsumerTests` | Exactly-once sending, reminder opt-in/out (sign-up and profile), deactivated accounts, failures and retries, events on MassTransit's in-memory test bus |
 | `InternalQuotesControllerTests` | A quote can only be reserved for the caller |
 | `ServiceBoundaryTests` | No service references another's implementation, no service's SQL touches another service's schema, and nothing depends on the Notifications service |
@@ -414,7 +419,9 @@ flowchart LR
 
 | Email | Sent when | Can be turned off |
 |---|---|---|
-| Verify your email | Sign-up, resend | No |
+| Verify your email / Confirm your new email address | Sign-up, resend, email change | No |
+| Your email address was changed | To the **old** address after a change: "if this was you, ignore it; if not, contact support immediately" | No |
+| Your password was changed | After a password change, with the same warning | No |
 | Policy active / Policy cancelled | The enrollment saga completes, the customer cancels | No |
 | Payment receipt | Every installment paid at checkout (receipt number, payment method, installment *n* of *N*, next payment, link to the in-app receipt) | No |
 | Payment didn't go through | A declined or failed checkout attempt (the reason, nothing charged, a "try again" link) | No |
@@ -433,7 +440,8 @@ How it stays reliable:
 
 - **Simulated payments.** The payment processor is a simulation (`MockPaymentGateway`): no money moves. Everything around it is built as for a real processor (tokens instead of card numbers, idempotency keys, a transaction log, refunds, saved methods), so connecting one is a new `IPaymentGateway` class plus its browser library. Not yet simulated: webhooks for asynchronous confirmations, 3-D Secure, disputes, and a reconciliation job for a charge that succeeds while the service crashes before recording it. Cancelling a policy removes its unpaid installments instead of voiding them.
 - **Illustrative pricing.** Rating multipliers are hard-coded in the strategy classes. They are not actuarial data and cannot be edited from the UI.
-- **UTC date rules.** "Today" is evaluated in UTC, with slack in the enrollment window and a grace period on overdue premiums to cover time-zone differences.
+- **One business time zone.** "Today" (due dates, overdue premiums, coverage and claim dates) is US Eastern for every customer, wherever they are (`BusinessTimeZone`). Screens show timestamps in the browser's own time zone.
+- **Existing sessions survive a password change.** Tokens already issued stay valid until they expire (60 minutes); there is no "sign out everywhere".
 - **Token storage.** The JWT is kept in `localStorage` with no refresh-token flow. Production systems often use httpOnly cookies.
 - **Per-request account check.** The gateway asks the Identity service, on every request, whether the account is still active with the same role. Deactivation is immediate, but it costs one internal HTTP call per request.
 - **Eventual consistency.** The premium schedule is created by Billing a moment after the enrollment is saved, and unpaid installments are removed a moment after a cancellation. The API hides both gaps (it waits for the saga, and treats a cancelled policy's unpaid installments as gone), but other services' views of each other can briefly lag.

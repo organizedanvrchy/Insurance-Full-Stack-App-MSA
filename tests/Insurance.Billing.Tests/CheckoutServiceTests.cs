@@ -21,7 +21,7 @@ public class CheckoutServiceTests
     private const string DeclinedCard = "tok_mock_card_visa_0002_1230";    // card_declined
     private const string ProcessorError = "tok_mock_card_visa_0119_1230";  // processing_error (retryable)
 
-    private static DateOnly Today => DateOnly.FromDateTime(DateTime.UtcNow);
+    private static DateOnly Today => Insurance.BuildingBlocks.Time.BusinessTime.Today;
 
     private readonly FakePaymentRepository _payments = new();
     private readonly FakeTransactionRepository _transactions;

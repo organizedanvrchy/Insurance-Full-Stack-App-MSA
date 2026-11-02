@@ -71,6 +71,36 @@ public class UserRepository : IUserRepository
         return list;
     }
 
+    public async Task<string> ChangeEmailAsync(int userId, string newEmail)
+    {
+        await using var conn = _db.Create();
+        await using var cmd = conn.StoredProc("accounts.usp_User_ChangeEmail");
+        cmd.AddParam("@UserId",   SqlDbType.Int, userId);
+        cmd.AddParam("@NewEmail", SqlDbType.NVarChar, newEmail, 256);
+
+        await conn.OpenAsync();
+        try
+        {
+            return (string)(await cmd.ExecuteScalarAsync())!;
+        }
+        // 50001 = the THROW in the proc. 2627/2601 = unique index violation (two accounts racing for the address).
+        catch (SqlException ex) when (ex.Number is 50001 or 2627 or 2601)
+        {
+            throw new DuplicateEmailException(newEmail);
+        }
+    }
+
+    public async Task ChangePasswordAsync(int userId, string passwordHash)
+    {
+        await using var conn = _db.Create();
+        await using var cmd = conn.StoredProc("accounts.usp_User_ChangePassword");
+        cmd.AddParam("@UserId",       SqlDbType.Int, userId);
+        cmd.AddParam("@PasswordHash", SqlDbType.NVarChar, passwordHash, 100);
+
+        await conn.OpenAsync();
+        await cmd.ExecuteNonQueryAsync();
+    }
+
     internal static User Map(SqlDataReader r) => new()
     {
         UserId       = r.GetInt32(r.GetOrdinal("UserId")),

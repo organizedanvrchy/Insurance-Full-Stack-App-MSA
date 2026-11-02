@@ -108,6 +108,7 @@ flowchart TD
 | `EnrollmentActivated` | Enrollments | Quotes, Notifications | The reserved quote becomes used for good; the customer gets a "your policy is active" email |
 | `EnrollmentFailed` | Enrollments | Quotes, Billing | Compensation: the quote is released, any schedule removed |
 | `EnrollmentCancelled` | Enrollments (outbox) | Billing, Notifications | Unpaid installments are removed; paid ones stay as history. The customer gets a confirmation email |
+| `EmailChanged`, `PasswordChanged` | Identity (direct) | Notifications | "Was this you?" emails: to the **old** address after an email change, to the account's address after a password change |
 | `CustomerRegistered` | Identity (direct, see below) | Notifications | Saves the sign-up form's "email me payment reminders" answer, unless the customer already changed it |
 | `EmailVerificationRequested` | Identity (direct) | Notifications | Emails the verification link |
 | `PaymentReceived` | Billing (outbox, in the same transaction as `usp_Payment_Settle`) | Notifications | Payment receipt email |
@@ -128,7 +129,7 @@ The Notifications service only listens: no service waits for it, references it (
 
 **Payment reminders** come from `PaymentReminderJob` in Billing, which runs hourly. `ReminderSchedule` decides, per unpaid installment, which stage is due today: `DueSoon` (3 days before), `DueToday`, `Overdue` (the day after the grace period, from `billing.ufn_OverdueGraceDays`, the same rule as the overdue badge and the claim block), `OverdueSecondNotice` (+5 days) and `OverdueFinalNotice` (+10 days). A stage is sent on its day or the day after, never later, so a first deployment or an outage doesn't produce a burst of stale reminders. Each (installment, stage) is inserted into `billing.PaymentReminders` together with its event (outbox) before anything is published, so several Billing instances never send the same reminder twice.
 
-**Email verification** (Identity): registering creates an unverified account and a link token (32 random bytes; only its SHA-256 hash is stored, single-use, 24-hour expiry, replaced by any newer link). Until the link is used, `EmailVerificationRules.EnsureEmailVerifiedAsync` makes Enrollments and Claims answer `403` to enrolling and filing claims; it asks Identity on each such request, so verifying takes effect immediately without a new token. Customers can't change their email address (the original application never offered it; `003_remove_email_change.sql` removed an early version). Resending is limited to one per minute while a link is outstanding and six a day. Accounts that existed before verification was introduced were marked verified by the migration.
+**Email verification** (Identity): registering creates an unverified account and a link token (32 random bytes; only its SHA-256 hash is stored, single-use, 24-hour expiry, replaced by any newer link). Until the link is used, `EmailVerificationRules.EnsureEmailVerifiedAsync` makes Enrollments and Claims answer `403` to enrolling and filing claims; it asks Identity on each such request, so verifying takes effect immediately without a new token. Customers can change their email from the profile page with their current password (`usp_User_ChangeEmail`): the new address works at once but is unverified again, links sent to the old one stop working, a link goes to the new one, and the old one gets a "was this you?" email. (`003_remove_email_change.sql` removed an earlier design that held the new address as pending; `004` added this one.) Changing the password needs the current one, follows the sign-up rules, and is announced by email. Every email ends with an "automated message, don't reply" notice pointing at `Email:SupportEmail`. Resending is limited to one per minute while a link is outstanding and six a day. Accounts that existed before verification was introduced were marked verified by the migration.
 
 ### 3.3 What keeps them independent
 
@@ -396,7 +397,7 @@ The allowed moves live in **one** place, the `ClaimStatusTransitions` class. The
 
 | Concept | Rule | Where it lives |
 |---|---|---|
-| Enrollment **Expired** | Stored `Active` and `EndDate` is before today (UTC) | `enrollments.vw_EnrollmentDetails` |
+| Enrollment **Expired** | Stored `Active` and `EndDate` is before today (business time zone) | `enrollments.vw_EnrollmentDetails` |
 | Payment **Overdue** | Stored `Pending` and due more than **5 days** ago | `billing.vw_PaymentDetails` |
 | Alert **Overdue** | Active enrollment with at least one overdue payment | Billing's `usp_Premium_GetSummaries` (count) and `EnrollmentService` |
 | Alert **DueSoon** | Active, nothing overdue, next unpaid installment due within **7 days** | `EnrollmentService` (`DueSoonDays` constant) |
@@ -589,7 +590,7 @@ Some rules read another service's data, so they are checked in a service's C# co
 
 | No. | Raised by | Meaning | Exception | HTTP |
 |---:|---|---|---|:---:|
-| 50001 | Identity: `accounts.usp_User_Register` | Email already registered | `DuplicateEmailException` | 409 |
+| 50001 | Identity: `accounts.usp_User_Register`, `usp_User_ChangeEmail` | Email already registered | `DuplicateEmailException` | 409 |
 | 50002 | Enrollments: `enrollments.usp_Enrollment_CreatePending` | Active enrollment already exists for this plan | `DuplicateEnrollmentException` | 409 |
 | (50003) | Service: `QuoteService`, `EnrollmentService` | Plan does not exist or was retired (quote: 404, enrolling from an old quote: 400) | `NotFoundException` / `BusinessRuleException` | 404 / 400 |
 | 50004 | Billing: `billing.usp_Payment_Settle`, and `CheckoutService` for "not yours" | Payment not found, or not yours (deliberately the same message) | `PaymentNotFoundException` | 404 |
@@ -628,7 +629,7 @@ Each service creates its own database from the scripts in its `Database/` folder
 
 | Database (service) | Tables and views | Stored procedures |
 |---|---|---|
-| `InsuranceIdentity` | `accounts.Users` (with `EmailVerifiedAt`), `accounts.EmailVerificationTokens` (hashes only) | `usp_User_Register`, `usp_User_GetByEmail`, `usp_User_GetById`, `usp_User_GetMany`, `usp_Customer_GetAll`, `usp_Customer_SetActive`, `usp_EmailToken_Create`, `usp_EmailToken_GetRecent`, `usp_EmailToken_Consume` |
+| `InsuranceIdentity` | `accounts.Users` (with `EmailVerifiedAt`), `accounts.EmailVerificationTokens` (hashes only) | `usp_User_Register`, `usp_User_GetByEmail`, `usp_User_GetById`, `usp_User_GetMany`, `usp_User_ChangeEmail`, `usp_User_ChangePassword`, `usp_Customer_GetAll`, `usp_Customer_SetActive`, `usp_EmailToken_Create`, `usp_EmailToken_GetRecent`, `usp_EmailToken_Consume` |
 | `InsuranceCatalog` | `catalog.Policies` (20 plans seeded by `002_seed_plans.sql`) | `usp_Policy_Create`, `usp_Policy_GetAll`, `usp_Policy_GetById`, `usp_Policy_GetMany`, `usp_Policy_Update`, `usp_Policy_Deactivate` |
 | `InsuranceQuotes` | `quotes.Quotes` | `usp_Quote_Create`, `usp_Quote_GetById`, `usp_Quote_Reserve`, `usp_Quote_Release`, `usp_Quote_MarkUsed` |
 | `InsuranceEnrollments` | `enrollments.Enrollments`, `enrollments.vw_EnrollmentDetails` (derived `Expired`), `dbo.OutboxMessages` | `usp_Enrollment_CreatePending`, `usp_Enrollment_Complete`, `usp_Enrollment_GetByUser`, `usp_Enrollment_GetById`, `usp_Enrollment_GetMany`, `usp_Enrollment_CountActiveByUser`, `usp_Enrollment_Cancel` |
@@ -651,6 +652,7 @@ A transaction never spans two services. Each service keeps its own invariants wi
 | Review a claim | Claims: `usp_Claim_Review` | **Optimistic concurrency** through `WHERE Status = @FromStatus`. On approval, locks the enrollment's claims and re-checks remaining coverage against the plan coverage the service passes in |
 | Set customer active | Identity: `usp_Customer_SetActive` | A single `UPDATE`, restricted to `Role = 'Customer'` so admins cannot be deactivated through this path |
 | Verify an email | Identity: `usp_EmailToken_Consume` | `UPDLOCK` on the token and the user; a link works exactly once |
+| Change the email | Identity: `usp_User_ChangeEmail` | `UPDLOCK, HOLDLOCK` on the "address taken" check, so two accounts can't take the same address; outstanding links are invalidated in the same transaction |
 | Send a reminder | Billing: `usp_Reminder_Record` | Primary key (installment, stage) plus `UPDLOCK, HOLDLOCK`; the row and `PaymentReminderDue` commit together through the outbox |
 | Send an email | Notifications: `usp_Email_Begin` | Unique `NotificationKey`, claimed under `UPDLOCK, HOLDLOCK`; a repeated event finds the email already sent |
 
@@ -711,7 +713,7 @@ src/app/
 
 ## 13. Conventions
 
-- **Time:** all timestamps are UTC (`SYSUTCDATETIME()`, `DateTime.UtcNow`). `DATE` columns map to `DateOnly`. ADO.NET returns `DATETIME2` values with an unspecified kind, so `GetUtcDateTime` tags them as UTC, which makes the JSON end in `Z` and the browser display local time correctly. Date rules include slack (enrollment window, 5-day overdue grace) to absorb time-zone differences.
+- **Time:** all timestamps are UTC (`SYSUTCDATETIME()`, `DateTime.UtcNow`). `DATE` columns map to `DateOnly`. ADO.NET returns `DATETIME2` values with an unspecified kind, so `GetUtcDateTime` tags them as UTC, which makes the JSON end in `Z` and the browser display local time correctly. **"Today" is in the business time zone** (`BusinessTimeZone`, default `America/New_York`): C# uses `BusinessTime.Today` (never `DateTime.UtcNow.Date`), and SQL uses `dbo.ufn_Today()`, which `DatabaseMigrator` recreates from the same setting at every start. Otherwise a payment made at 8 pm Eastern would be dated tomorrow, and "due today" reminders would arrive the evening before. Emails write times in that zone with EST/EDT.
 - **Money:** `DECIMAL(18,2)` in SQL and `decimal` in C#. Decimal parameters always declare precision and scale, otherwise SQL Server rounds to whole numbers. Rounding is away from zero.
 - **JSON:** camelCase properties, enums as names, `DateOnly` as `yyyy-MM-dd`.
 - **IDs:** read from the validated token for the caller, never accepted from the client for "who am I".
@@ -760,7 +762,7 @@ Unit tests (xUnit) target the layers that contain decisions, using small in-memo
 
 ## 16. Limitations and future work
 
-**Limitations:** simulated payments (cancelling deletes unpaid installments rather than voiding them), hard-coded illustrative rating factors, UTC-based date rules, JWT in `localStorage` with no refresh tokens, no pagination, attachments or notifications, no frontend tests, and the end-to-end suite is not yet automated in CI.
+**Limitations:** simulated payments (cancelling deletes unpaid installments rather than voiding them), hard-coded illustrative rating factors, one business time zone for every customer, JWT in `localStorage` with no refresh tokens, no pagination, attachments or notifications, no frontend tests, and the end-to-end suite is not yet automated in CI.
 
 **Platform next steps:**
 

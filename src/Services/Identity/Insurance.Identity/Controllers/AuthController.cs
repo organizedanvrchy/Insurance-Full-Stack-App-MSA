@@ -64,6 +64,30 @@ public class AuthController : ControllerBase
     public async Task<ActionResult<VerifyEmailResponse>> VerifyEmail(VerifyEmailRequest request) =>
         Ok(await _verification.VerifyAsync(request.Token));
 
+    // ---------------- Changing the email and the password ----------------
+
+    // Takes effect at once; the new address must then be verified, and the old one is told.
+    // 400 wrong password or same address, 409 address taken, 429 too many emails.
+    [Authorize]
+    [HttpPost("change-email")]
+    [ProducesResponseType(typeof(UserDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+    public async Task<ActionResult<UserDto>> ChangeEmail(ChangeEmailRequest request) =>
+        Ok(await _verification.ChangeEmailAsync(CurrentUserId, request));
+
+    // 400 if the current password is wrong, the new one breaks the rules, or the confirmation doesn't match.
+    [Authorize]
+    [HttpPost("change-password")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ChangePassword(ChangePasswordRequest request)
+    {
+        await _auth.ChangePasswordAsync(CurrentUserId, request);
+        return NoContent();
+    }
+
     // Sends a fresh link. 409 if already verified, 429 when asked too often.
     [Authorize]
     [HttpPost("resend-verification")]

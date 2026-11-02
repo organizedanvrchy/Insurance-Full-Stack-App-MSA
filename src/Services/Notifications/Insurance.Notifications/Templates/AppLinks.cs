@@ -8,8 +8,16 @@ public class AppLinks
 {
     private readonly string _base;
 
-    public AppLinks(IOptions<EmailOptions> options) : this(options.Value.AppBaseUrl) { }
-    public AppLinks(string appBaseUrl) => _base = appBaseUrl.TrimEnd('/');
+    public AppLinks(IOptions<EmailOptions> options) : this(options.Value.AppBaseUrl, options.Value.SupportEmail) { }
+
+    public AppLinks(string appBaseUrl, string supportEmail = "support@rainsurance.example")
+    {
+        _base = appBaseUrl.TrimEnd('/');
+        SupportEmail = supportEmail;
+    }
+
+    /// <summary>Where customers get help (the From address isn't monitored).</summary>
+    public string SupportEmail { get; }
 
     public string VerifyEmail(string token) => $"{_base}/verify-email?token={Uri.EscapeDataString(token)}";
     public string MyPolicies => $"{_base}/my-policies";

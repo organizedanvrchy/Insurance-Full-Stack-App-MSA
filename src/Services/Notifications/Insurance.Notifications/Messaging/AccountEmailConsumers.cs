@@ -31,6 +31,50 @@ public class EmailVerificationRequestedConsumer : IConsumer<EmailVerificationReq
     }
 }
 
+/// <summary>"Your email address was changed", to the OLD address.</summary>
+public class EmailChangedConsumer : IConsumer<EmailChanged>
+{
+    private readonly INotificationDispatcher _dispatcher;
+    private readonly EmailTemplates _templates;
+
+    public EmailChangedConsumer(INotificationDispatcher dispatcher, EmailTemplates templates)
+    {
+        _dispatcher = dispatcher;
+        _templates = templates;
+    }
+
+    public Task Consume(ConsumeContext<EmailChanged> context)
+    {
+        var e = context.Message;
+        return _dispatcher.SendAsync(new Notification(
+            $"email-changed:{context.MessageId}", e.UserId, NotificationKind.EmailChanged,
+            _ => Task.FromResult(_templates.EmailChanged(e)),
+            ToEmail: e.OldEmail), context.CancellationToken);   // the account already uses the new one
+    }
+}
+
+/// <summary>"Your password was changed", to the account's email.</summary>
+public class PasswordChangedConsumer : IConsumer<PasswordChanged>
+{
+    private readonly INotificationDispatcher _dispatcher;
+    private readonly EmailTemplates _templates;
+
+    public PasswordChangedConsumer(INotificationDispatcher dispatcher, EmailTemplates templates)
+    {
+        _dispatcher = dispatcher;
+        _templates = templates;
+    }
+
+    public Task Consume(ConsumeContext<PasswordChanged> context)
+    {
+        var e = context.Message;
+        return _dispatcher.SendAsync(new Notification(
+            $"password-changed:{context.MessageId}", e.UserId, NotificationKind.PasswordChanged,
+            _ => Task.FromResult(_templates.PasswordChanged(e)),
+            ToEmail: e.Email), context.CancellationToken);
+    }
+}
+
 /// <summary>Saves the "email me payment reminders" answer from the sign-up form, unless the customer already chose.</summary>
 public class CustomerRegisteredConsumer : IConsumer<CustomerRegistered>
 {

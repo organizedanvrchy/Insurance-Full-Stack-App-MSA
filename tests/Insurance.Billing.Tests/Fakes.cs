@@ -107,7 +107,7 @@ public class FakeTransactionRepository : ITransactionRepository
 
         var payment = _payments.Payments.Single(p => p.PaymentId == paymentId);
         if (payment.PaidDate is not null) throw new PaymentConflictException("This installment has already been paid.");
-        payment.PaidDate = DateOnly.FromDateTime(DateTime.UtcNow);
+        payment.PaidDate = Insurance.BuildingBlocks.Time.BusinessTime.Today;
         payment.Status = PaymentStatus.Paid;
 
         var t = Transactions.Single(x => x.TransactionId == transactionId);

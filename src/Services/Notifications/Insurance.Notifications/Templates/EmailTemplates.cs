@@ -1,6 +1,7 @@
 using System.Globalization;
 using Insurance.Billing.Contracts;
 using Insurance.Claims.Contracts;
+using Insurance.BuildingBlocks.Time;
 using Insurance.Identity.Contracts;
 
 namespace Insurance.Notifications.Templates;
@@ -16,9 +17,21 @@ public class EmailTemplates
 
     public EmailTemplates(AppLinks links) => _links = links;
 
+    // Every email says it's automated and where to get help.
+    private EmailBuilder Email(string subject, string preheader) => new(subject, preheader, _links.SupportEmail);
+
     public static string Money(decimal amount) => amount.ToString("C", Us);
     public static string Date(DateOnly date) => date.ToString("MMMM d, yyyy", Us);
-    public static string Date(DateTime utc) => utc.ToString("MMMM d, yyyy", Us);
+
+    /// <summary>A UTC timestamp as a date in the business time zone (see BusinessTime).</summary>
+    public static string Date(DateTime utc) => BusinessTime.ToLocal(utc).ToString("MMMM d, yyyy", Us);
+
+    /// <summary>"November 3, 2026 at 9:00 AM EST": a UTC timestamp in the business time zone.</summary>
+    public static string DateTimeText(DateTime utc)
+    {
+        var local = BusinessTime.ToLocal(utc);
+        return $"{local.ToString("MMMM d, yyyy 'at' h:mm tt", Us)} {BusinessTime.Abbreviation(local)}";
+    }
 
     /// <summary>"Jane" from "Jane Doe". The whole name if it has no space.</summary>
     public static string FirstName(string fullName)
@@ -33,9 +46,21 @@ public class EmailTemplates
     public RenderedEmail VerifyEmail(EmailVerificationRequested e)
     {
         var link = _links.VerifyEmail(e.Token);
-        var expires = e.ExpiresAtUtc.ToString("MMMM d, yyyy 'at' h:mm tt 'UTC'", Us);
+        var expires = DateTimeText(e.ExpiresAtUtc);
 
-        return new EmailBuilder("Verify your email address", "Confirm your email to start enrolling in policies.")
+        if (e.AfterEmailChange)
+        {
+            return Email("Confirm your new email address", "One click to confirm the address you just changed to.")
+                .Heading("Confirm your new email address")
+                .Paragraph($"Hi {FirstName(e.FullName)},")
+                .Paragraph($"You changed your RAINsurance sign-in email to {e.Email}. Please confirm it's yours. Until you do, you can still sign in with it and look around, but enrolling in a policy and filing claims are paused.")
+                .Button("Confirm my email", link)
+                .Small($"This link works once and expires on {expires}. If it expires, sign in and send a new one from your profile.")
+                .Small($"Didn't change your email? Contact us right away at {_links.SupportEmail}.")
+                .Build();
+        }
+
+        return Email("Verify your email address", "Confirm your email to start enrolling in policies.")
             .Heading("Welcome to RAINsurance")
             .Paragraph($"Hi {FirstName(e.FullName)},")
             .Paragraph("Thanks for creating an account. Please confirm that this is your email address. You can browse plans and get quotes right away; enrolling in a policy and filing claims unlock once your email is verified.")
@@ -45,10 +70,29 @@ public class EmailTemplates
             .Build();
     }
 
+    /// <summary>To the OLD address: the only way the owner hears about it if someone else made the change.</summary>
+    public RenderedEmail EmailChanged(EmailChanged e) =>
+        Email("Your RAINsurance email address was changed", $"Your account now uses {e.NewEmail}.")
+            .Heading("Your email address was changed")
+            .Paragraph($"Hi {FirstName(e.FullName)},")
+            .Paragraph($"The sign-in email for your RAINsurance account was changed from {e.OldEmail} to {e.NewEmail} on {DateTimeText(e.ChangedAtUtc)}. We'll send everything to the new address from now on.")
+            .Paragraph("If you made this change, you can ignore this email.")
+            .Callout("Didn't make this change?", $"Contact support immediately at {_links.SupportEmail}. Someone else may have access to your account.", warning: true)
+            .Build();
+
+    public RenderedEmail PasswordChanged(PasswordChanged e) =>
+        Email("Your RAINsurance password was changed", "Your password was just changed.")
+            .Heading("Your password was changed")
+            .Paragraph($"Hi {FirstName(e.FullName)},")
+            .Paragraph($"The password for your RAINsurance account was changed on {DateTimeText(e.ChangedAtUtc)}.")
+            .Paragraph("If you made this change, you can ignore this email.")
+            .Callout("Didn't make this change?", $"Contact support immediately at {_links.SupportEmail}. Someone else may have access to your account.", warning: true)
+            .Build();
+
     // ---------------- Policies ----------------
 
     public RenderedEmail PolicyActivated(string fullName, PolicySummary policy) =>
-        new EmailBuilder($"Your {policy.PolicyName} policy is active", $"Coverage starts {Date(policy.StartDate)}.")
+        Email($"Your {policy.PolicyName} policy is active", $"Coverage starts {Date(policy.StartDate)}.")
             .Heading("You're covered")
             .Paragraph($"Hi {FirstName(fullName)},")
             .Paragraph($"Your enrollment in {policy.PolicyName} is complete. Here are the details for your records.")
@@ -57,12 +101,11 @@ public class EmailTemplates
                 ("Coverage", Money(policy.CoverageAmount)),
                 ("Coverage period", $"{Date(policy.StartDate)} – {Date(policy.EndDate)}"),
                 ("First premium due", Date(policy.StartDate)))
-            .Paragraph("We'll remind you before each premium is due, and send a receipt every time you pay.")
             .Button("View my policies", _links.MyPolicies)
             .Build();
 
     public RenderedEmail PolicyCancelled(string fullName, PolicySummary policy) =>
-        new EmailBuilder($"Your {policy.PolicyName} policy was cancelled", "Your cancellation is confirmed.")
+        Email($"Your {policy.PolicyName} policy was cancelled", "Your cancellation is confirmed.")
             .Heading("Policy cancelled")
             .Paragraph($"Hi {FirstName(fullName)},")
             .Paragraph($"As requested, your {policy.PolicyName} policy has been cancelled. Any premiums you hadn't paid yet have been removed; the ones you paid stay in your payment history.")
@@ -73,7 +116,7 @@ public class EmailTemplates
     // ---------------- Claims ----------------
 
     public RenderedEmail ClaimSubmitted(string fullName, ClaimSubmitted e, string policyName) =>
-        new EmailBuilder($"We received your claim {e.ClaimNumber}", "We'll email you whenever its status changes.")
+        Email($"We received your claim {e.ClaimNumber}", "We'll email you whenever its status changes.")
             .Heading("Claim received")
             .Paragraph($"Hi {FirstName(fullName)},")
             .Paragraph("Thanks, we've received your claim. A claims specialist will review it, and we'll email you each time its status changes.")
@@ -101,7 +144,7 @@ public class EmailTemplates
             _ => ($"Your claim {e.ClaimNumber} was updated", "Your claim was updated", "The status of your claim has changed.")
         };
 
-        var email = new EmailBuilder(subject, message)
+        var email = Email(subject, message)
             .Heading(heading)
             .Paragraph($"Hi {FirstName(fullName)},")
             .Paragraph(message)
@@ -129,7 +172,7 @@ public class EmailTemplates
 
     public RenderedEmail PaymentReceipt(string fullName, PaymentReceived e, string policyName)
     {
-        var email = new EmailBuilder($"Payment receipt {e.ReceiptNumber}", $"We received your {Money(e.Amount)} payment for {policyName}.")
+        var email = Email($"Payment receipt {e.ReceiptNumber}", $"We received your {Money(e.Amount)} payment for {policyName}.")
             .Heading("Thanks for your payment")
             .Paragraph($"Hi {FirstName(fullName)},")
             .Paragraph($"We've received your premium payment for {policyName}. Keep this email as your receipt.")
@@ -156,7 +199,7 @@ public class EmailTemplates
             ? "This was a problem on the payment processor's side, not with your account. Please try again in a few minutes."
             : "Please check the details or use a different payment method.";
 
-        return new EmailBuilder($"Your {policyName} payment didn't go through", $"Your {amount} payment was not completed. Nothing was charged.")
+        return Email($"Your {policyName} payment didn't go through", $"Your {amount} payment was not completed. Nothing was charged.")
             .Heading("Your payment didn't go through")
             .Paragraph($"Hi {FirstName(fullName)},")
             .Paragraph($"We couldn't complete your {amount} premium payment for {policyName}. You have not been charged, and the installment is still unpaid.")
@@ -196,7 +239,7 @@ public class EmailTemplates
                 $"Your {amount} premium for {policyName} was due on {due} and is now {e.DaysPastDue} days overdue. This is our last reminder for this installment.", true)
         };
 
-        var email = new EmailBuilder(subject, message)
+        var email = Email(subject, message)
             .Heading(heading)
             .Paragraph($"Hi {FirstName(fullName)},")
             .Paragraph(message)

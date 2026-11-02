@@ -1,3 +1,4 @@
+using Insurance.BuildingBlocks.Time;
 using Insurance.Billing.Contracts;
 using Insurance.BuildingBlocks.Exceptions;
 using Insurance.Catalog.Contracts;
@@ -48,7 +49,7 @@ public class EnrollmentService : IEnrollmentService
     // For step 4 the request waits briefly for the saga, so the customer normally gets the finished policy (201).
     public async Task<EnrollmentDto> EnrollAsync(int userId, EnrollmentRequest request)
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = BusinessTime.Today;
         var start = request.StartDate ?? today;
 
         // One day of slack: in the evening a customer's local "today" can already be "yesterday" in UTC.
@@ -157,7 +158,7 @@ public class EnrollmentService : IEnrollmentService
         if (e.Status != EnrollmentStatus.Active) return PaymentAlert.None;
         if (p.OverdueCount > 0) return PaymentAlert.Overdue;
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = BusinessTime.Today;
         if (p.NextDueDate is { } due && due <= today.AddDays(DueSoonDays))
             return PaymentAlert.DueSoon;
 

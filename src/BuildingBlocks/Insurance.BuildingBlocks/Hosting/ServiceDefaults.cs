@@ -3,6 +3,7 @@ using Insurance.BuildingBlocks.Data;
 using Insurance.BuildingBlocks.Exceptions;
 using Insurance.BuildingBlocks.Http;
 using Insurance.BuildingBlocks.Security;
+using Insurance.BuildingBlocks.Time;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -17,6 +18,8 @@ public static class ServiceDefaults
 {
     public static WebApplicationBuilder AddServiceDefaults(this WebApplicationBuilder builder, string title)
     {
+        BusinessTime.Configure(builder.Configuration);   // "today" in the insurer's time zone, not UTC
+
         builder.Services.AddControllers()
             .AddJsonOptions(o =>
                 // Enums travel as names ("Admin"), and unknown names/numbers are rejected with a 400.

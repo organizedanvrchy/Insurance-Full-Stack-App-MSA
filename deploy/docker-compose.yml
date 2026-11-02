@@ -17,6 +17,8 @@ x-service: &service
 x-common-env: &common-env
   Jwt__Key: ${JWT_KEY:?set JWT_KEY in deploy/.env}
   RabbitMq__Host: rabbitmq
+  # What "today" means for due dates, overdue premiums and claims, and the zone emails show times in.
+  BusinessTimeZone: ${BUSINESS_TIME_ZONE:-America/New_York}
 
 services:
   sqlserver:
@@ -162,6 +164,7 @@ services:
       Email__Username: ${EMAIL_USERNAME:-}
       Email__Password: ${EMAIL_PASSWORD:-}
       Email__FromAddress: ${EMAIL_FROM:-no-reply@rainsurance.example}
+      Email__SupportEmail: ${SUPPORT_EMAIL:-support@rainsurance.example}
       Email__AppBaseUrl: ${APP_BASE_URL:-http://localhost:4200}
 
   gateway:

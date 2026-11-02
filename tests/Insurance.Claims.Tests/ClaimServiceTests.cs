@@ -13,7 +13,7 @@ namespace Insurance.Claims.Tests;
 
 public class ClaimServiceTests
 {
-    private static DateOnly Today => DateOnly.FromDateTime(DateTime.UtcNow);
+    private static DateOnly Today => Insurance.BuildingBlocks.Time.BusinessTime.Today;
 
     private readonly FakeClaimRepository _repo = new();
     private readonly FakeEnrollmentLookup _enrollments = new();

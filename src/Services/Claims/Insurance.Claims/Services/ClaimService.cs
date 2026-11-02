@@ -1,3 +1,4 @@
+using Insurance.BuildingBlocks.Time;
 using Insurance.Billing.Contracts;
 using Insurance.BuildingBlocks.Exceptions;
 using Insurance.Catalog.Contracts;
@@ -32,7 +33,7 @@ public class ClaimService : IClaimService
     public async Task<ClaimDto> SubmitAsync(int userId, ClaimSubmitRequest request)
     {
         var incidentDate = request.IncidentDate!.Value;
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = BusinessTime.Today;
 
         // 403 until the customer has clicked the link in their verification email.
         await _users.EnsureEmailVerifiedAsync(userId, "file a claim");
