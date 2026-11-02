@@ -67,7 +67,7 @@ export class EmailSettingsComponent {
     this.auth.resendVerification().subscribe({
       next: () => {
         this.sending.set(false);
-        this.verifyMessage.set(`We sent a new link to ${this.auth.user()?.email}. It works for 15 minutes.`);
+        this.verifyMessage.set(`We sent a new link to ${this.auth.user()?.email}.`);
       },
       error: (err) => {
         this.sending.set(false);
@@ -114,7 +114,7 @@ export class EmailSettingsComponent {
         this.changing.set(false);
         this.closeChange();
         this.verifyMessage.set(
-          `Your email is now ${user.email}. We sent a verification link there (it works for 15 minutes), and a notice to ${oldEmail}.`,
+          `Your email is now ${user.email}. We sent a verification link there, and a notice to ${oldEmail}.`,
         );
       },
       error: (err) => {

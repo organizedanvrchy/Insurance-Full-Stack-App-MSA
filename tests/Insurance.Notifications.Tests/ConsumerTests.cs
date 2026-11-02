@@ -75,6 +75,26 @@ public class ConsumerTests : IAsyncLifetime
         Assert.True(_repo.Emails.ContainsKey("claim-status:7:Approved"));
     }
 
+    [Theory]
+    [InlineData(ClaimStatus.Submitted, ClaimStatus.UnderReview)]
+    [InlineData(ClaimStatus.Approved, ClaimStatus.Paid)]
+    public async Task Only_the_decision_on_a_claim_is_emailed(ClaimStatus from, ClaimStatus to)
+    {
+        await PublishAndWaitAsync(new ClaimStatusChanged(7, "CLM-2026-000007", 1, 10, 500m, from, to, null, DateTime.UtcNow));
+
+        Assert.Empty(_smtp.Sent);
+    }
+
+    [Fact]
+    public async Task A_rejection_is_emailed_with_the_reason()
+    {
+        await PublishAndWaitAsync(new ClaimStatusChanged(8, "CLM-2026-000008", 1, 10, 500m,
+            ClaimStatus.UnderReview, ClaimStatus.Rejected, "Not covered by this plan.", DateTime.UtcNow));
+
+        var email = Assert.Single(_smtp.Sent);
+        Assert.Contains("Reason: Not covered by this plan.", email.TextBody);
+    }
+
     [Fact]
     public async Task A_payment_produces_a_receipt()
     {

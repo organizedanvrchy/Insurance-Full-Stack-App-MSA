@@ -114,7 +114,7 @@ flowchart TD
 | `PaymentReceived` | Billing (outbox, in the same transaction as `usp_Payment_Settle`) | Notifications | Payment receipt email |
 | `PaymentDeclined` | Billing (outbox, with the declined/failed outcome) | Notifications | "Your payment didn't go through" email |
 | `PaymentReminderDue` | Billing (outbox, from the hourly reminder job) | Notifications | Reminder email, unless the customer turned reminders off |
-| `ClaimSubmitted`, `ClaimStatusChanged` | Claims (outbox) | Notifications | "Claim received" and one email per status the claim reaches |
+| `ClaimSubmitted`, `ClaimStatusChanged` | Claims (outbox) | Notifications | "Claim received", then one email for the decision (approved or rejected, with the reviewer's reason or notes); "under review" and "paid" send nothing |
 
 Identity publishes its events straight to the bus rather than through an outbox, because `EmailVerificationRequested` carries the one-time token for the link and the token must never be written to a database. If that publish fails, the account change still stands and the customer presses "Resend".
 

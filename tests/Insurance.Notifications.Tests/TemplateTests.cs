@@ -127,10 +127,8 @@ public class TemplateTests
     }
 
     [Theory]
-    [InlineData(ClaimStatus.UnderReview, "Your claim CLM-1 is under review")]
     [InlineData(ClaimStatus.Approved, "Good news: claim CLM-1 was approved")]
     [InlineData(ClaimStatus.Rejected, "An update on your claim CLM-1")]
-    [InlineData(ClaimStatus.Paid, "Claim CLM-1 has been paid")]
     public void Each_claim_status_has_its_own_subject(ClaimStatus status, string subject)
     {
         var e = new ClaimStatusChanged(1, "CLM-1", 1, 10, 500m, ClaimStatus.Submitted, status, null, DateTime.UtcNow);
@@ -179,7 +177,7 @@ public class TemplateTests
             "policy-active" => _templates.PolicyActivated("Jane Doe", policy),
             "policy-cancelled" => _templates.PolicyCancelled("Jane Doe", policy),
             "claim-received" => _templates.ClaimSubmitted("Jane Doe", new ClaimSubmitted(1, "CLM-1", 1, 10, due, 500m, DateTime.UtcNow), "Gold"),
-            "claim-status" => _templates.ClaimStatusChanged("Jane Doe", new ClaimStatusChanged(1, "CLM-1", 1, 10, 500m, ClaimStatus.Submitted, ClaimStatus.UnderReview, null, DateTime.UtcNow), "Gold"),
+            "claim-status" => _templates.ClaimStatusChanged("Jane Doe", new ClaimStatusChanged(1, "CLM-1", 1, 10, 500m, ClaimStatus.UnderReview, ClaimStatus.Approved, null, DateTime.UtcNow), "Gold"),
             "receipt" => _templates.PaymentReceipt("Jane Doe", new PaymentReceived(42, 7, "TXN-000007", 10, 1, 4, 9m, due, due, DateTime.UtcNow, "PayPal", 1, 12, null, null), "Gold"),
             "declined" => _templates.PaymentDeclined("Jane Doe", new PaymentDeclined(7, "TXN-000007", 42, 10, 1, 4, 9m, due, "PayPal", "No.", false, DateTime.UtcNow), "Gold"),
             _ => _templates.PaymentReminder("Jane Doe", Reminder(PaymentReminderStage.DueToday), "Gold")
@@ -201,7 +199,7 @@ public class TemplateTests
     [Fact]
     public void A_received_claim_sets_expectations_for_the_review()
     {
-        Assert.Contains("A claims specialist will review your claim, and we'll email you when it has been reviewed. "
+        Assert.Contains("Your claim is under review and we'll email you when a decision has been made. "
             + "Please allow at least 2 business days for a response.", Render("claim-received").Text);
     }
 
@@ -240,7 +238,8 @@ public class TemplateTests
         var e = new EmailVerificationRequested(1, "Jane Doe", "j@example.com", "t",
             new DateTime(2026, 11, 2, 19, 18, 0, DateTimeKind.Utc), ValidForMinutes: 15);
 
-        Assert.Contains("expires in 15 minutes, at 2:18 PM EST", _templates.VerifyEmail(e).Text);
+        Assert.Contains("This link works once and expires in 15 minutes, at 2:18 PM EST. If it expires, resend another verification email.",
+            _templates.VerifyEmail(e).Text);
     }
 
     [Fact]
