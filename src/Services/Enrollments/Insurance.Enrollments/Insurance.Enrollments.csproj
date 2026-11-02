@@ -18,6 +18,7 @@
     <ProjectReference Include="..\..\Catalog\Insurance.Catalog.Contracts\Insurance.Catalog.Contracts.csproj" />
     <ProjectReference Include="..\..\Quotes\Insurance.Quotes.Contracts\Insurance.Quotes.Contracts.csproj" />
     <ProjectReference Include="..\..\Billing\Insurance.Billing.Contracts\Insurance.Billing.Contracts.csproj" />
+    <ProjectReference Include="..\..\Identity\Insurance.Identity.Contracts\Insurance.Identity.Contracts.csproj" />
   </ItemGroup>
 
 </Project>

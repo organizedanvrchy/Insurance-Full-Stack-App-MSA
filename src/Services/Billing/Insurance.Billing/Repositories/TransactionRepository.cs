@@ -1,8 +1,10 @@
 using System.Data;
+using Insurance.Billing.Contracts;
 using Insurance.Billing.Enums;
 using Insurance.Billing.Exceptions;
 using Insurance.Billing.Models;
 using Insurance.BuildingBlocks.Data;
+using Insurance.BuildingBlocks.Messaging;
 using Microsoft.Data.SqlClient;
 
 namespace Insurance.Billing.Repositories;
@@ -10,7 +12,13 @@ namespace Insurance.Billing.Repositories;
 public class TransactionRepository : ITransactionRepository
 {
     private readonly IDbConnectionFactory _db;
-    public TransactionRepository(IDbConnectionFactory db) => _db = db;
+    private readonly IOutbox _outbox;
+
+    public TransactionRepository(IDbConnectionFactory db, IOutbox outbox)
+    {
+        _db = db;
+        _outbox = outbox;
+    }
 
     public async Task<PaymentTransaction?> GetByKeyAsync(int userId, string idempotencyKey)
     {
@@ -44,44 +52,95 @@ public class TransactionRepository : ITransactionRepository
     }
 
     public async Task<PaymentTransaction> CompleteAsync(int transactionId, TransactionStatus status, string? providerChargeId,
-        string? declineCode, string? message)
+        string? declineCode, string? message, PaymentDeclined? declinedEvent = null)
     {
         await using var conn = _db.Create();
-        await using var cmd = conn.StoredProc("billing.usp_Transaction_Complete");
-        cmd.AddParam("@TransactionId",    SqlDbType.Int, transactionId);
-        cmd.AddParam("@Status",           SqlDbType.NVarChar, status.ToString(), 20);
-        cmd.AddParam("@ProviderChargeId", SqlDbType.NVarChar, providerChargeId, 100);
-        cmd.AddParam("@DeclineCode",      SqlDbType.NVarChar, declineCode, 50);
-        cmd.AddParam("@Message",          SqlDbType.NVarChar, message, 300);
-        return (await ReadOneAsync(conn, cmd))!;
+        await conn.OpenAsync();
+        await using var tx = (SqlTransaction)await conn.BeginTransactionAsync();
+
+        PaymentTransaction completed;
+        await using (var cmd = conn.StoredProc("billing.usp_Transaction_Complete"))
+        {
+            cmd.Transaction = tx;
+            cmd.AddParam("@TransactionId",    SqlDbType.Int, transactionId);
+            cmd.AddParam("@Status",           SqlDbType.NVarChar, status.ToString(), 20);
+            cmd.AddParam("@ProviderChargeId", SqlDbType.NVarChar, providerChargeId, 100);
+            cmd.AddParam("@DeclineCode",      SqlDbType.NVarChar, declineCode, 50);
+            cmd.AddParam("@Message",          SqlDbType.NVarChar, message, 300);
+
+            await using var reader = await cmd.ExecuteReaderAsync();
+            await reader.ReadAsync();
+            completed = Map(reader);
+        }
+
+        if (declinedEvent is not null)
+            await _outbox.EnqueueAsync(conn, tx, declinedEvent);
+
+        await tx.CommitAsync();
+        if (declinedEvent is not null) _outbox.Notify();
+        return completed;
     }
 
-    public async Task<Payment> SettleAsync(int paymentId, int transactionId, string providerChargeId, string message)
+    public async Task<Payment> SettleAsync(int paymentId, int transactionId, string providerChargeId, string message, ReceiptDetails receipt)
     {
         await using var conn = _db.Create();
-        await using var cmd = conn.StoredProc("billing.usp_Payment_Settle");
-        cmd.AddParam("@PaymentId",        SqlDbType.Int, paymentId);
-        cmd.AddParam("@TransactionId",    SqlDbType.Int, transactionId);
-        cmd.AddParam("@ProviderChargeId", SqlDbType.NVarChar, providerChargeId, 100);
-        cmd.AddParam("@Message",          SqlDbType.NVarChar, message, 300);
-
         await conn.OpenAsync();
-        try
+        await using var tx = (SqlTransaction)await conn.BeginTransactionAsync();
+
+        // The proc's own BEGIN/COMMIT nest inside this transaction, so the receipt event commits with the payment.
+        Payment paid;
+        await using (var cmd = conn.StoredProc("billing.usp_Payment_Settle"))
         {
-            await using var reader = await cmd.ExecuteReaderAsync();
-            if (!await reader.ReadAsync())
-                throw new InvalidOperationException("usp_Payment_Settle returned no row.");
-            return PaymentRepository.Map(reader);
+            cmd.Transaction = tx;
+            cmd.AddParam("@PaymentId",        SqlDbType.Int, paymentId);
+            cmd.AddParam("@TransactionId",    SqlDbType.Int, transactionId);
+            cmd.AddParam("@ProviderChargeId", SqlDbType.NVarChar, providerChargeId, 100);
+            cmd.AddParam("@Message",          SqlDbType.NVarChar, message, 300);
+            try
+            {
+                await using var reader = await cmd.ExecuteReaderAsync();
+                if (!await reader.ReadAsync())
+                    throw new InvalidOperationException("usp_Payment_Settle returned no row.");
+                paid = PaymentRepository.Map(reader);
+            }
+            catch (SqlException ex) when (ex.Number == 50004)
+            {
+                throw new PaymentNotFoundException(paymentId);
+            }
+            // 50005 already paid, 50007 earlier installment unpaid: the proc's message is already user-friendly.
+            catch (SqlException ex) when (ex.Number is 50005 or 50007)
+            {
+                throw new PaymentConflictException(ex.Message);
+            }
         }
-        catch (SqlException ex) when (ex.Number == 50004)
+
+        // Where this installment sits in the schedule and what's due next. (The reader is closed before the outbox
+        // insert: both use this connection.)
+        int number, count;
+        DateOnly? nextDueDate;
+        decimal? nextDueAmount;
+        await using (var info = conn.StoredProc("billing.usp_Payment_GetReceiptInfo"))
         {
-            throw new PaymentNotFoundException(paymentId);
+            info.Transaction = tx;
+            info.AddParam("@PaymentId", SqlDbType.Int, paymentId);
+            await using var reader = await info.ExecuteReaderAsync();
+            await reader.ReadAsync();
+
+            number = reader.GetInt32(reader.GetOrdinal("InstallmentNumber"));
+            count = reader.GetInt32(reader.GetOrdinal("InstallmentCount"));
+            var hasNext = !reader.IsDBNull(reader.GetOrdinal("NextDueDate"));
+            nextDueDate = hasNext ? reader.GetDateOnly("NextDueDate") : null;
+            nextDueAmount = hasNext ? reader.GetDecimal(reader.GetOrdinal("NextDueAmount")) : null;
         }
-        // 50005 already paid, 50007 earlier installment unpaid: the proc's message is already user-friendly.
-        catch (SqlException ex) when (ex.Number is 50005 or 50007)
-        {
-            throw new PaymentConflictException(ex.Message);
-        }
+
+        await _outbox.EnqueueAsync(conn, tx, new PaymentReceived(
+            paid.PaymentId, transactionId, Services.PaymentService.Reference(transactionId), paid.EnrollmentId,
+            receipt.UserId, receipt.PolicyId, paid.Amount, paid.DueDate, paid.PaidDate!.Value, DateTime.UtcNow,
+            receipt.PaymentMethod, number, count, nextDueDate, nextDueAmount));
+
+        await tx.CommitAsync();
+        _outbox.Notify();
+        return paid;
     }
 
     public async Task<PaymentTransaction?> GetByIdAsync(int transactionId)

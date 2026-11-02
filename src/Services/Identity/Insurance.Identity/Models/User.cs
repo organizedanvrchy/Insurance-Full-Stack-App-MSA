@@ -14,4 +14,8 @@ public class User
     public UserRole Role { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; }
+
+    public DateTime? EmailVerifiedAt { get; set; }    // null until the customer clicks the link in their email
+
+    public bool EmailVerified => EmailVerifiedAt is not null;
 }

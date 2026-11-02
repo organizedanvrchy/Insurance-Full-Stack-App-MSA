@@ -2,6 +2,7 @@ using Insurance.Billing.DTOs;
 using Insurance.Billing.Enums;
 using Insurance.Billing.Exceptions;
 using Insurance.Billing.Gateway;
+using Insurance.Billing.Repositories;
 using Insurance.Billing.Models;
 using Insurance.Billing.Services;
 using Insurance.BuildingBlocks.Exceptions;
@@ -20,7 +21,7 @@ public class CheckoutServiceTests
     private const string DeclinedCard = "tok_mock_card_visa_0002_1230";    // card_declined
     private const string ProcessorError = "tok_mock_card_visa_0119_1230";  // processing_error (retryable)
 
-    private static DateOnly Today => DateOnly.FromDateTime(DateTime.UtcNow);
+    private static DateOnly Today => Insurance.BuildingBlocks.Time.BusinessTime.Today;
 
     private readonly FakePaymentRepository _payments = new();
     private readonly FakeTransactionRepository _transactions;
@@ -238,5 +239,69 @@ public class CheckoutServiceTests
 
         await Assert.ThrowsAsync<NotFoundException>(() => _sut.PayAsync(100, userId: 1, request));
         Assert.Equal(0, _gateway.Charges);
+    }
+
+    // Email events (sent by the Notifications service)
+
+    [Fact]
+    public async Task An_approved_payment_saves_the_receipt_email_with_the_payment()
+    {
+        await _sut.PayAsync(100, userId: 1, With(Visa));
+
+        var (paymentId, transactionId, details) = Assert.Single(_transactions.Receipts);
+        Assert.Equal((100, 1), (paymentId, transactionId));
+        Assert.Equal(new ReceiptDetails(UserId: 1, PolicyId: 1, "Visa ending in 4242"), details);
+        Assert.Empty(_transactions.Declined);
+    }
+
+    [Fact]
+    public async Task A_declined_payment_saves_a_declined_email()
+    {
+        var result = await _sut.PayAsync(100, userId: 1, With(DeclinedCard));
+
+        var e = Assert.Single(_transactions.Declined);
+        Assert.Equal((result.Transaction.TransactionId, "TXN-000001", 100, 10, 1, 1, 50m),
+            (e.TransactionId, e.Reference, e.PaymentId, e.EnrollmentId, e.UserId, e.PolicyId, e.Amount));
+        Assert.Equal("Visa ending in 0002", e.PaymentMethod);
+        Assert.Equal(result.Message, e.Reason);
+        Assert.False(e.CanRetry);
+        Assert.Empty(_transactions.Receipts);
+    }
+
+    [Fact]
+    public async Task A_processor_error_says_trying_again_may_work()
+    {
+        await _sut.PayAsync(100, userId: 1, With(ProcessorError));
+
+        Assert.True(Assert.Single(_transactions.Declined).CanRetry);
+    }
+
+    [Fact]
+    public async Task Replaying_an_attempt_sends_no_second_email()
+    {
+        await _sut.PayAsync(100, userId: 1, With(DeclinedCard, key: "same-key"));
+        await _sut.PayAsync(100, userId: 1, With(DeclinedCard, key: "same-key"));
+
+        Assert.Single(_transactions.Declined);
+    }
+
+    [Fact]
+    public async Task A_refunded_attempt_sends_no_email()
+    {
+        _transactions.SettleThrows = new PaymentConflictException("This installment has already been paid.");
+
+        await Assert.ThrowsAsync<PaymentConflictException>(() => _sut.PayAsync(100, userId: 1, With(Visa)));
+
+        Assert.Empty(_transactions.Declined);
+    }
+
+    [Theory]
+    [InlineData(PaymentMethodType.Card, "visa", "4242", "Visa ending in 4242")]
+    [InlineData(PaymentMethodType.Card, "amex", "0005", "American Express ending in 0005")]
+    [InlineData(PaymentMethodType.ApplePay, null, null, "Apple Pay")]
+    [InlineData(PaymentMethodType.PayPal, null, null, "PayPal")]
+    public void Payment_methods_are_described_for_customers(PaymentMethodType type, string? brand, string? last4, string expected)
+    {
+        Assert.Equal(expected, CheckoutService.ForCustomer(new PaymentMethodDetails(type, brand, last4, null, null)));
     }
 }

@@ -1,3 +1,4 @@
+using Insurance.Billing.Contracts;
 using Insurance.Billing.DTOs;
 using Insurance.Billing.Enums;
 using Insurance.Billing.Exceptions;
@@ -21,7 +22,9 @@ public interface ICheckoutService
 ///   2. Every rule is checked BEFORE any money moves (ownership, active policy, already paid, pay in order).
 ///   3. The attempt is recorded (Processing), then the gateway charges the token.
 ///   4. Declined: recorded, and the customer is told why (HTTP 200: a decline is an outcome, not an error).
-///   5. Approved: the installment is marked paid and the attempt Succeeded in one database transaction.
+///      A PaymentDeclined event is saved with it, so the customer also gets an email.
+///   5. Approved: the installment is marked paid and the attempt Succeeded in one database transaction, together
+///      with the PaymentReceived event that becomes the emailed receipt.
 ///      If that fails anyway (another payment won a race), the charge is refunded and recorded as Refunded.
 ///   6. "Save this card": the processor turns the token into a reusable reference, stored with brand and last 4.
 /// The logs (ILogger) describe each attempt without the token: only brand and last 4, which are safe to show.
@@ -59,7 +62,7 @@ public class CheckoutService : ICheckoutService
             return await ReplayAsync(earlier, paymentId);
 
         // 2. Can this installment be paid by this customer right now?
-        var payment = await CheckPayableAsync(paymentId, userId);
+        var (payment, enrollment) = await CheckPayableAsync(paymentId, userId);
 
         // 3. What is being charged?
         var (token, method, holderName) = await ResolveMethodAsync(request, userId);
@@ -91,7 +94,11 @@ public class CheckoutService : ICheckoutService
         if (!charge.Succeeded)
         {
             var status = charge.Retryable ? TransactionStatus.Failed : TransactionStatus.Declined;
-            attempt = await _transactions.CompleteAsync(attempt.TransactionId, status, charge.ChargeId, charge.DeclineCode, charge.Message);
+            var reason = charge.Message ?? "The payment was not approved.";
+            attempt = await _transactions.CompleteAsync(attempt.TransactionId, status, charge.ChargeId, charge.DeclineCode, charge.Message,
+                new PaymentDeclined(attempt.TransactionId, Reference(attempt), payment.PaymentId, payment.EnrollmentId, userId,
+                    enrollment.PolicyId, payment.Amount, payment.DueDate, ForCustomer(method), reason,
+                    CanRetry: charge.Retryable, AttemptedAtUtc: DateTime.UtcNow));
             _logger.LogWarning("Payment {Reference} for installment {PaymentId} {Status} ({DeclineCode}) via {Provider} {Method}",
                 Reference(attempt), payment.PaymentId, status, charge.DeclineCode, _gateway.Name, Describe(method));
             return Result(CheckoutOutcome.Declined, charge.Message ?? "The payment was not approved.", attempt, payment);
@@ -101,7 +108,8 @@ public class CheckoutService : ICheckoutService
         Payment paid;
         try
         {
-            paid = await _transactions.SettleAsync(payment.PaymentId, attempt.TransactionId, charge.ChargeId!, "Payment received.");
+            paid = await _transactions.SettleAsync(payment.PaymentId, attempt.TransactionId, charge.ChargeId!, "Payment received.",
+                new ReceiptDetails(userId, enrollment.PolicyId, ForCustomer(method)));
         }
         catch (Exception ex) when (ex is PaymentConflictException or PaymentNotFoundException)
         {
@@ -124,7 +132,7 @@ public class CheckoutService : ICheckoutService
     }
 
     // Same checks as before simulated payments existed, plus "pay in order", all BEFORE charging anything.
-    private async Task<Payment> CheckPayableAsync(int paymentId, int userId)
+    private async Task<(Payment Payment, EnrollmentInfo Enrollment)> CheckPayableAsync(int paymentId, int userId)
     {
         var payment = await _payments.GetByIdAsync(paymentId);
         var enrollment = payment is null ? null : await _enrollments.GetAsync(payment.EnrollmentId);
@@ -144,7 +152,7 @@ public class CheckoutService : ICheckoutService
         if (schedule.Any(p => p.PaidDate is null && p.DueDate < payment.DueDate))
             throw new PaymentConflictException("Please pay your earlier installments first.");
 
-        return payment;
+        return (payment, enrollment);
     }
 
     private async Task<(string Token, PaymentMethodDetails Method, string? HolderName)> ResolveMethodAsync(CheckoutRequest request, int userId)
@@ -210,6 +218,26 @@ public class CheckoutService : ICheckoutService
     };
 
     private static string Reference(PaymentTransaction t) => PaymentService.Reference(t.TransactionId);
+
+    // What the customer's emails show: "Visa ending in 4242", "PayPal", "Apple Pay". Never the token.
+    public static string ForCustomer(PaymentMethodDetails m) => m.Type switch
+    {
+        PaymentMethodType.Card when m.Last4 is not null => $"{BrandName(m.Brand)} ending in {m.Last4}",
+        PaymentMethodType.Card => "Card",
+        PaymentMethodType.ApplePay => "Apple Pay",
+        PaymentMethodType.GooglePay => "Google Pay",
+        _ => m.Type.ToString()
+    };
+
+    private static string BrandName(string? brand) => brand?.ToLowerInvariant() switch
+    {
+        "visa" => "Visa",
+        "mastercard" => "Mastercard",
+        "amex" or "american express" => "American Express",
+        "discover" => "Discover",
+        null or "" => "Card",
+        var other => char.ToUpperInvariant(other[0]) + other[1..]
+    };
 
     // What the logs show: "visa ****4242" or "PayPal". Never the token.
     private static string Describe(PaymentMethodDetails m) =>

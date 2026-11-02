@@ -6,6 +6,7 @@ using Insurance.Enrollments.Enums;
 using Insurance.Enrollments.Exceptions;
 using Insurance.Enrollments.Models;
 using Insurance.Enrollments.Services;
+using Insurance.Identity.Contracts;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -14,12 +15,13 @@ namespace Insurance.Enrollments.Tests;
 
 public class EnrollmentServiceTests
 {
-    private static DateOnly Today => DateOnly.FromDateTime(DateTime.UtcNow);
+    private static DateOnly Today => Insurance.BuildingBlocks.Time.BusinessTime.Today;
 
     private readonly FakeEnrollmentRepository _repo = new();
     private readonly FakeQuoteReservations _quotes = new();
     private readonly FakePlanCatalog _plans = new();
     private readonly FakePremiumSummaries _premiums = new();
+    private readonly FakeUserDirectory _users = new();
     private readonly EnrollmentService _sut;
 
     public EnrollmentServiceTests()
@@ -29,7 +31,7 @@ public class EnrollmentServiceTests
             SagaTimeout = TimeSpan.FromMilliseconds(200),
             SagaPollInterval = TimeSpan.FromMilliseconds(10)
         });
-        _sut = new EnrollmentService(_repo, _quotes, _plans, _premiums, options, NullLogger<EnrollmentService>.Instance);
+        _sut = new EnrollmentService(_repo, _quotes, _plans, _premiums, _users, options, NullLogger<EnrollmentService>.Instance);
     }
 
     // Start date window
@@ -251,5 +253,30 @@ public class EnrollmentServiceTests
         Assert.False(await _sut.CancelAsync(1, userId: 2));
         Assert.Equal(EnrollmentStatus.Active, _repo.Enrollments.Single().Status);
         Assert.Empty(_repo.CancelledEvents);
+    }
+
+    // ---------------- Email verification ----------------
+
+    [Fact]
+    public async Task A_customer_must_verify_their_email_before_enrolling()
+    {
+        _users.Unverified.Add(1);
+
+        var ex = await Assert.ThrowsAsync<EmailNotVerifiedException>(() =>
+            _sut.EnrollAsync(1, new EnrollmentRequest { QuoteId = 7 }));
+
+        Assert.IsAssignableFrom<ForbiddenException>(ex);          // a 403
+        Assert.Contains("enroll in a policy", ex.Message);
+        Assert.Null(_quotes.LastReserve);                          // the quote is never touched
+        Assert.Null(_repo.LastCreate);
+    }
+
+    [Fact]
+    public async Task Enrolling_fails_cleanly_when_the_identity_service_is_down()
+    {
+        _users.Unavailable = true;
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => _sut.EnrollAsync(1, new EnrollmentRequest { QuoteId = 7 }));
+        Assert.Null(_quotes.LastReserve);
     }
 }

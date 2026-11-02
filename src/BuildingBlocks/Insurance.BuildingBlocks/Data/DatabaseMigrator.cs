@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text.RegularExpressions;
+using Insurance.BuildingBlocks.Time;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -30,6 +31,18 @@ public static partial class DatabaseMigrator
                 CREATE TABLE dbo.SchemaVersions (
                     ScriptName NVARCHAR(200) NOT NULL CONSTRAINT PK_SchemaVersions PRIMARY KEY,
                     AppliedAt  DATETIME2     NOT NULL CONSTRAINT DF_SchemaVersions_AppliedAt DEFAULT SYSUTCDATETIME());
+            """);
+
+        // "Today" in the business time zone, for views and procedures (see BusinessTime). Recreated at every start
+        // from configuration, before the scripts run, so the scripts can use it and it always matches the C# side.
+        var zone = BusinessTime.SqlServerZoneName.Replace("'", "''");
+        await ExecuteAsync(connectionString, $"""
+            CREATE OR ALTER FUNCTION dbo.ufn_Today()
+            RETURNS DATE
+            AS
+            BEGIN
+                RETURN CAST(SYSUTCDATETIME() AT TIME ZONE 'UTC' AT TIME ZONE '{zone}' AS DATE);
+            END
             """);
 
         var applied = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

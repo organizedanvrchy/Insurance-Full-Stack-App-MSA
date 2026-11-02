@@ -5,6 +5,7 @@ export interface Customer {
   email: string;
   phone: string | null;
   isActive: boolean;
+  emailVerified: boolean;
   createdAt: string;
   activePolicies: number;
   totalClaims: number;

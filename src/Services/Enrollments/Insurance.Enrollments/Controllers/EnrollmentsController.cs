@@ -38,8 +38,8 @@ public class EnrollmentsController : ControllerBase
         return Ok(dto);
     }
 
-    // Errors (400 bad date/expired quote, 404 quote not found, 
-    // 409 duplicate/quote already used)
+    // Errors (400 bad date/expired quote, 403 email not verified,
+    // 404 quote not found, 409 duplicate/quote already used)
     // are translated by ApiExceptionHandler.
     // 201 once the enrollment saga has finished; 202 if it is still running after the wait (rare).
     [HttpPost]
@@ -47,6 +47,7 @@ public class EnrollmentsController : ControllerBase
     [ProducesResponseType(typeof(EnrollmentDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(EnrollmentDto), StatusCodes.Status202Accepted)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<EnrollmentDto>> Enroll(EnrollmentRequest request)

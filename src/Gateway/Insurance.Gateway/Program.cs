@@ -57,11 +57,12 @@ app.UseCors("Angular");
 app.UseAuthentication();
 
 // A request that carries a token must carry a valid one for an active account: 401 otherwise, even on routes
-// that don't need a token. Signing in and registering are the exception, so a stale token can't block them.
+// that don't need a token. Signing in, registering and email links are the exception, so a stale token can't block them.
 app.Use(async (context, next) =>
 {
     var path = context.Request.Path;
-    var isSignIn = path.StartsWithSegments("/api/auth/login") || path.StartsWithSegments("/api/auth/register");
+    var isSignIn = path.StartsWithSegments("/api/auth/login") || path.StartsWithSegments("/api/auth/register")
+                   || path.StartsWithSegments("/api/auth/verify-email");   // the emailed link works signed in or not
 
     if (!isSignIn && context.Request.Headers.Authorization.Count > 0 && context.User.Identity?.IsAuthenticated != true)
     {

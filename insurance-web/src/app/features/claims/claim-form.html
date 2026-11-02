@@ -100,10 +100,13 @@
 
     <div class="form-actions">
       <a class="btn-sm" routerLink="/my-policies">Cancel</a>
-      <button class="btn" type="submit" [disabled]="saving()">
+      <button class="btn" type="submit" [disabled]="saving() || auth.needsEmailVerification()">
         {{ saving() ? 'Submitting…' : 'Submit claim' }}
       </button>
     </div>
+    @if (auth.needsEmailVerification()) {
+    <p class="muted" role="note">Verify your email address to file a claim (see the message at the top of the page).</p>
+    }
   </form>
   }
   } @else if (!error()) {

@@ -1,5 +1,5 @@
 using Insurance.BuildingBlocks.Exceptions;
-using Insurance.Claims.Enums;
+using Insurance.Claims.Contracts;
 using Insurance.Claims.Exceptions;
 using Insurance.Claims.Models;
 using Insurance.Claims.Services;

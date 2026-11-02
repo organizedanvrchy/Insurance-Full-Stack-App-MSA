@@ -1,3 +1,4 @@
+using Insurance.BuildingBlocks.Time;
 using Insurance.Billing.Contracts;
 using Insurance.BuildingBlocks.Exceptions;
 using Insurance.Catalog.Contracts;
@@ -6,6 +7,7 @@ using Insurance.Enrollments.DTOs;
 using Insurance.Enrollments.Enums;
 using Insurance.Enrollments.Models;
 using Insurance.Enrollments.Repositories;
+using Insurance.Identity.Contracts;
 using Insurance.Quotes.Contracts;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -21,13 +23,15 @@ public class EnrollmentService : IEnrollmentService
     private readonly IQuoteReservations _quotes;
     private readonly IPlanCatalog _plans;
     private readonly IPremiumSummaries _premiums;
+    private readonly IUserDirectory _users;
     private readonly EnrollmentOptions _options;
     private readonly ILogger<EnrollmentService> _logger;
 
     public EnrollmentService(IEnrollmentRepository enrollments, IQuoteReservations quotes, IPlanCatalog plans,
-        IPremiumSummaries premiums, IOptions<EnrollmentOptions> options, ILogger<EnrollmentService> logger)
+        IPremiumSummaries premiums, IUserDirectory users, IOptions<EnrollmentOptions> options, ILogger<EnrollmentService> logger)
     {
         _logger = logger;
+        _users = users;
         _enrollments = enrollments;
         _quotes = quotes;
         _plans = plans;
@@ -36,6 +40,7 @@ public class EnrollmentService : IEnrollmentService
     }
 
     // The enrollment saga, orchestrated by this service:
+    //   0. Identity service (HTTP): the customer's email address must be verified.
     //   1. Quotes service (HTTP): reserve the quote: ownership, expiry, one-time use.
     //   2. Catalog service (HTTP): the plan must still be active.
     //   3. Here: save the enrollment as Pending, with EnrollmentRequested in the outbox (same transaction).
@@ -44,7 +49,7 @@ public class EnrollmentService : IEnrollmentService
     // For step 4 the request waits briefly for the saga, so the customer normally gets the finished policy (201).
     public async Task<EnrollmentDto> EnrollAsync(int userId, EnrollmentRequest request)
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = BusinessTime.Today;
         var start = request.StartDate ?? today;
 
         // One day of slack: in the evening a customer's local "today" can already be "yesterday" in UTC.
@@ -52,6 +57,9 @@ public class EnrollmentService : IEnrollmentService
             throw new BusinessRuleException("Start date cannot be in the past.");
         if (start > today.AddDays(90))
             throw new BusinessRuleException("Start date must be within 90 days from today.");
+
+        // 403 until the customer has clicked the link in their verification email (Identity service, HTTP).
+        await _users.EnsureEmailVerifiedAsync(userId, "enroll in a policy");
 
         // The premium and the plan come from the quote, so the caller can't choose either.
         var quote = await _quotes.ReserveAsync(request.QuoteId, userId);
@@ -150,7 +158,7 @@ public class EnrollmentService : IEnrollmentService
         if (e.Status != EnrollmentStatus.Active) return PaymentAlert.None;
         if (p.OverdueCount > 0) return PaymentAlert.Overdue;
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = BusinessTime.Today;
         if (p.NextDueDate is { } due && due <= today.AddDays(DueSoonDays))
             return PaymentAlert.DueSoon;
 

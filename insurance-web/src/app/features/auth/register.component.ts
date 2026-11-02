@@ -13,6 +13,7 @@ import { US_STATES } from '../../core/models/us-states';
 import { AuthService } from '../../core/services/auth.service';
 import { getErrorMessage } from '../../core/utils/http-error';
 import {
+  EMAIL_PATTERN,
   NAME_PATTERN,
   PASSWORD_MAX,
   PASSWORD_RULES,
@@ -49,7 +50,7 @@ export class RegisterComponent {
     {
       firstName: ['', [Validators.required, Validators.maxLength(45), Validators.pattern(NAME_PATTERN)]],
       lastName: ['', [Validators.required, Validators.maxLength(45), Validators.pattern(NAME_PATTERN)]],
-      email: ['', [Validators.required, Validators.email]],
+      email: ['', [Validators.required, Validators.email, Validators.pattern(EMAIL_PATTERN)]],
       phone: ['', [usPhone]],
       street: ['', [Validators.required, Validators.maxLength(100)]],
       unit: ['', [Validators.maxLength(40)]],
@@ -58,6 +59,7 @@ export class RegisterComponent {
       postalCode: ['', [Validators.required, Validators.pattern(ZIP_PATTERN)]],
       password: ['', [Validators.required, Validators.maxLength(PASSWORD_MAX), strongPassword]],
       confirmPassword: ['', Validators.required],
+      paymentReminders: [true],   // "Email me payment reminders": changeable later on the profile page
     },
     { validators: passwordsMatch },
   );
@@ -99,6 +101,7 @@ export class RegisterComponent {
         city: v.city.trim(),
         state: v.state,
         postalCode: v.postalCode.trim(),
+        paymentReminders: v.paymentReminders,
       })
       .subscribe({
         next: () => this.router.navigate(['/dashboard']),   // API already returned a token = logged in

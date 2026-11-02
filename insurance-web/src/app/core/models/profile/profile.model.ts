@@ -9,4 +9,5 @@ export interface UserProfile {
   phone: string | null;
   address: string | null;
   createdAt: string;   // UTC ISO string
+  emailVerified: boolean;
 }

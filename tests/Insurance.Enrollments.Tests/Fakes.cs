@@ -4,6 +4,8 @@ using Insurance.Enrollments.Contracts;
 using Insurance.Enrollments.Exceptions;
 using Insurance.Enrollments.Models;
 using Insurance.Enrollments.Repositories;
+using Insurance.BuildingBlocks.Security;
+using Insurance.Identity.Contracts;
 using Insurance.Quotes.Contracts;
 
 namespace Insurance.Enrollments.Tests;
@@ -132,4 +134,20 @@ public class FakePremiumSummaries : IPremiumSummaries
     public Task<IReadOnlyDictionary<int, PremiumSummary>> GetSummariesAsync(IEnumerable<int> enrollmentIds) =>
         Unavailable ? throw new HttpRequestException("Connection refused") : Task.FromResult<IReadOnlyDictionary<int, PremiumSummary>>(enrollmentIds.Distinct().ToDictionary(
             id => id, id => Summaries.GetValueOrDefault(id) ?? new PremiumSummary(0, 0, 0, null, null)));
+}
+
+// Every customer has a verified email unless a test adds them to Unverified.
+public class FakeUserDirectory : IUserDirectory
+{
+    public HashSet<int> Unverified { get; } = new();
+    public bool Unavailable { get; set; }   // simulates the Identity service being down
+
+    public Task<UserAccount?> GetAsync(int userId) =>
+        Unavailable
+            ? throw new HttpRequestException("Connection refused")
+            : Task.FromResult<UserAccount?>(new UserAccount(userId, $"Customer {userId}", $"c{userId}@test.example",
+                UserRole.Customer, IsActive: true, EmailVerified: !Unverified.Contains(userId)));
+
+    public Task<IReadOnlyDictionary<int, UserAccount>> GetManyAsync(IEnumerable<int> userIds) =>
+        throw new NotSupportedException();
 }

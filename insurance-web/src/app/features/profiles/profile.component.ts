@@ -13,6 +13,8 @@ import { initialsOf } from '../../core/utils/initials';
 import { claimBadgeClass, statusLabel } from '../../core/utils/labels';
 import { buildMonthBuckets, summarizePayments } from '../../core/utils/payment-stats';
 import { PaymentChartComponent } from './payment-chart.component';
+import { EmailSettingsComponent } from './email-settings.component';
+import { ChangePasswordComponent } from './change-password.component';
 import { UserProfile } from '../../core/models/profile/profile.model';
 import { Enrollment } from '../../core/models/enrollment/enrollment';
 import { Payment } from '../../core/models/payment/payment';
@@ -21,7 +23,7 @@ import { OPEN_CLAIM_STATUSES } from '../../core/models/enums';
 
 @Component({
   selector: 'app-profile',
-  imports: [RouterLink, CurrencyPipe, DatePipe, PaymentChartComponent],
+  imports: [RouterLink, CurrencyPipe, DatePipe, PaymentChartComponent, EmailSettingsComponent, ChangePasswordComponent],
   templateUrl: './profile.component.html',
   styleUrl: './profile.component.css',
 })

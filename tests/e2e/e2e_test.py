@@ -5,18 +5,22 @@ Uses only Python's standard library. Run from the repository root:
 
     python tests/e2e/e2e_test.py
 
-Settings (environment variables): API_URL (default http://localhost:5080), SA_PASSWORD (read from
-deploy/.env if not set). Every run registers new users, so it can run again without resetting anything.
+Settings (environment variables): API_URL (default http://localhost:5080), MAILPIT_URL (default
+http://localhost:8025, where the emails are read from), SA_PASSWORD (read from deploy/.env if not set).
+Every run registers new users, so it can run again without resetting anything.
 """
 import json
 import os
 import subprocess
 import sys
 import time
+import re
 import urllib.error
+import urllib.parse
 import urllib.request
 
 API = os.environ.get("API_URL", "http://localhost:5080")
+MAILPIT = os.environ.get("MAILPIT_URL", "http://localhost:8025")
 COMPOSE = ["docker", "compose", "-f", "deploy/docker-compose.yml"]
 RUN = str(int(time.time()))          # makes this run's emails unique
 failures = []
@@ -77,6 +81,27 @@ def wait_until_ready():
     sys.exit("The gateway did not come up at " + API)
 
 
+def emails_to(address, subject_contains, timeout=30):
+    """The emails Mailpit received for an address whose subject contains the text (waits for the first one)."""
+    query = urllib.parse.quote(f'to:"{address}"')
+    deadline = time.time() + timeout
+    while True:
+        with urllib.request.urlopen(f"{MAILPIT}/api/v1/search?query={query}") as response:
+            found = [m for m in json.loads(response.read())["messages"] if subject_contains in m["Subject"]]
+        if found or time.time() > deadline:
+            return found
+        time.sleep(0.5)
+
+
+def verify_email(address):
+    """Does what the customer does: opens the verification email and follows its link."""
+    message = emails_to(address, "Verify your email")[0]
+    with urllib.request.urlopen(f"{MAILPIT}/api/v1/message/{message['ID']}") as response:
+        text = json.loads(response.read())["Text"]
+    token = re.search(r"verify-email\?token=([A-Za-z0-9_\-]+)", text).group(1)
+    expect("verify the email address", "POST", "/api/auth/verify-email", 200, {"token": token})
+
+
 def register(first, email):
     return {"firstName": first, "lastName": "Tester", "email": email, "password": "Str0ng#Passw0rd",
             "phone": "2035550100", "street": "1 Main St", "city": "Stamford", "state": "CT", "postalCode": "06902"}
@@ -106,6 +131,7 @@ def main():
     expect("duplicate email", "POST", "/api/auth/register", 409, register("Cal", customer_email))
     expect("register admin", "POST", "/api/auth/register", 201, register("Ada", admin_email))
     sql(f"UPDATE InsuranceIdentity.accounts.Users SET Role = 'Admin' WHERE Email = '{admin_email}'")
+    check("a verification email was sent", len(emails_to(customer_email, "Verify your email")) == 1)
     customer, admin = login(customer_email), login(admin_email)
     me = expect("who am I", "GET", "/api/auth/me", 200, token=customer)
     expect("wrong password", "POST", "/api/auth/login", 401, {"email": customer_email, "password": "nope"})
@@ -116,6 +142,10 @@ def main():
     auto = next(p for p in plans if p["policyType"] == "Auto")
     answers = answers_for(auto["policyId"], customer)
     quote = expect("get a quote", "POST", "/api/quotes", 201, {"policyId": auto["policyId"], "answers": answers}, customer)
+
+    # --- Email verification: browsing and quotes are fine, enrolling needs a verified address
+    expect("enrolling before verifying", "POST", "/api/enrollments", 403, {"quoteId": quote["quoteId"]}, customer)
+    verify_email(customer_email)
 
     # --- Enrollments: the saga (Quotes -> Enrollments -> RabbitMQ -> Billing -> RabbitMQ -> Enrollments)
     policy = expect("enroll", "POST", "/api/enrollments", 201, {"quoteId": quote["quoteId"], "startDate": today}, customer)
@@ -141,6 +171,8 @@ def main():
                    card("tok_mock_card_visa_4242_1230", key=f"e2e-{RUN}-pay1"), customer)
     check("a retry replays the receipt", retry["transaction"]["transactionId"] == paid["transaction"]["transactionId"], retry)
     expect("pay it twice", "POST", f"/api/payments/{first}/pay", 409, card("tok_mock_card_visa_4242_1230"), customer)
+    check("one declined-payment email", len(emails_to(customer_email, "didn't go through")) == 1)
+    check("one receipt email (the retry sent none)", len(emails_to(customer_email, "Payment receipt")) == 1)
     log = expect("payment history", "GET", f"/api/payments/transactions?enrollmentId={eid}", 200, token=customer)
     check("the history has the decline and the payment", [t["status"] for t in log] == ["Succeeded", "Declined"], log)
 

@@ -1,4 +1,4 @@
-using Insurance.Claims.Enums;
+using Insurance.Claims.Contracts;
 using Insurance.Claims.Services;
 using Xunit;
 

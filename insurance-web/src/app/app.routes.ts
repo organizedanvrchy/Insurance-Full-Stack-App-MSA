@@ -13,6 +13,13 @@ export const routes: Routes = [
       import('./features/auth/register.component').then((m) => m.RegisterComponent),
   },
 
+  {
+    // Opened from the link in a verification email, signed in or not
+    path: 'verify-email',
+    loadComponent: () =>
+      import('./features/auth/verify-email.component').then((m) => m.VerifyEmailComponent),
+  },
+
   // Pages that need login and render inside the shell (nav bar + outlet)
   {
     path: '',

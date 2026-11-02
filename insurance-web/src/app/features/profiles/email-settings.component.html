@@ -1,0 +1,107 @@
+<section class="panel email-settings" id="email-settings" aria-labelledby="email-settings-title">
+  <h2 id="email-settings-title">Email settings</h2>
+
+  @if (auth.user(); as u) {
+    <!-- ============ Address ============ -->
+    <div class="address">
+      <div>
+        <span class="label">Email address</span>
+        <div class="value">
+          <strong>{{ u.email }}</strong>
+          @if (u.emailVerified) {
+            <span class="badge">Verified</span>
+          } @else {
+            <span class="badge amber">Not verified</span>
+          }
+        </div>
+      </div>
+      @if (step() === 'closed') {
+        <button type="button" class="btn-sm" (click)="openChange()">Change email</button>
+      }
+    </div>
+
+    @if (!u.emailVerified) {
+      <p class="muted">
+        Verify your address to enroll in policies and file claims.
+        <button type="button" class="btn-sm" [disabled]="sending()" (click)="resend()">
+          {{ sending() ? 'Sending…' : 'Resend verification email' }}
+        </button>
+      </p>
+    }
+
+    @if (verifyMessage(); as m) {
+      <p class="ok" role="status">{{ m }}</p>
+    }
+    @if (verifyError(); as e) {
+      <div class="alert" role="alert">{{ e }}</div>
+    }
+
+    <!-- ============ Change email: the new address, then "Are you sure?" ============ -->
+    @if (step() === 'edit') {
+      <form class="change" [formGroup]="changeForm" (ngSubmit)="review()" novalidate>
+        <p class="muted">
+          You will have to verify this new email address. You will be unable to enroll in policies or file a claim
+          until you verify it.
+        </p>
+
+        @if (changeError(); as e) {
+          <div class="alert" role="alert">{{ e }}</div>
+        }
+
+        <label class="field">
+          New email address
+          <input type="email" formControlName="newEmail" autocomplete="email" />
+          @if (newEmail.touched && newEmail.invalid) {
+            <small class="err">Enter a valid email address, like name&#64;example.com.</small>
+          }
+        </label>
+
+        <div class="form-actions">
+          <button type="button" class="btn-sm" (click)="closeChange()">Cancel</button>
+          <button type="submit" class="btn-sm primary">Change email</button>
+        </div>
+      </form>
+    } @else if (step() === 'confirm') {
+      <div class="change" role="alertdialog" aria-labelledby="confirm-title" aria-describedby="confirm-text">
+        <p id="confirm-title"><strong>Are you sure?</strong></p>
+        <p id="confirm-text">
+          Change your email from <strong>{{ u.email }}</strong> to <strong>{{ newEmail.value.trim() }}</strong>?
+          You'll need to verify the new address before you can enroll in policies or file claims.
+        </p>
+        <div class="form-actions">
+          <button type="button" class="btn-sm" [disabled]="changing()" (click)="step.set('edit')">Go back</button>
+          <button type="button" class="btn-sm primary" [disabled]="changing()" (click)="confirmChange()">
+            {{ changing() ? 'Changing…' : 'Yes, change my email' }}
+          </button>
+        </div>
+      </div>
+    }
+
+    <!-- ============ Preferences (customers) ============ -->
+    @if (isCustomer()) {
+      <div class="prefs">
+        <h3>What we email you</h3>
+
+        <label class="toggle">
+          <input
+            type="checkbox"
+            [checked]="paymentReminders()"
+            [disabled]="!prefsLoaded() || prefsSaving()"
+            (change)="toggleReminders($any($event.target).checked)"
+            aria-describedby="reminders-help"
+          />
+          <span>
+            <strong>Payment reminders</strong>
+            <small id="reminders-help" class="muted">
+              Opt-in to reminders about upcoming and overdue payments.
+            </small>
+          </span>
+        </label>
+        @if (prefsMessage(); as m) {
+          <p class="ok" role="status">{{ m }}</p>
+        }
+
+      </div>
+    }
+  }
+</section>

@@ -4,6 +4,7 @@ using Insurance.Billing.Exceptions;
 using Insurance.Billing.Gateway;
 using Insurance.Billing.Models;
 using Insurance.Billing.Repositories;
+using Insurance.Billing.Services.Reminders;
 using Insurance.BuildingBlocks.Security;
 using Insurance.Enrollments.Contracts;
 using Insurance.Identity.Contracts;
@@ -34,6 +35,27 @@ public class FakePaymentRepository : IPaymentRepository
 
     public Task<Dictionary<int, PremiumSummary>> GetSummariesAsync(IEnumerable<int> enrollmentIds) =>
         throw new NotSupportedException();
+
+    // ---- Payment reminders ----
+
+    public List<ReminderCandidate> Candidates { get; } = new();
+    public (DateOnly From, DateOnly To)? LastCandidateWindow { get; private set; }
+    public List<PaymentReminderDue> Recorded { get; } = new();   // what RecordReminderAsync would have published
+
+    public Task<List<ReminderCandidate>> GetReminderCandidatesAsync(DateOnly fromDueDate, DateOnly toDueDate)
+    {
+        LastCandidateWindow = (fromDueDate, toDueDate);
+        return Task.FromResult(Candidates.Where(c => c.DueDate >= fromDueDate && c.DueDate <= toDueDate).ToList());
+    }
+
+    // Like usp_Reminder_Record: once per (installment, stage).
+    public Task<bool> RecordReminderAsync(PaymentReminderDue reminder)
+    {
+        if (Recorded.Any(r => r.PaymentId == reminder.PaymentId && r.Stage == reminder.Stage))
+            return Task.FromResult(false);
+        Recorded.Add(reminder);
+        return Task.FromResult(true);
+    }
 }
 
 public class FakeTransactionRepository : ITransactionRepository
@@ -61,9 +83,14 @@ public class FakeTransactionRepository : ITransactionRepository
         return Task.FromResult((attempt, false));
     }
 
+    // What would have been written to the outbox with the outcome: the email events.
+    public List<PaymentDeclined> Declined { get; } = new();
+    public List<(int PaymentId, int TransactionId, ReceiptDetails Details)> Receipts { get; } = new();
+
     public Task<PaymentTransaction> CompleteAsync(int transactionId, TransactionStatus status, string? providerChargeId,
-        string? declineCode, string? message)
+        string? declineCode, string? message, PaymentDeclined? declinedEvent = null)
     {
+        if (declinedEvent is not null) Declined.Add(declinedEvent);
         var t = Transactions.Single(x => x.TransactionId == transactionId);
         t.Status = status;
         t.ProviderChargeId = providerChargeId ?? t.ProviderChargeId;
@@ -73,13 +100,14 @@ public class FakeTransactionRepository : ITransactionRepository
         return Task.FromResult(t);
     }
 
-    public Task<Payment> SettleAsync(int paymentId, int transactionId, string providerChargeId, string message)
+    public Task<Payment> SettleAsync(int paymentId, int transactionId, string providerChargeId, string message, ReceiptDetails receipt)
     {
         if (SettleThrows is not null) throw SettleThrows;
+        Receipts.Add((paymentId, transactionId, receipt));
 
         var payment = _payments.Payments.Single(p => p.PaymentId == paymentId);
         if (payment.PaidDate is not null) throw new PaymentConflictException("This installment has already been paid.");
-        payment.PaidDate = DateOnly.FromDateTime(DateTime.UtcNow);
+        payment.PaidDate = Insurance.BuildingBlocks.Time.BusinessTime.Today;
         payment.Status = PaymentStatus.Paid;
 
         var t = Transactions.Single(x => x.TransactionId == transactionId);
@@ -155,7 +183,8 @@ public class FakeEnrollmentLookup : IEnrollmentLookup
         Task.FromResult(Enrollments.GetValueOrDefault(enrollmentId));
 
     public Task<IReadOnlyDictionary<int, EnrollmentInfo>> GetManyAsync(IEnumerable<int> enrollmentIds) =>
-        throw new NotSupportedException();
+        Task.FromResult<IReadOnlyDictionary<int, EnrollmentInfo>>(
+            Enrollments.Where(e => enrollmentIds.Contains(e.Key)).ToDictionary(e => e.Key, e => e.Value));
 
     public Task<IReadOnlyDictionary<int, int>> CountActiveByUserAsync(IEnumerable<int> userIds) =>
         throw new NotSupportedException();
@@ -165,8 +194,8 @@ public class FakeUserDirectory : IUserDirectory
 {
     public Dictionary<int, UserAccount> Users { get; } = new()
     {
-        [1] = new UserAccount(1, "Cal Tester", "cal@test.example", UserRole.Customer, true),
-        [2] = new UserAccount(2, "Dee Tester", "dee@test.example", UserRole.Customer, true),
+        [1] = new UserAccount(1, "Cal Tester", "cal@test.example", UserRole.Customer, true, EmailVerified: true),
+        [2] = new UserAccount(2, "Dee Tester", "dee@test.example", UserRole.Customer, true, EmailVerified: true),
     };
 
     public Task<UserAccount?> GetAsync(int userId) => Task.FromResult(Users.GetValueOrDefault(userId));

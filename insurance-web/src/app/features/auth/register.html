@@ -132,6 +132,19 @@
         </label>
       </fieldset>
 
+      <fieldset>
+        <legend>Email notifications</legend>
+        <label class="check opt-in">
+          <input type="checkbox" formControlName="paymentReminders" aria-describedby="reminders-help" />
+          <span>
+            Email me payment reminders
+            <small id="reminders-help" class="muted">
+              Opt-in to reminders about upcoming and overdue payments.
+            </small>
+          </span>
+        </label>
+      </fieldset>
+
       <button class="btn" type="submit" [disabled]="loading()">
         {{ loading() ? 'Creating account…' : 'Create account' }}
       </button>

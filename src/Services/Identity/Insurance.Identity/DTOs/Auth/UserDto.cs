@@ -12,4 +12,6 @@ public class UserDto
     public string? Phone { get; set; }
     public string? Address { get; set; }
     public DateTime CreatedAt { get; set; }
+
+    public bool EmailVerified { get; set; }
 }

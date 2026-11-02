@@ -20,12 +20,19 @@ public class ServiceBoundaryTests
         [typeof(Insurance.Enrollments.Services.EnrollmentService).Assembly] = "enrollments",
         [typeof(Insurance.Billing.Services.PaymentService).Assembly] = "billing",
         [typeof(Insurance.Claims.Services.ClaimService).Assembly] = "claims",
+        [typeof(Insurance.Notifications.Services.NotificationDispatcher).Assembly] = "notifications",
     };
+
+    // Services nothing else calls have no Contracts project: other services only listen to their events, or the
+    // browser talks to them through the gateway.
+    private static readonly HashSet<string> WithoutContracts = new() { "Insurance.Notifications" };
 
     private static readonly Assembly Gateway = typeof(Insurance.Gateway.Controllers.AdminCustomersController).Assembly;
 
     public static TheoryData<string> Deployables => new(Services.Keys.Append(Gateway).Select(a => a.GetName().Name!));
     public static TheoryData<string> ServiceNames => new(Services.Keys.Select(a => a.GetName().Name!));
+    public static TheoryData<string> ServicesWithContracts =>
+        new(Services.Keys.Select(a => a.GetName().Name!).Where(n => !WithoutContracts.Contains(n)));
 
     private static IEnumerable<string> InsuranceReferences(string assemblyName) =>
         Assembly.Load(assemblyName).GetReferencedAssemblies()
@@ -44,7 +51,7 @@ public class ServiceBoundaryTests
     }
 
     [Theory]
-    [MemberData(nameof(ServiceNames))]
+    [MemberData(nameof(ServicesWithContracts))]
     public void Contracts_reference_only_building_blocks(string service)
     {
         var contracts = service + ".Contracts";
@@ -75,4 +82,27 @@ public class ServiceBoundaryTests
 
     private static string StripComments(string sql) =>
         Regex.Replace(Regex.Replace(sql, @"/\*.*?\*/", "", RegexOptions.Singleline), @"--[^\n]*", "");
+}
+
+public class NotificationsBoundaryTests
+{
+    // Nothing may depend on the Notifications service: emails are a side effect, never part of a business rule.
+    [Fact]
+    public void No_other_service_references_the_notifications_service()
+    {
+        var notifications = typeof(Insurance.Notifications.Services.NotificationDispatcher).Assembly.GetName().Name;
+        var others = new[]
+        {
+            typeof(Insurance.Gateway.Controllers.AdminCustomersController).Assembly,
+            typeof(Insurance.Identity.Services.AuthService).Assembly,
+            typeof(Insurance.Catalog.Services.PlanCatalog).Assembly,
+            typeof(Insurance.Quotes.Services.QuoteService).Assembly,
+            typeof(Insurance.Enrollments.Services.EnrollmentService).Assembly,
+            typeof(Insurance.Billing.Services.PaymentService).Assembly,
+            typeof(Insurance.Claims.Services.ClaimService).Assembly,
+        };
+
+        foreach (var assembly in others)
+            Assert.DoesNotContain(assembly.GetReferencedAssemblies(), r => r.Name == notifications);
+    }
 }
