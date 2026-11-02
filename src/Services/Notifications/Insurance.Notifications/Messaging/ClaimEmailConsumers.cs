@@ -1,8 +1,11 @@
 using Insurance.Claims.Contracts;
+using System.Text.Json;
 using Insurance.Notifications.Models;
+using Insurance.Notifications.Repositories;
 using Insurance.Notifications.Services;
 using Insurance.Notifications.Templates;
 using MassTransit;
+using Microsoft.Extensions.Options;
 
 namespace Insurance.Notifications.Messaging;
 
@@ -10,25 +13,20 @@ namespace Insurance.Notifications.Messaging;
 
 public class ClaimSubmittedConsumer : IConsumer<ClaimSubmitted>
 {
-    private readonly INotificationDispatcher _dispatcher;
-    private readonly EmailTemplates _templates;
-    private readonly IPolicyDetails _policies;
+    private readonly INotificationRepository _repo;
+    private readonly NotificationOptions _options;
 
-    public ClaimSubmittedConsumer(INotificationDispatcher dispatcher, EmailTemplates templates, IPolicyDetails policies)
+    public ClaimSubmittedConsumer(INotificationRepository repo, IOptions<NotificationOptions> options)
     {
-        _dispatcher = dispatcher;
-        _templates = templates;
-        _policies = policies;
+        _repo = repo;
+        _options = options.Value;
     }
 
-    public Task Consume(ConsumeContext<ClaimSubmitted> context)
-    {
-        var e = context.Message;
-        return _dispatcher.SendAsync(new Notification(
-            $"claim-submitted:{e.ClaimId}", e.UserId, NotificationKind.ClaimSubmitted,
-            async user => _templates.ClaimSubmitted(user.FullName, e, await _policies.PlanNameForEnrollmentAsync(e.EnrollmentId))),
-            context.CancellationToken);
-    }
+    // Not sent yet: the claim's documents are still being uploaded. ClaimReceivedEmailJob sends it after
+    // Notifications:ClaimEmailDelay, with copies of the documents.
+    public Task Consume(ConsumeContext<ClaimSubmitted> context) =>
+        _repo.QueueClaimEmailAsync(context.Message.ClaimId, JsonSerializer.Serialize(context.Message),
+            DateTime.UtcNow.Add(_options.ClaimEmailDelay));
 }
 
 /// <summary>

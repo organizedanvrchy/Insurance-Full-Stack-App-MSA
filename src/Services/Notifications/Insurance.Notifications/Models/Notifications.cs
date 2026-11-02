@@ -26,4 +26,7 @@ public enum EmailStatus
 
 public record NotificationPreferences(int UserId, bool PaymentReminders, DateTime? UpdatedAtUtc);
 
+/// <summary>A queued "We received your claim" email. Payload is the ClaimSubmitted event as JSON.</summary>
+public record PendingClaimEmail(int ClaimId, string Payload, int Attempts);
+
 public record SentEmail(long EmailId, NotificationKind Kind, string? ToEmail, string? Subject, DateTime? SentAtUtc);

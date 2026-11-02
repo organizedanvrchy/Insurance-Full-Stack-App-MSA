@@ -15,4 +15,9 @@ public interface INotificationRepository
     Task CompleteAsync(string notificationKey, EmailStatus status, string? toEmail = null, string? subject = null, string? detail = null);
 
     Task<List<SentEmail>> GetRecentAsync(int userId, int take);
+
+    // "We received your claim" waits until its documents have been uploaded (ClaimReceivedEmailJob).
+    Task QueueClaimEmailAsync(int claimId, string payload, DateTime sendAfterUtc);
+    Task<List<PendingClaimEmail>> TakeDueClaimEmailsAsync(int take, TimeSpan lease);
+    Task RemoveClaimEmailAsync(int claimId);
 }

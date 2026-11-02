@@ -26,6 +26,12 @@ public class EmailOptions
     public string AppBaseUrl { get; set; } = "http://localhost:4200";
 
     /// <summary>
+    /// The most an email's attachments may add up to. Most mail providers refuse messages over about 20-25 MB; files
+    /// beyond this are still listed in the email, with a note to download them from the app.
+    /// </summary>
+    public int MaxAttachmentBytes { get; set; } = 15 * 1024 * 1024;
+
+    /// <summary>
     /// Recipient domains never emailed (e.g. "demo.example" for the demo accounts on a real mail server).
     /// The email is recorded as Skipped instead.
     /// </summary>

@@ -34,10 +34,12 @@ public class ConsumerTests : IAsyncLifetime
             .AddSingleton(new AppLinks("http://app.test"))
             .AddSingleton<EmailTemplates>()
             .AddScoped<INotificationDispatcher, NotificationDispatcher>()
+            .Configure<NotificationOptions>(o => o.ClaimEmailDelay = TimeSpan.FromMinutes(2))
             .AddMassTransitTestHarness(x =>
             {
                 x.AddConsumer<EmailVerificationRequestedConsumer>();
                 x.AddConsumer<ClaimStatusChangedConsumer>();
+                x.AddConsumer<ClaimSubmittedConsumer>();
                 x.AddConsumer<PaymentReceivedConsumer>();
                 x.AddConsumer<PaymentDeclinedConsumer>();
                 x.AddConsumer<CustomerRegisteredConsumer>();
@@ -101,6 +103,17 @@ public class ConsumerTests : IAsyncLifetime
 
         var email = Assert.Single(_smtp.Sent);
         Assert.Contains("Reason: Not covered by this plan.", email.TextBody);
+    }
+
+    [Fact]
+    public async Task A_new_claim_waits_for_its_documents_before_emailing()
+    {
+        await PublishAndWaitAsync(new ClaimSubmitted(5, "CLM-2026-000005", 1, 10, new DateOnly(2026, 11, 1), 250m, DateTime.UtcNow));
+
+        Assert.Empty(_smtp.Sent);                               // not yet: documents are still being uploaded
+        var queued = Assert.Single(_repo.PendingClaimEmails);
+        Assert.Equal(5, queued.Key);
+        Assert.InRange(queued.Value.SendAfter, DateTime.UtcNow.AddSeconds(100), DateTime.UtcNow.AddSeconds(130));
     }
 
     [Fact]

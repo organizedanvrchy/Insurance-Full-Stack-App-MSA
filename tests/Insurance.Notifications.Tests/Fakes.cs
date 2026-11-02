@@ -66,6 +66,28 @@ public class FakeNotificationRepository : INotificationRepository
         return Task.CompletedTask;
     }
 
+    // ---- Queued claim emails (usp_PendingClaimEmail_*) ----
+    public Dictionary<int, (string Payload, DateTime SendAfter)> PendingClaimEmails { get; } = new();
+
+    public Task QueueClaimEmailAsync(int claimId, string payload, DateTime sendAfterUtc)
+    {
+        PendingClaimEmails.TryAdd(claimId, (payload, sendAfterUtc));
+        return Task.CompletedTask;
+    }
+
+    public Task<List<PendingClaimEmail>> TakeDueClaimEmailsAsync(int take, TimeSpan lease)
+    {
+        var due = PendingClaimEmails.Where(p => p.Value.SendAfter <= DateTime.UtcNow).Take(take).ToList();
+        foreach (var p in due) PendingClaimEmails[p.Key] = (p.Value.Payload, DateTime.UtcNow.Add(lease));
+        return Task.FromResult(due.Select(p => new PendingClaimEmail(p.Key, p.Value.Payload, 1)).ToList());
+    }
+
+    public Task RemoveClaimEmailAsync(int claimId)
+    {
+        PendingClaimEmails.Remove(claimId);
+        return Task.CompletedTask;
+    }
+
     public Task<List<SentEmail>> GetRecentAsync(int userId, int take) =>
         Task.FromResult(Emails.Values.Where(e => e.UserId == userId && e.Status == EmailStatus.Sent)
             .Take(take).Select((e, i) => new SentEmail(i + 1, e.Kind, e.ToEmail, e.Subject, DateTime.UtcNow)).ToList());
@@ -109,4 +131,21 @@ public class FakePolicyDetails : IPolicyDetails
 
     public Task<PolicySummary> SummaryAsync(int enrollmentId) =>
         Task.FromResult(new PolicySummary("Homeowners Preferred", 250_000m, new DateOnly(2026, 11, 2), new DateOnly(2027, 11, 2)));
+}
+
+/// <summary>The Claims service's internal documents API.</summary>
+public class FakeClaimDocuments : Insurance.Claims.Contracts.IClaimDocuments
+{
+    public List<(Insurance.Claims.Contracts.ClaimDocumentInfo Info, byte[] Content)> Documents { get; } = new();
+    public bool Unavailable { get; set; }
+
+    public void Add(int claimId, string name, string type, byte[] content) =>
+        Documents.Add((new Insurance.Claims.Contracts.ClaimDocumentInfo(Documents.Count + 1, claimId, name, type, content.Length, DateTime.UtcNow), content));
+
+    public Task<List<Insurance.Claims.Contracts.ClaimDocumentInfo>> GetForClaimAsync(int claimId) =>
+        Unavailable ? throw new HttpRequestException("Claims is down")
+            : Task.FromResult(Documents.Where(d => d.Info.ClaimId == claimId).Select(d => d.Info).ToList());
+
+    public Task<byte[]?> GetContentAsync(int claimId, int claimDocumentId) =>
+        Task.FromResult<byte[]?>(Documents.FirstOrDefault(d => d.Info.ClaimId == claimId && d.Info.ClaimDocumentId == claimDocumentId).Content);
 }

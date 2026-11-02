@@ -81,7 +81,7 @@ public class NotificationDispatcher : INotificationDispatcher
             }
 
             var email = await n.Render(user);
-            await _sender.SendAsync(new EmailMessage(to, user.FullName, email.Subject, email.Html, email.Text), ct);
+            await _sender.SendAsync(new EmailMessage(to, user.FullName, email.Subject, email.Html, email.Text, email.Attachments), ct);
             await _repo.CompleteAsync(n.Key, EmailStatus.Sent, to, email.Subject);
             _logger.LogInformation("Sent {Kind} email {Key} to user {UserId}.", n.Kind, n.Key, n.UserId);
         }

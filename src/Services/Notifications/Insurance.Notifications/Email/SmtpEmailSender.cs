@@ -17,7 +17,10 @@ public class SmtpEmailSender : IEmailSender
         mime.From.Add(new MailboxAddress(_options.FromName, _options.FromAddress));
         mime.To.Add(new MailboxAddress(message.ToName, message.ToAddress));
         mime.Subject = message.Subject;
-        mime.Body = new BodyBuilder { HtmlBody = message.HtmlBody, TextBody = message.TextBody }.ToMessageBody();
+        var body = new BodyBuilder { HtmlBody = message.HtmlBody, TextBody = message.TextBody };
+        foreach (var file in message.Attachments ?? Array.Empty<EmailAttachment>())
+            body.Attachments.Add(file.FileName, file.Content, ContentType.Parse(file.ContentType));
+        mime.Body = body.ToMessageBody();
 
         // A connection per email keeps this simple and robust; the volume here is small.
         using var smtp = new SmtpClient();
@@ -46,8 +49,8 @@ public class LoggingEmailSender : IEmailSender
 
     public Task SendAsync(EmailMessage message, CancellationToken ct = default)
     {
-        _logger.LogInformation("Email (not sent, Email:Host is empty) to {To}: {Subject}\n{Body}",
-            message.ToAddress, message.Subject, message.TextBody);
+        _logger.LogInformation("Email (not sent, Email:Host is empty) to {To}: {Subject} [{Attachments} attachment(s)]\n{Body}",
+            message.ToAddress, message.Subject, message.Attachments?.Count ?? 0, message.TextBody);
         return Task.CompletedTask;
     }
 }

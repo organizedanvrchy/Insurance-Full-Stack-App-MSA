@@ -98,6 +98,47 @@ public class NotificationRepository : INotificationRepository
         return list;
     }
 
+    public async Task QueueClaimEmailAsync(int claimId, string payload, DateTime sendAfterUtc)
+    {
+        await using var conn = _db.Create();
+        await using var cmd = conn.StoredProc("notifications.usp_PendingClaimEmail_Add");
+        cmd.AddParam("@ClaimId",   SqlDbType.Int, claimId);
+        cmd.AddParam("@Payload",   SqlDbType.NVarChar, payload);
+        cmd.AddParam("@SendAfter", SqlDbType.DateTime2, sendAfterUtc);
+
+        await conn.OpenAsync();
+        try
+        {
+            await cmd.ExecuteNonQueryAsync();
+        }
+        catch (SqlException ex) when (ex.Number is 2627 or 2601) { }   // the same event, twice at once: already queued
+    }
+
+    public async Task<List<PendingClaimEmail>> TakeDueClaimEmailsAsync(int take, TimeSpan lease)
+    {
+        await using var conn = _db.Create();
+        await using var cmd = conn.StoredProc("notifications.usp_PendingClaimEmail_TakeDue");
+        cmd.AddParam("@Take",         SqlDbType.Int, take);
+        cmd.AddParam("@LeaseSeconds", SqlDbType.Int, (int)lease.TotalSeconds);
+
+        await conn.OpenAsync();
+        await using var reader = await cmd.ExecuteReaderAsync();
+        var list = new List<PendingClaimEmail>();
+        while (await reader.ReadAsync())
+            list.Add(new PendingClaimEmail(reader.GetInt32(0), reader.GetString(1), reader.GetInt32(2)));
+        return list;
+    }
+
+    public async Task RemoveClaimEmailAsync(int claimId)
+    {
+        await using var conn = _db.Create();
+        await using var cmd = conn.StoredProc("notifications.usp_PendingClaimEmail_Remove");
+        cmd.AddParam("@ClaimId", SqlDbType.Int, claimId);
+
+        await conn.OpenAsync();
+        await cmd.ExecuteNonQueryAsync();
+    }
+
     private static async Task<NotificationPreferences> ReadPreferencesAsync(SqlConnection conn, SqlCommand cmd)
     {
         await conn.OpenAsync();

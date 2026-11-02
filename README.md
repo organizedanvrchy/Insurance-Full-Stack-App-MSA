@@ -270,6 +270,8 @@ Every setting can also be given as an environment variable (`:` becomes `__`), w
 | `Email:Host`, `Port`, `Security`, `Username`, `Password` | Notifications | The SMTP server. `Security` is `None` (Mailpit), `StartTls` (port 587) or `SslOnConnect` (port 465). **Password in user secrets or `.env` only.** An empty `Host` logs emails instead of sending them |
 | `Email:FromAddress`, `FromName` | Notifications | The sender |
 | `Email:AppBaseUrl` | Notifications | The Angular app's address; links in emails point there |
+| `Email:MaxAttachmentBytes` | Notifications | Most a claim email's document copies may add up to (default 15 MB); larger files are listed but not attached |
+| `Notifications:ClaimEmailDelay` | Notifications | How long "We received your claim" waits for the claim's documents to upload (default 2 minutes) |
 | `Email:SupportEmail` | Notifications | Where customers get help. Every email says it's automated ("don't reply") and points here |
 | `BusinessTimeZone` | Every service | The insurer's time zone (IANA id, default `America/New_York`, i.e. EST/EDT): what "today" means for due dates, overdue premiums, coverage and claims, and the zone emails show times in |
 | `Email:SkipDomains` | Notifications | Recipient domains never emailed (e.g. `demo.example` against a real mail server) |
@@ -432,7 +434,7 @@ flowchart LR
 | Payment receipt | Every installment paid at checkout (receipt number, payment method, installment *n* of *N*, next payment, link to the in-app receipt) | No |
 | Payment didn't go through | A declined or failed checkout attempt (the reason, nothing charged, a "try again" link) | No |
 | Payment reminder | 3 days before, on the due date, when Overdue, +5 days, +10 days | **Yes**: at sign-up, and in the profile's "Email settings" |
-| Claim received / approved / rejected (with the reason) / payment sent | Filed ("allow 5-7 business days for a decision"); approved ("payment goes out in about 2-3 business days"); rejected; paid ("your check arrives in about 5-10 business days"). Moving to "under review" sends nothing | No |
+| Claim received / approved / rejected (with the reason) / payment sent | Filed: the customer's copy of the claim, listing its documents with **copies attached** (sent about 2 minutes after filing, once the documents have uploaded; up to 15 MB of attachments, larger files are listed with a link to My claims), "allow 5-7 business days for a decision"; approved ("payment goes out in about 2-3 business days"); rejected; paid ("your check arrives in about 5-10 business days"). Moving to "under review" sends nothing | No |
 
 How it stays reliable:
 

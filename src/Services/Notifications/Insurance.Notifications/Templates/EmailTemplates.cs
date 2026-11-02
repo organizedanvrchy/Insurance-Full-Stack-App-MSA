@@ -131,8 +131,16 @@ public class EmailTemplates
 
     // ---------------- Claims ----------------
 
-    public RenderedEmail ClaimSubmitted(string fullName, ClaimSubmitted e, string policyName) =>
-        Email($"We received your claim {e.ClaimNumber}", "We'll email you whenever its status changes.")
+    /// <summary>A document on the claim, and whether a copy is attached to this email.</summary>
+    public record ClaimDocumentCopy(string FileName, string ContentType, int SizeBytes, bool Attached);
+
+    /// <summary>The customer's copy of their claim, with the documents they added (copies attached where they fit).</summary>
+    public RenderedEmail ClaimSubmitted(string fullName, ClaimSubmitted e, string policyName,
+        IReadOnlyList<ClaimDocumentCopy>? documents = null)
+    {
+        documents ??= Array.Empty<ClaimDocumentCopy>();
+
+        var email = Email($"We received your claim {e.ClaimNumber}", "Your claim is under review.")
             .Heading("Claim received")
             .Paragraph($"Hi {FirstName(fullName)},")
             .Paragraph("Thanks, we've received your claim. Your claim is under review and we'll email you when a decision has been made. Please allow at least 5-7 business days for a response.")
@@ -141,9 +149,42 @@ public class EmailTemplates
                 ("Policy", policyName),
                 ("Incident date", Date(e.IncidentDate)),
                 ("Amount claimed", Money(e.ClaimAmount)),
-                ("Status", "Submitted"))
-            .Button("Track my claim", _links.MyClaims)
-            .Build();
+                ("Status", "Submitted"));
+
+        if (documents.Count == 0)
+        {
+            email.Small("No documents were added to this claim. You can add them from My claims until a decision has been made.");
+        }
+        else
+        {
+            email.Paragraph(documents.Count == 1 ? "Document added to this claim:" : $"Documents added to this claim ({documents.Count}):")
+                .Details(documents.Select(d => (d.FileName, $"{DocumentType(d.ContentType)}, {FileSize(d.SizeBytes)}")).ToArray());
+
+            if (documents.All(d => d.Attached))
+                email.Small(documents.Count == 1 ? "A copy is attached to this email." : "Copies are attached to this email.");
+            else if (documents.Any(d => d.Attached))
+                email.Small("Copies are attached, except for files too large to email. You can download every document from My claims.");
+            else
+                email.Small("The files are too large to email. You can download them from My claims.");
+        }
+
+        return email.Button("Track my claim", _links.MyClaims).Build();
+    }
+
+    public static string DocumentType(string contentType) => contentType switch
+    {
+        "application/pdf" => "PDF",
+        "image/jpeg" => "JPG image",
+        "image/png" => "PNG image",
+        _ => "File"
+    };
+
+    public static string FileSize(int bytes) => bytes switch
+    {
+        < 1024 => $"{bytes} bytes",
+        < 1024 * 1024 => $"{Math.Round(bytes / 1024.0)} KB",
+        _ => $"{bytes / (1024.0 * 1024.0):0.#} MB"
+    };
 
     /// <summary>The decision on a claim (approved or rejected, with the reviewer's reason or notes), and the payment.</summary>
     public RenderedEmail ClaimStatusChanged(string fullName, ClaimStatusChanged e, string policyName)

@@ -3,8 +3,12 @@ using System.Text;
 
 namespace Insurance.Notifications.Templates;
 
-/// <summary>A rendered email before it has a recipient.</summary>
-public record RenderedEmail(string Subject, string Html, string Text);
+/// <summary>A rendered email before it has a recipient. Attachments are files sent with it.</summary>
+public record RenderedEmail(string Subject, string Html, string Text)
+{
+    public IReadOnlyList<Insurance.Notifications.Email.EmailAttachment> Attachments { get; init; } =
+        Array.Empty<Insurance.Notifications.Email.EmailAttachment>();
+}
 
 /// <summary>
 /// Builds the HTML and the plain-text version of an email side by side, from the same blocks, so the two never

@@ -2,6 +2,7 @@ using Insurance.BuildingBlocks.Hosting;
 using Insurance.BuildingBlocks.Http;
 using Insurance.BuildingBlocks.Messaging;
 using Insurance.Catalog.Contracts;
+using Insurance.Claims.Contracts;
 using Insurance.Enrollments.Contracts;
 using Insurance.Identity.Contracts;
 using Insurance.Notifications.Email;
@@ -29,9 +30,15 @@ builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 builder.Services.AddScoped<INotificationDispatcher, NotificationDispatcher>();
 builder.Services.AddScoped<IPolicyDetails, PolicyDetails>();
 
+// "We received your claim" waits for the claim's documents, then goes out with copies of them.
+builder.Services.Configure<NotificationOptions>(builder.Configuration.GetSection("Notifications"));
+builder.Services.AddScoped<IClaimReceivedEmail, ClaimReceivedEmail>();
+builder.Services.AddHostedService<ClaimReceivedEmailJob>();
+
 builder.Services.AddServiceClient<IUserDirectory, IdentityClient>(builder.Configuration, "Identity");
 builder.Services.AddServiceClient<IEnrollmentLookup, EnrollmentLookupClient>(builder.Configuration, "Enrollments");
 builder.Services.AddServiceClient<IPlanCatalog, PlanCatalogClient>(builder.Configuration, "Catalog");
+builder.Services.AddServiceClient<IClaimDocuments, ClaimDocumentsClient>(builder.Configuration, "Claims");
 
 builder.Services.AddMessaging(builder.Configuration, "notifications", bus =>
 {

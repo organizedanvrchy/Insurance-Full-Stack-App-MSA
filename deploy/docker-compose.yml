@@ -159,6 +159,7 @@ services:
       Services__Identity: http://identity:8080/
       Services__Catalog: http://catalog:8080/
       Services__Enrollments: http://enrollments:8080/
+      Services__Claims: http://claims:8080/
       # Mailpit by default. For a real mail server set EMAIL_HOST, EMAIL_PORT, EMAIL_SECURITY, EMAIL_USERNAME,
       # EMAIL_PASSWORD and EMAIL_FROM in deploy/.env.
       Email__Host: ${EMAIL_HOST:-mailpit}
