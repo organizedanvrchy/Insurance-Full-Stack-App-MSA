@@ -14,6 +14,7 @@ public class AppLinks
     public string VerifyEmail(string token) => $"{_base}/verify-email?token={Uri.EscapeDataString(token)}";
     public string MyPolicies => $"{_base}/my-policies";
     public string PaymentSchedule(int enrollmentId) => $"{_base}/my-policies/{enrollmentId}/payments";
+    public string Receipt(int transactionId) => $"{_base}/receipts/{transactionId}";
     public string MyClaims => $"{_base}/claims";
     public string Profile => $"{_base}/profile";
     public string EmailSettings => $"{_base}/profile#email-settings";

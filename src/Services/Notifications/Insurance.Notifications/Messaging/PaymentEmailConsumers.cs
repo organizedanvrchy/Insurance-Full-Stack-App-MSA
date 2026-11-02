@@ -32,6 +32,30 @@ public class PaymentReceivedConsumer : IConsumer<PaymentReceived>
     }
 }
 
+/// <summary>A payment attempt was declined or failed. Always sent: the customer needs to know their premium isn't paid.</summary>
+public class PaymentDeclinedConsumer : IConsumer<PaymentDeclined>
+{
+    private readonly INotificationDispatcher _dispatcher;
+    private readonly EmailTemplates _templates;
+    private readonly IPolicyDetails _policies;
+
+    public PaymentDeclinedConsumer(INotificationDispatcher dispatcher, EmailTemplates templates, IPolicyDetails policies)
+    {
+        _dispatcher = dispatcher;
+        _templates = templates;
+        _policies = policies;
+    }
+
+    public Task Consume(ConsumeContext<PaymentDeclined> context)
+    {
+        var e = context.Message;
+        return _dispatcher.SendAsync(new Notification(
+            $"payment-declined:{e.TransactionId}", e.UserId, NotificationKind.PaymentDeclined,
+            async user => _templates.PaymentDeclined(user.FullName, e, await _policies.PlanNameAsync(e.PolicyId))),
+            context.CancellationToken);
+    }
+}
+
 /// <summary>Due soon / due today / overdue reminders. Skipped for customers who turned reminders off.</summary>
 public class PaymentReminderDueConsumer : IConsumer<PaymentReminderDue>
 {

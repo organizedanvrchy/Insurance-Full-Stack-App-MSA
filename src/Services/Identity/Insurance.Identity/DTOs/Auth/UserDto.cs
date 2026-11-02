@@ -14,5 +14,4 @@ public class UserDto
     public DateTime CreatedAt { get; set; }
 
     public bool EmailVerified { get; set; }
-    public string? PendingEmail { get; set; }      // set while an email change waits for confirmation
 }

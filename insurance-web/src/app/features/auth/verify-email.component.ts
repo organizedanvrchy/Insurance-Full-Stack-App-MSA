@@ -5,7 +5,7 @@ import { getErrorMessage } from '../../core/utils/http-error';
 import { ThemeToggleComponent } from '../../shared/components/theme-toggle.component';
 import { BrandLogoComponent } from '../../shared/components/brand-logo.component';
 
-type State = 'verifying' | 'verified' | 'changed' | 'failed';
+type State = 'verifying' | 'verified' | 'failed';
 
 /**
  * Opened from the link in a verification email: /verify-email?token=...
@@ -40,7 +40,7 @@ export class VerifyEmailComponent {
     this.auth.verifyEmail(token).subscribe({
       next: (res) => {
         this.email.set(res.email);
-        this.state.set(res.emailChanged ? 'changed' : 'verified');
+        this.state.set('verified');
       },
       error: (err) => this.fail(getErrorMessage(err)),
     });

@@ -16,11 +16,8 @@
 }
 
 .address {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.75rem;
+  display: grid;
+  gap: 0.15rem;
 }
 
 .label {
@@ -39,33 +36,10 @@
   overflow-wrap: anywhere;
 }
 
-.row-actions {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
-}
-
-.notice {
-  margin: 0;
-}
-
 .ok {
   margin: 0;
   color: var(--success-text);
   font-weight: 600;
-}
-
-.change {
-  display: grid;
-  gap: 0.75rem;
-  max-width: 480px;
-  padding: 1rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-}
-
-.change p {
-  margin: 0;
 }
 
 .prefs,

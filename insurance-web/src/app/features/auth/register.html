@@ -132,6 +132,21 @@
         </label>
       </fieldset>
 
+      <fieldset>
+        <legend>Email notifications</legend>
+        <label class="check opt-in">
+          <input type="checkbox" formControlName="paymentReminders" aria-describedby="reminders-help" />
+          <span>
+            Email me payment reminders
+            <small id="reminders-help" class="muted">
+              Before each premium is due, on the due date, and if it's overdue. You can change this any time on
+              your profile. Receipts, declined-payment notices, claim updates and your verification email are
+              always sent.
+            </small>
+          </span>
+        </label>
+      </fieldset>
+
       <button class="btn" type="submit" [disabled]="loading()">
         {{ loading() ? 'Creating account…' : 'Create account' }}
       </button>

@@ -85,3 +85,18 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ---- Email notifications opt-in ---- */
+.opt-in {
+  align-items: flex-start;
+  cursor: pointer;
+}
+
+.opt-in input {
+  margin-top: 0.2rem;
+}
+
+.opt-in span {
+  display: grid;
+  gap: 0.15rem;
+}

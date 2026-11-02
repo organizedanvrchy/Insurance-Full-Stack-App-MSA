@@ -16,7 +16,6 @@ public class User
     public DateTime CreatedAt { get; set; }
 
     public DateTime? EmailVerifiedAt { get; set; }    // null until the customer clicks the link in their email
-    public string? PendingEmail { get; set; }         // a requested email change, waiting for its link to be used
 
     public bool EmailVerified => EmailVerifiedAt is not null;
 }

@@ -16,12 +16,6 @@
           claims.
         </p>
       }
-      @case ('changed') {
-        <h1>Email address updated</h1>
-        <p>
-          Your account now uses <strong>{{ email() }}</strong>. Use it the next time you sign in.
-        </p>
-      }
       @case ('failed') {
         <h1>We couldn't verify your email</h1>
         <div class="alert" role="alert">{{ error() }}</div>

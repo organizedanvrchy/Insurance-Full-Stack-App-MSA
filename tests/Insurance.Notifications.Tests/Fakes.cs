@@ -34,6 +34,12 @@ public class FakeNotificationRepository : INotificationRepository
         return GetPreferencesAsync(userId);
     }
 
+    public Task SetInitialPreferencesAsync(int userId, bool paymentReminders)
+    {
+        PaymentReminders.TryAdd(userId, paymentReminders);   // like the proc: never overwrites a saved choice
+        return Task.CompletedTask;
+    }
+
     public Task<bool> BeginAsync(string notificationKey, int userId, NotificationKind kind)
     {
         if (!Emails.TryGetValue(notificationKey, out var row))

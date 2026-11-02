@@ -13,6 +13,7 @@ export type NotificationKind =
   | 'ClaimSubmitted'
   | 'ClaimStatusChanged'
   | 'PaymentReceipt'
+  | 'PaymentDeclined'
   | 'PaymentReminder';
 
 export interface SentEmail {

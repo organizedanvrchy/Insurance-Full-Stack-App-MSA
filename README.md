@@ -50,7 +50,7 @@ The application simulates the core operations of an insurer:
 3. The customer **enrolls** from the quote. A **saga** across three services reserves the quote, creates the policy and its monthly **premium schedule**, and confirms the quote.
 4. The customer pays installments, and can **file claims** against active, paid-up policies.
 5. Admins move claims through a **review workflow**, and manage customer access.
-6. Along the way, customers get **emails**: a verification link at sign-up, a confirmation for each policy, a receipt for each payment, reminders before and after premiums are due, and an update each time a claim moves.
+6. Along the way, customers get **emails**: a verification link at sign-up, a confirmation for each policy, a receipt for each payment (or a notice if it's declined), reminders before and after premiums are due, and an update each time a claim moves.
 
 The backend is a set of **microservices**: seven ASP.NET Core services, each with its own database, behind an **API gateway + BFF**. Services call each other over HTTP for queries and exchange **events over RabbitMQ** for everything that changes state in another service. The Angular frontend talks only to the gateway. Inside each service, data access uses **ADO.NET with parameterized stored procedures**.
 
@@ -58,20 +58,24 @@ The backend is a set of **microservices**: seven ASP.NET Core services, each wit
 
 ### Customers
 - Register, sign in and sign out. Passwords are hashed with BCrypt and sessions use JWTs.
-- **Verify their email address** from a link sent at sign-up. Until then they can browse and get quotes, but not enroll or file claims. They can also **change their email**, which only takes effect once the new address is confirmed.
+- **Verify their email address** from a link sent at sign-up. Until then they can browse and get quotes, but not enroll or file claims.
+- **Choose their emails:** a "Email me payment reminders" box on the sign-up form, changeable any time on the profile page.
 - Browse the plan catalog and filter by type.
 - **Get a personalized quote:** the API supplies the questions for each plan type, and the form is built dynamically from them. The result shows the base rate, every rating factor, the monthly price, the total over the term and the quote's expiry date.
 - Enroll from a quote with a chosen start date, and cancel a policy.
 - **Pay premiums** in order from a payment schedule, with paid, pending and overdue states.
+- **Simulated checkout:** pay by credit/debit card, PayPal, Apple Pay, Google Pay or Venmo. Card numbers are validated (brand, checksum, expiry, security code) and turned into a token in the browser; the server never sees them. Name and billing address are filled in from sign-up, cards can be saved for later, and every attempt gets a printable receipt.
+- **Payment history:** every attempt on a policy, including declined ones, with the reason the customer was given.
 - **Payment alerts:** a "payment due soon" or "payment overdue" badge on each policy.
 - **File claims** with incident date, amount and description. Eligibility is validated against the policy.
 - Track claims through the review workflow and read the reviewer's notes.
-- **Email notifications:** payment receipts; reminders 3 days before a premium is due, on the due date, when it becomes overdue, and 5 and 10 days after that; claim received and every claim status change; policy activated or cancelled. Payment reminders can be turned off from the profile page, which also lists recent emails.
+- **Email notifications:** a receipt for every payment and a notice when one is declined; reminders 3 days before a premium is due, on the due date, when it becomes overdue, and 5 and 10 days after that; claim received and every claim status change; policy activated or cancelled. Payment reminders are opt-in/out at sign-up and on the profile page, which also lists recent emails.
 
 ### Administrators
 - Create, edit and deactivate plans. Deactivated plans disappear for customers but remain on existing policies.
 - **Claims review queue** with a status filter. Buttons show only the legal next step, and a rejection requires a reason.
 - **Customer management:** search, filter by status, see active-policy and claim counts and whether the email is verified, and deactivate or reactivate accounts (takes effect on the customer's next request).
+- **Payment log:** every payment attempt from every customer, filterable by status, with amounts collected, declines and refunds.
 
 ### Platform
 - Role-based authorization (`Customer`, `Admin`), with ownership checks on every record.
@@ -127,11 +131,11 @@ flowchart TD
 
 | Service | Owns | Talks to |
 |---|---|---|
-| **Identity** | Users, sign-in, JWT issuing, email verification | Nobody (others call it). Publishes `EmailVerificationRequested`, `EmailChangeRequested`, `EmailChanged` |
+| **Identity** | Users, sign-in, JWT issuing, email verification | Nobody (others call it). Publishes `CustomerRegistered`, `EmailVerificationRequested` |
 | **Catalog** | Plans | Nobody (others call it) |
 | **Quotes** (Quotes) | Rating engine, quotes | Catalog (HTTP). Consumes `EnrollmentActivated`, `EnrollmentFailed` |
 | **Enrollments** (Enrollments) | Policies, **the enrollment saga** | Identity, Quotes, Catalog, Billing (HTTP). Publishes `EnrollmentRequested`, `EnrollmentActivated`, `EnrollmentFailed`, `EnrollmentCancelled` through an outbox |
-| **Billing** | Premium schedules, payments, payment reminders | Enrollments (HTTP). Consumes `EnrollmentRequested`, `EnrollmentCancelled`, `EnrollmentFailed`; publishes `PremiumScheduleCreated`, and `PaymentReceived` and `PaymentReminderDue` through an outbox |
+| **Billing** | Premium schedules, payments, payment reminders | Enrollments (HTTP). Consumes `EnrollmentRequested`, `EnrollmentCancelled`, `EnrollmentFailed`; publishes `PremiumScheduleCreated`, and `PaymentReceived`, `PaymentDeclined` and `PaymentReminderDue` through an outbox |
 | **Claims** (Claims) | Claims, review workflow | Enrollments, Billing, Catalog, Identity (HTTP). Publishes `ClaimSubmitted`, `ClaimStatusChanged` through an outbox |
 | **Notifications** | Emails sent, customers' email preferences | Identity, Enrollments, Catalog (HTTP). Consumes the account, enrollment, claim and payment events above and emails the customer. Nothing depends on it |
 | **Gateway + BFF** | Nothing | Routes `/api/*`; checks that the caller's account is active (Identity); composes the admin customer list (Identity + Enrollments + Claims) |
@@ -157,9 +161,9 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the enrollment saga, the ou
 | Quotes | Priced on the server from the customer's answers. The client never sends a price. Valid for 30 days and usable once. |
 | Rating | `premium = base rate x every factor`, rounded to cents, minimum $1.00. Some answers trigger an underwriting decline. |
 | Enrollment | Start date from yesterday (time-zone slack) to 90 days ahead. One active enrollment per plan per customer. The premium is copied from the quote, so later plan price changes never alter existing policies. |
-| Payments | Installments must be paid **in order**. An unpaid installment becomes **Overdue** more than **5 days** past its due date. A payment alert shows when the next due date is within **7 days**. Every payment is emailed as a receipt. |
-| Reminders | Emailed 3 days before the due date, on the due date, the day the installment turns Overdue, then 5 and 10 days after that. Each one at most once per installment. Customers can turn reminders off; receipts, claim and account emails always go out. |
-| Email verification | New accounts must confirm their email before **enrolling** or **filing a claim** (`403` until then). Links are single-use, expire after 24 hours, and only their hash is stored. Resending is limited to one per minute and six a day. Changing the email needs the current password and only takes effect when the new address is confirmed; the old address is told. |
+| Payments | Installments must be paid **in order**. An unpaid installment becomes **Overdue** more than **5 days** past its due date. A payment alert shows when the next due date is within **7 days**. Every successful payment is emailed as a receipt, and every declined or failed one as a notice. |
+| Reminders | Emailed 3 days before the due date, on the due date, the day the installment turns Overdue, then 5 and 10 days after that. Each one at most once per installment. Customers choose at sign-up (on by default) and can change it on their profile; receipts, declines, claim and account emails always go out. |
+| Email verification | New accounts must confirm their email before **enrolling** or **filing a claim** (`403` until then). Links are single-use, expire after 24 hours, and only their hash is stored. Resending is limited to one per minute and six a day. |
 | Claims | Active policy only. The incident must fall inside the coverage period and not be in the future. No overdue premiums. The amount cannot exceed the remaining coverage (policy coverage minus approved and paid claims). |
 | Claim workflow | Submitted, Under review, then Approved or Rejected, then (approved only) Paid. A rejection needs a reason. Concurrent edits are detected. |
 | Accounts | Deactivated accounts cannot sign in and existing tokens stop working. Admin accounts cannot be deactivated from the UI. |
@@ -271,6 +275,8 @@ Every setting can also be given as an environment variable (`:` becomes `__`), w
 | `ReverseProxy:Clusters:<name>:Destinations:d1:Address` | Gateway | Where each service runs |
 | `Cors:AllowedOrigins` | Gateway | Frontend origins allowed to call the API |
 | `Enrollment:SagaTimeout` | Enrollments | How long `POST /api/enrollments` waits for the saga before answering `202` (default 10 seconds) |
+| `Payments:Provider` | Billing | Which payment processor to use. Only `Mock` (the simulation) exists; a real one is a new `IPaymentGateway` class |
+| `Payments:Mock:LatencyMs` | Billing | How long the simulated processor takes to answer (default 700 ms) |
 | `apiUrl` | `insurance-web/src/environments/environment.development.ts` (dev) and `environment.ts` (production build) | The gateway's address |
 
 ## API overview
@@ -284,7 +290,6 @@ Every endpoint is reached through the gateway at `/api`. Each service documents 
 | | `GET /api/auth/me` | Signed in |
 | | `POST /api/auth/verify-email` | Public (the token from the emailed link) |
 | | `POST /api/auth/resend-verification` | Signed in |
-| | `POST /api/auth/change-email`, `DELETE /api/auth/change-email` | Signed in (start or cancel a change; needs the current password) |
 | **Policies** (Catalog) | `GET /api/policies` | Signed in (`?includeInactive=true` for admins) |
 | | `GET /api/policies/{id}` | Signed in |
 | | `POST /api/policies`, `PUT /api/policies/{id}`, `DELETE /api/policies/{id}` | Admin (delete is a soft delete) |
@@ -296,7 +301,10 @@ Every endpoint is reached through the gateway at `/api`. Each service documents 
 | | `POST /api/enrollments` | Customer (`201`, or `202` while the saga is still running) |
 | | `PUT /api/enrollments/{id}/cancel` | Owner |
 | **Payments** (Billing) | `GET /api/enrollments/{id}/payments` | Owner or admin |
-| | `POST /api/payments/{id}/pay` | Customer (owner) |
+| | `POST /api/payments/{id}/pay` | Customer (owner). Body: a payment-method token or a saved method, and an idempotency key. Answers `200` with `outcome: Succeeded` (a receipt) or `Declined` (the reason) |
+| | `GET /api/payments/transactions?enrollmentId=&status=` | The payment log: one policy (owner or admin), your own attempts, or everyone's (admin) |
+| | `GET /api/payments/transactions/{id}` | A receipt (the customer who paid, or an admin) |
+| | `GET /api/payment-methods`, `DELETE /api/payment-methods/{id}` | Customer: saved payment methods (brand, last 4 digits, expiry) |
 | **Claims** (Claims) | `POST /api/claims` | Customer |
 | | `GET /api/claims/mine` | Customer |
 | | `GET /api/claims?status=` | Admin |
@@ -325,16 +333,24 @@ dotnet test Insurance.sln
 | `EmailVerificationServiceTests` | Verification links (hashing, single use, expiry, replacement), resend limits, email changes (password, conflicts, confirm, cancel) |
 | `EnrollmentServiceTests` | Start-date window, payment alerts, ownership, cancellation, the enrollment saga (completed, still running, failed, quote released), degradation when Billing is down |
 | `ClaimServiceTests` | Review rules, the concurrency guard, claim visibility, claim eligibility, names and plans from other services |
-| `PaymentServiceTests` | Ownership, already paid, cancelled, pending and expired policies, receipt details |
+| `CheckoutServiceTests` | Approved, declined and failed payments; retries never charge twice; every rule checked before charging; automatic refund when an approved charge can't be applied; saved cards; the receipt and declined emails saved with each outcome |
+| `MockPaymentGatewayTests` | Test cards and their decline reasons, expired cards, idempotent charges, malformed tokens |
+| `PaymentServiceTests` | Who sees schedules, the payment log and receipts; cancelled policies |
 | `ReminderScheduleTests`, `PaymentReminderServiceTests` | Which reminder goes out on which day, no repeats or stale reminders, only for policies in force |
 | `TemplateTests` | Every email's subject and content, HTML encoding of customer text, links into the app |
-| `NotificationDispatcherTests`, `ConsumerTests` | Exactly-once sending, reminder opt-out, deactivated accounts, failures and retries, events on MassTransit's in-memory test bus |
+| `NotificationDispatcherTests`, `ConsumerTests` | Exactly-once sending, reminder opt-in/out (sign-up and profile), deactivated accounts, failures and retries, events on MassTransit's in-memory test bus |
 | `InternalQuotesControllerTests` | A quote can only be reserved for the caller |
 | `ServiceBoundaryTests` | No service references another's implementation, no service's SQL touches another service's schema, and nothing depends on the Notifications service |
 
-The stored procedures, the saga over RabbitMQ and the gateway were verified end to end with Docker Compose: a scripted run of 95 requests returns the same responses as the original single API, and the saga recovers when Billing is stopped and restarted, and compensates when Billing keeps failing.
+An end-to-end test drives the whole running system through the gateway, the way the Angular app does: accounts, quotes, the enrollment saga, payments (declines, retries, receipts), claims, the admin screens and cancellation. With the stack running (`docker compose -f deploy/docker-compose.yml up --build -d`):
 
-Email notifications were verified end to end the same way (SQL Server, RabbitMQ and an SMTP inbox): a scripted run of 40 checks covers registration, the `403` before verifying, verifying, enrolling, paying, filing and reviewing a claim, due-soon and overdue reminders with the opt-out, and changing the email address, and checks that every email arrives exactly once.
+```bash
+python tests/e2e/e2e_test.py
+```
+
+The stored procedures, the saga over RabbitMQ and the gateway were also verified end to end with Docker Compose: a scripted run of 95 requests returns the same responses as the original single API, and the saga recovers when Billing is stopped and restarted, and compensates when Billing keeps failing.
+
+Email notifications were verified end to end the same way (SQL Server, RabbitMQ and an SMTP inbox): a scripted run of 40 checks covers registration, the `403` before verifying, verifying, enrolling, paying, filing and reviewing a claim, due-soon and overdue reminders with the opt-out, receipts and declined-payment notices from checkout, and checks that every email arrives exactly once.
 
 ## Project structure
 
@@ -387,9 +403,9 @@ The **Notifications service** sends every email. It listens to events the other 
 
 ```mermaid
 flowchart LR
-    ID["Identity"] -- "EmailVerificationRequested<br/>EmailChangeRequested, EmailChanged" --> BUS[["RabbitMQ"]]
+    ID["Identity"] -- "CustomerRegistered<br/>EmailVerificationRequested" --> BUS[["RabbitMQ"]]
     EN["Enrollments"] -- "EnrollmentActivated<br/>EnrollmentCancelled" --> BUS
-    BI["Billing<br/>(+ hourly reminder job)"] -- "PaymentReceived<br/>PaymentReminderDue" --> BUS
+    BI["Billing<br/>(checkout + hourly reminder job)"] -- "PaymentReceived, PaymentDeclined<br/>PaymentReminderDue" --> BUS
     CL["Claims"] -- "ClaimSubmitted<br/>ClaimStatusChanged" --> BUS
     BUS --> NO["Notifications"]
     NO -- "recipient, plan name (HTTP)" --> LOOK["Identity, Enrollments, Catalog"]
@@ -398,24 +414,24 @@ flowchart LR
 
 | Email | Sent when | Can be turned off |
 |---|---|---|
-| Verify your email / Confirm your new email | Sign-up, resend, email change | No |
-| Email change requested / Email changed | To the **old** address, when a change is requested and when it's confirmed | No |
+| Verify your email | Sign-up, resend | No |
 | Policy active / Policy cancelled | The enrollment saga completes, the customer cancels | No |
-| Payment receipt | Every installment paid (receipt number, installment *n* of *N*, next payment) | No |
-| Payment reminder | 3 days before, on the due date, when Overdue, +5 days, +10 days | **Yes** (profile, "Email settings") |
+| Payment receipt | Every installment paid at checkout (receipt number, payment method, installment *n* of *N*, next payment, link to the in-app receipt) | No |
+| Payment didn't go through | A declined or failed checkout attempt (the reason, nothing charged, a "try again" link) | No |
+| Payment reminder | 3 days before, on the due date, when Overdue, +5 days, +10 days | **Yes**: at sign-up, and in the profile's "Email settings" |
 | Claim received / Claim under review / approved / rejected (with the reason) / paid | Each step of the claim workflow | No |
 
 How it stays reliable:
 
 - **Exactly once.** Each email has a key (e.g. `receipt:123`, `reminder:123:DueToday`). A repeated event finds the key already sent and does nothing; a failed send is recorded and retried.
-- **No lost events.** Billing and Claims publish through the same **transactional outbox** as Enrollments, so an event exists exactly when its change committed.
+- **No lost events.** Billing and Claims publish through the same **transactional outbox** as Enrollments, so an event exists exactly when its change committed. The receipt is saved in the same database transaction that marks the installment paid, and the declined notice with the declined outcome; a replayed checkout request (same idempotency key) sends nothing new.
 - **Reminders once per stage.** Billing records each (installment, stage) under a primary key before publishing, so several Billing instances never double-send.
 - **Background calls.** Consumers and the reminder job have no signed-in user, so they call other services' internal APIs with a short-lived **service token** (role `Service`, no user id: useless on public endpoints and refused by the gateway).
 - **Safe content.** All customer-entered text (names, reviewer notes) is HTML-encoded in the templates, and every email also has a plain-text version.
 
 ## Known limitations
 
-- **Simulated payments.** There is no payment gateway. "Pay" records a payment. Cancelling a policy removes its unpaid installments instead of voiding them.
+- **Simulated payments.** The payment processor is a simulation (`MockPaymentGateway`): no money moves. Everything around it is built as for a real processor (tokens instead of card numbers, idempotency keys, a transaction log, refunds, saved methods), so connecting one is a new `IPaymentGateway` class plus its browser library. Not yet simulated: webhooks for asynchronous confirmations, 3-D Secure, disputes, and a reconciliation job for a charge that succeeds while the service crashes before recording it. Cancelling a policy removes its unpaid installments instead of voiding them.
 - **Illustrative pricing.** Rating multipliers are hard-coded in the strategy classes. They are not actuarial data and cannot be edited from the UI.
 - **UTC date rules.** "Today" is evaluated in UTC, with slack in the enrollment window and a grace period on overdue premiums to cover time-zone differences.
 - **Token storage.** The JWT is kept in `localStorage` with no refresh-token flow. Production systems often use httpOnly cookies.

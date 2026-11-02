@@ -1,7 +1,6 @@
 using System.Data;
 using Insurance.Billing.Contracts;
 using Insurance.Billing.Enums;
-using Insurance.Billing.Exceptions;
 using Insurance.Billing.Models;
 using Insurance.Billing.Services.Reminders;
 using Insurance.BuildingBlocks.Data;
@@ -44,78 +43,6 @@ public class PaymentRepository : IPaymentRepository
         await using var reader = await cmd.ExecuteReaderAsync();
         return await reader.ReadAsync() ? Map(reader) : null;
     }
-
-    public async Task<Payment> PayAsync(int paymentId, int userId, int policyId)
-    {
-        await using var conn = _db.Create();
-        await conn.OpenAsync();
-        await using var tx = (SqlTransaction)await conn.BeginTransactionAsync();
-
-        Payment paid;
-        await using (var cmd = conn.StoredProc("billing.usp_Payment_Pay"))
-        {
-            cmd.Transaction = tx;
-            cmd.AddParam("@PaymentId", SqlDbType.Int, paymentId);
-            try
-            {
-                await using var reader = await cmd.ExecuteReaderAsync();
-                if (!await reader.ReadAsync())
-                    throw new InvalidOperationException("usp_Payment_Pay returned no row.");
-                paid = Map(reader);
-            }
-            catch (SqlException ex) when (ex.Number == 50004)
-            {
-                throw new PaymentNotFoundException(paymentId);
-            }
-            // 50005 already paid, 50007 earlier installment unpaid.
-            // The proc's THROW message is already user-friendly, so we pass it along.
-            catch (SqlException ex) when (ex.Number is 50005 or 50007)
-            {
-                throw new PaymentConflictException(ex.Message);
-            }
-        }
-
-        // The receipt: where this installment sits in the schedule and what's due next.
-        // (Read and close the reader first: the outbox insert needs the same connection.)
-        int installmentNumber, installmentCount;
-        DateOnly? nextDueDate;
-        decimal? nextDueAmount;
-        await using (var info = conn.StoredProc("billing.usp_Payment_GetReceiptInfo"))
-        {
-            info.Transaction = tx;
-            info.AddParam("@PaymentId", SqlDbType.Int, paymentId);
-            await using var reader = await info.ExecuteReaderAsync();
-            await reader.ReadAsync();
-
-            installmentNumber = reader.GetInt32(reader.GetOrdinal("InstallmentNumber"));
-            installmentCount = reader.GetInt32(reader.GetOrdinal("InstallmentCount"));
-            var hasNext = !reader.IsDBNull(reader.GetOrdinal("NextDueDate"));
-            nextDueDate = hasNext ? reader.GetDateOnly("NextDueDate") : null;
-            nextDueAmount = hasNext ? reader.GetDecimal(reader.GetOrdinal("NextDueAmount")) : null;
-        }
-
-        await _outbox.EnqueueAsync(conn, tx, new PaymentReceived(
-            paid.PaymentId,
-            ReceiptNumber(paid.PaymentId),
-            paid.EnrollmentId,
-            userId,
-            policyId,
-            paid.Amount,
-            paid.DueDate,
-            paid.PaidDate!.Value,
-            DateTime.UtcNow,
-            installmentNumber,
-            installmentCount,
-            nextDueDate,
-            nextDueAmount));
-
-        await tx.CommitAsync();
-        _outbox.Notify();
-        return paid;
-    }
-
-    /// <summary>The number printed on a payment receipt, e.g. PAY-00001234.</summary>
-    public static string ReceiptNumber(int paymentId) => $"PAY-{paymentId:D8}";
 
     public async Task<List<ReminderCandidate>> GetReminderCandidatesAsync(DateOnly fromDueDate, DateOnly toDueDate)
     {
@@ -219,7 +146,8 @@ public class PaymentRepository : IPaymentRepository
         return summaries;
     }
 
-    private static Payment Map(SqlDataReader r) => new()
+    // Also used by TransactionRepository, which reads the same row after settling a payment.
+    internal static Payment Map(SqlDataReader r) => new()
     {
         PaymentId = r.GetInt32(r.GetOrdinal("PaymentId")),
         EnrollmentId = r.GetInt32(r.GetOrdinal("EnrollmentId")),

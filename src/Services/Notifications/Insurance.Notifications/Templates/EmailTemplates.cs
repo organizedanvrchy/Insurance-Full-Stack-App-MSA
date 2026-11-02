@@ -35,18 +35,6 @@ public class EmailTemplates
         var link = _links.VerifyEmail(e.Token);
         var expires = e.ExpiresAtUtc.ToString("MMMM d, yyyy 'at' h:mm tt 'UTC'", Us);
 
-        if (e.Purpose == EmailVerificationPurpose.EmailChange)
-        {
-            return new EmailBuilder("Confirm your new email address", "One click to start using this address with RAINsurance.")
-                .Heading("Confirm your new email address")
-                .Paragraph($"Hi {FirstName(e.FullName)},")
-                .Paragraph($"You asked to use {e.Email} to sign in to RAINsurance. Confirm it's yours and it will replace your current address straight away.")
-                .Button("Confirm new email", link)
-                .Small($"This link works once and expires on {expires}. Until you confirm, your current address keeps working.")
-                .Small("Didn't ask for this? You can ignore this email: nothing changes unless the link is used.")
-                .Build();
-        }
-
         return new EmailBuilder("Verify your email address", "Confirm your email to start enrolling in policies.")
             .Heading("Welcome to RAINsurance")
             .Paragraph($"Hi {FirstName(e.FullName)},")
@@ -56,23 +44,6 @@ public class EmailTemplates
             .Small("Didn't create an account? You can safely ignore this email.")
             .Build();
     }
-
-    public RenderedEmail EmailChangeRequested(EmailChangeRequested e) =>
-        new EmailBuilder("Your sign-in email is about to change", $"A change to {e.NewEmail} was requested.")
-            .Heading("Email change requested")
-            .Paragraph($"Hi {FirstName(e.FullName)},")
-            .Paragraph($"Someone signed in to your account asked to change its email address to {e.NewEmail}. The change only happens once the link we sent to that address is opened.")
-            .Callout("Wasn't you?", "Sign in and cancel the pending change from your profile, and choose a new password if you think someone else knows yours.", warning: true)
-            .Button("Review my account", _links.EmailSettings)
-            .Build();
-
-    public RenderedEmail EmailChanged(EmailChanged e) =>
-        new EmailBuilder("Your sign-in email has changed", $"Your account now uses {e.NewEmail}.")
-            .Heading("Your email address was changed")
-            .Paragraph($"Hi {FirstName(e.FullName)},")
-            .Paragraph($"Your RAINsurance account now uses {e.NewEmail}. Sign in with that address from now on; we'll send everything there, and nothing more to this address.")
-            .Callout("Wasn't you?", "Contact us right away so we can secure your account.", warning: true)
-            .Build();
 
     // ---------------- Policies ----------------
 
@@ -166,6 +137,7 @@ public class EmailTemplates
                 ("Receipt number", e.ReceiptNumber),
                 ("Policy", policyName),
                 ("Amount paid", Money(e.Amount)),
+                ("Paid with", e.PaymentMethod),
                 ("Paid on", Date(e.PaidDate)),
                 ("Installment", $"{e.InstallmentNumber} of {e.InstallmentCount}"),
                 ("Covers premium due", Date(e.DueDate)),
@@ -174,7 +146,31 @@ public class EmailTemplates
         if (e.NextDueDate is null)
             email.Paragraph("That was the last installment on this policy. Thank you!");
 
-        return email.Button("View payment schedule", _links.PaymentSchedule(e.EnrollmentId)).Build();
+        return email.Button("View receipt", _links.Receipt(e.TransactionId)).Build();
+    }
+
+    public RenderedEmail PaymentDeclined(string fullName, PaymentDeclined e, string policyName)
+    {
+        var amount = Money(e.Amount);
+        var next = e.CanRetry
+            ? "This was a problem on the payment processor's side, not with your account. Please try again in a few minutes."
+            : "Please check the details or use a different payment method.";
+
+        return new EmailBuilder($"Your {policyName} payment didn't go through", $"Your {amount} payment was not completed. Nothing was charged.")
+            .Heading("Your payment didn't go through")
+            .Paragraph($"Hi {FirstName(fullName)},")
+            .Paragraph($"We couldn't complete your {amount} premium payment for {policyName}. You have not been charged, and the installment is still unpaid.")
+            .Callout("Reason", e.Reason, warning: true)
+            .Details(
+                ("Reference", e.Reference),
+                ("Policy", policyName),
+                ("Amount", amount),
+                ("Payment method", e.PaymentMethod),
+                ("Premium due", Date(e.DueDate)))
+            .Paragraph(next)
+            .Button("Try again", _links.PaymentSchedule(e.EnrollmentId))
+            .Small("Didn't try to make a payment? Please contact us.")
+            .Build();
     }
 
     public RenderedEmail PaymentReminder(string fullName, PaymentReminderDue e, string policyName)

@@ -35,14 +35,14 @@ builder.Services.AddServiceClient<IPlanCatalog, PlanCatalogClient>(builder.Confi
 
 builder.Services.AddMessaging(builder.Configuration, "notifications", bus =>
 {
+    bus.AddConsumer<CustomerRegisteredConsumer>();
     bus.AddConsumer<EmailVerificationRequestedConsumer>();
-    bus.AddConsumer<EmailChangeRequestedConsumer>();
-    bus.AddConsumer<EmailChangedConsumer>();
     bus.AddConsumer<EnrollmentActivatedConsumer>();
     bus.AddConsumer<EnrollmentCancelledConsumer>();
     bus.AddConsumer<ClaimSubmittedConsumer>();
     bus.AddConsumer<ClaimStatusChangedConsumer>();
     bus.AddConsumer<PaymentReceivedConsumer>();
+    bus.AddConsumer<PaymentDeclinedConsumer>();
     bus.AddConsumer<PaymentReminderDueConsumer>();
 });
 

@@ -40,4 +40,7 @@ public class RegisterRequest
 
     [Required, RegularExpression(@"^\d{5}(-\d{4})?$", ErrorMessage = "Enter a 5-digit ZIP code.")]
     public string PostalCode { get; set; } = string.Empty;
+
+    // "Email me payment reminders" on the sign-up form. Left out = yes. Changeable later on the profile page.
+    public bool? PaymentReminders { get; set; }
 }

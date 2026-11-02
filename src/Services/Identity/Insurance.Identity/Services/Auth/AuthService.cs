@@ -37,7 +37,8 @@ public class AuthService : IAuthService
         user.UserId = await _users.CreateAsync(user);
 
         // New accounts start unverified: they can sign in and browse, but not enroll or file claims yet.
-        await _verification.SendRegistrationLinkAsync(user);
+        // Their "email me payment reminders" choice goes to the Notifications service, which owns preferences.
+        await _verification.OnRegisteredAsync(user, request.PaymentReminders ?? true);
         return BuildResponse(user);
     }
 
@@ -74,7 +75,6 @@ public class AuthService : IAuthService
         Address = u.Address,
         // ADO.NET returns DATETIME2 with an unspecified kind, but the column holds UTC.
         CreatedAt = DateTime.SpecifyKind(u.CreatedAt, DateTimeKind.Utc),
-        EmailVerified = u.EmailVerified,
-        PendingEmail = u.PendingEmail
+        EmailVerified = u.EmailVerified
     };
 }

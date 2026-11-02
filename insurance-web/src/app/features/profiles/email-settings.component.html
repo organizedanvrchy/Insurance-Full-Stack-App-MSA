@@ -4,83 +4,31 @@
   @if (auth.user(); as u) {
     <!-- ============ Address ============ -->
     <div class="address">
-      <div>
-        <span class="label">Sign-in and contact email</span>
-        <div class="value">
-          <strong>{{ u.email }}</strong>
-          @if (u.emailVerified) {
-            <span class="badge">Verified</span>
-          } @else {
-            <span class="badge amber">Not verified</span>
-          }
-        </div>
+      <span class="label">Email address</span>
+      <div class="value">
+        <strong>{{ u.email }}</strong>
+        @if (u.emailVerified) {
+          <span class="badge">Verified</span>
+        } @else {
+          <span class="badge amber">Not verified</span>
+        }
       </div>
-      @if (!changeOpen()) {
-        <button type="button" class="btn-sm" (click)="openChange()">Change email</button>
-      }
     </div>
 
-    @if (u.pendingEmail) {
-      <div class="notice" role="status">
-        Waiting for you to confirm <strong>{{ u.pendingEmail }}</strong>. Open the link we sent to
-        that address; until then you keep signing in with {{ u.email }}.
-        <div class="row-actions">
-          <button type="button" class="btn-sm" [disabled]="busy()" (click)="resend()">Resend link</button>
-          <button type="button" class="btn-sm danger" [disabled]="busy()" (click)="cancelChange()">
-            Cancel change
-          </button>
-        </div>
-      </div>
-    } @else if (!u.emailVerified) {
+    @if (!u.emailVerified) {
       <p class="muted">
         Verify your address to enroll in policies and file claims.
-        <button type="button" class="btn-sm" [disabled]="busy()" (click)="resend()">
-          {{ busy() ? 'Sending…' : 'Resend verification email' }}
+        <button type="button" class="btn-sm" [disabled]="sending()" (click)="resend()">
+          {{ sending() ? 'Sending…' : 'Resend verification email' }}
         </button>
       </p>
     }
 
-    @if (addressMessage(); as m) {
+    @if (verifyMessage(); as m) {
       <p class="ok" role="status">{{ m }}</p>
     }
-    @if (addressError(); as e) {
+    @if (verifyError(); as e) {
       <div class="alert" role="alert">{{ e }}</div>
-    }
-
-    <!-- ============ Change email ============ -->
-    @if (changeOpen()) {
-      <form class="change" [formGroup]="changeForm" (ngSubmit)="submitChange()" novalidate>
-        <p class="muted">
-          We'll send a confirmation link to the new address. Nothing changes until you click it.
-        </p>
-
-        @if (changeError(); as e) {
-          <div class="alert" role="alert">{{ e }}</div>
-        }
-
-        <label class="field">
-          New email address
-          <input type="email" formControlName="newEmail" autocomplete="email" />
-          @if (c.newEmail.touched && c.newEmail.invalid) {
-            <small class="err">Enter a valid email address.</small>
-          }
-        </label>
-
-        <label class="field">
-          Current password
-          <input type="password" formControlName="currentPassword" autocomplete="current-password" />
-          @if (c.currentPassword.touched && c.currentPassword.invalid) {
-            <small class="err">Enter your current password to confirm it's you.</small>
-          }
-        </label>
-
-        <div class="form-actions">
-          <button type="button" class="btn-sm" (click)="closeChange()">Cancel</button>
-          <button type="submit" class="btn-sm primary" [disabled]="changing()">
-            {{ changing() ? 'Sending link…' : 'Send confirmation link' }}
-          </button>
-        </div>
-      </form>
     }
 
     <!-- ============ Preferences (customers) ============ -->
@@ -109,8 +57,8 @@
         }
 
         <p class="muted always">
-          Always sent: payment receipts, policy confirmations, claim updates and account security
-          emails.
+          Always sent: payment receipts, declined-payment notices, policy confirmations, claim updates
+          and your verification email.
         </p>
       </div>
 

@@ -5,17 +5,15 @@ namespace Insurance.Identity.Services;
 
 public interface IEmailVerificationService
 {
-    /// <summary>Emails the link for a new account. Never throws: a failure is logged and the customer can resend.</summary>
-    Task SendRegistrationLinkAsync(User user);
+    /// <summary>
+    /// A new account: records the customer's email choice (CustomerRegistered) and emails the verification link.
+    /// Never throws: a failure is logged and the customer can press "Resend".
+    /// </summary>
+    Task OnRegisteredAsync(User user, bool paymentReminders);
 
-    /// <summary>Uses a link. Throws InvalidVerificationLinkException (400) or DuplicateEmailException (409).</summary>
+    /// <summary>Uses a link. Throws InvalidVerificationLinkException (400).</summary>
     Task<VerifyEmailResponse> VerifyAsync(string token);
 
-    /// <summary>Emails a fresh link: for the pending new address if there is one, else for the current address.</summary>
+    /// <summary>Emails a fresh link. 409 if already verified, 429 if asked too often.</summary>
     Task ResendAsync(int userId);
-
-    /// <summary>Starts an email change. The new address must be confirmed before it replaces the current one.</summary>
-    Task<UserDto> RequestEmailChangeAsync(int userId, ChangeEmailRequest request);
-
-    Task<UserDto> CancelEmailChangeAsync(int userId);
 }

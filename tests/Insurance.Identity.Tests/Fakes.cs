@@ -38,21 +38,6 @@ public class FakeUserRepository : IUserRepository
     public Task<List<UserAccount>> GetManyAsync(IEnumerable<int> userIds) =>
         Task.FromResult(Users.Where(u => userIds.Contains(u.UserId))
             .Select(u => new UserAccount(u.UserId, u.FullName, u.Email, u.Role, u.IsActive, u.EmailVerified)).ToList());
-
-    // Like usp_User_SetPendingEmail: refuses an address another account uses. Cancelling also kills change links.
-    public FakeEmailTokenRepository? Tokens { get; set; }
-
-    public Task SetPendingEmailAsync(int userId, string? pendingEmail)
-    {
-        if (pendingEmail is not null && Users.Any(u => u.UserId != userId && u.Email == pendingEmail))
-            throw new DuplicateEmailException(pendingEmail);
-
-        Users.Single(u => u.UserId == userId).PendingEmail = pendingEmail;
-        if (pendingEmail is null)
-            Tokens?.Rows.Where(t => t.UserId == userId && t.Purpose == EmailVerificationPurpose.EmailChange)
-                .ToList().ForEach(t => t.Used = true);
-        return Task.CompletedTask;
-    }
 }
 
 /// <summary>Mimics accounts.usp_EmailToken_* (create, recent count, consume) in memory.</summary>
@@ -62,7 +47,6 @@ public class FakeEmailTokenRepository : IEmailTokenRepository
     {
         public int UserId;
         public string Email = "";
-        public EmailVerificationPurpose Purpose;
         public string Hash = "";
         public DateTime CreatedAt;
         public DateTime ExpiresAt;
@@ -77,15 +61,14 @@ public class FakeEmailTokenRepository : IEmailTokenRepository
     {
         _users = users;
         _clock = clock;
-        users.Tokens = this;
     }
 
     private DateTime Now => _clock.GetUtcNow().UtcDateTime;
 
-    public Task CreateAsync(int userId, string email, EmailVerificationPurpose purpose, string tokenHash, DateTime expiresAtUtc)
+    public Task CreateAsync(int userId, string email, string tokenHash, DateTime expiresAtUtc)
     {
-        Rows.Where(r => r.UserId == userId && r.Purpose == purpose && !r.Used).ToList().ForEach(r => r.Used = true);
-        Rows.Add(new Row { UserId = userId, Email = email, Purpose = purpose, Hash = tokenHash, CreatedAt = Now, ExpiresAt = expiresAtUtc });
+        Rows.Where(r => r.UserId == userId && !r.Used).ToList().ForEach(r => r.Used = true);
+        Rows.Add(new Row { UserId = userId, Email = email, Hash = tokenHash, CreatedAt = Now, ExpiresAt = expiresAtUtc });
         return Task.CompletedTask;
     }
 
@@ -96,29 +79,16 @@ public class FakeEmailTokenRepository : IEmailTokenRepository
         return Task.FromResult(new RecentEmailTokens(pending.Count == 0 ? null : pending.Max(r => r.CreatedAt), recent.Count));
     }
 
-    public Task<ConsumedEmailToken> ConsumeAsync(string tokenHash)
+    public Task<User> ConsumeAsync(string tokenHash)
     {
         var row = Rows.FirstOrDefault(r => r.Hash == tokenHash && !r.Used && r.ExpiresAt > Now)
             ?? throw new InvalidVerificationLinkException();
         var user = _users.Users.Single(u => u.UserId == row.UserId);
-        var previous = user.Email;
+        if (user.Email != row.Email) throw new InvalidVerificationLinkException();
 
-        if (row.Purpose == EmailVerificationPurpose.EmailChange)
-        {
-            if (user.PendingEmail != row.Email) throw new InvalidVerificationLinkException();
-            if (_users.Users.Any(u => u.UserId != user.UserId && u.Email == row.Email)) throw new DuplicateEmailException(row.Email);
-            user.Email = row.Email;
-            user.PendingEmail = null;
-            user.EmailVerifiedAt = Now;
-        }
-        else
-        {
-            if (user.Email != row.Email) throw new InvalidVerificationLinkException();
-            user.EmailVerifiedAt ??= Now;
-        }
-
+        user.EmailVerifiedAt ??= Now;
         row.Used = true;
-        return Task.FromResult(new ConsumedEmailToken(row.Purpose, previous, user));
+        return Task.FromResult(user);
     }
 }
 

@@ -39,6 +39,8 @@ public class ConsumerTests : IAsyncLifetime
                 x.AddConsumer<EmailVerificationRequestedConsumer>();
                 x.AddConsumer<ClaimStatusChangedConsumer>();
                 x.AddConsumer<PaymentReceivedConsumer>();
+                x.AddConsumer<PaymentDeclinedConsumer>();
+                x.AddConsumer<CustomerRegisteredConsumer>();
                 x.AddConsumer<PaymentReminderDueConsumer>();
                 x.AddConsumer<EnrollmentActivatedConsumer>();
             })
@@ -76,10 +78,40 @@ public class ConsumerTests : IAsyncLifetime
     [Fact]
     public async Task A_payment_produces_a_receipt()
     {
-        await PublishAndWaitAsync(new PaymentReceived(42, "PAY-00000042", 10, 1, 4, 89.99m, new DateOnly(2026, 11, 1),
-            new DateOnly(2026, 11, 2), DateTime.UtcNow, 1, 12, new DateOnly(2026, 12, 1), 89.99m));
+        await PublishAndWaitAsync(new PaymentReceived(42, 7, "TXN-000007", 10, 1, 4, 89.99m, new DateOnly(2026, 11, 1),
+            new DateOnly(2026, 11, 2), DateTime.UtcNow, "Visa ending in 4242", 1, 12, new DateOnly(2026, 12, 1), 89.99m));
 
-        Assert.Equal("Payment receipt PAY-00000042", Assert.Single(_smtp.Sent).Subject);
+        Assert.Equal("Payment receipt TXN-000007", Assert.Single(_smtp.Sent).Subject);
+    }
+
+    [Fact]
+    public async Task A_declined_payment_is_emailed_even_with_reminders_off()
+    {
+        _repo.PaymentReminders[1] = false;
+
+        await PublishAndWaitAsync(new PaymentDeclined(7, "TXN-000007", 42, 10, 1, 4, 89.99m, new DateOnly(2026, 11, 2),
+            "Visa ending in 0002", "Your card was declined.", false, DateTime.UtcNow));
+
+        Assert.Equal("Your Gold Health Plan payment didn't go through", Assert.Single(_smtp.Sent).Subject);
+        Assert.True(_repo.Emails.ContainsKey("payment-declined:7"));
+    }
+
+    [Fact]
+    public async Task The_sign_up_choice_becomes_the_preference()
+    {
+        await PublishAndWaitAsync(new CustomerRegistered(1, PaymentReminders: false));
+
+        Assert.False(_repo.PaymentReminders[1]);
+    }
+
+    [Fact]
+    public async Task A_late_sign_up_event_never_overrides_a_choice_made_since()
+    {
+        _repo.PaymentReminders[1] = true;    // changed on the profile page first
+
+        await PublishAndWaitAsync(new CustomerRegistered(1, PaymentReminders: false));
+
+        Assert.True(_repo.PaymentReminders[1]);
     }
 
     [Fact]
@@ -105,10 +137,10 @@ public class ConsumerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task A_verification_link_goes_to_the_new_address()
+    public async Task A_verification_link_goes_to_the_address_it_was_made_for()
     {
         await PublishAndWaitAsync(new EmailVerificationRequested(1, "Jane Doe", "jane.new@example.com", "tok",
-            EmailVerificationPurpose.EmailChange, DateTime.UtcNow.AddDays(1)));
+            DateTime.UtcNow.AddDays(1)));
 
         var email = Assert.Single(_smtp.Sent);
         Assert.Equal("jane.new@example.com", email.ToAddress);

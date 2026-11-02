@@ -46,6 +46,8 @@ export function notificationKindLabel(kind: NotificationKind): string {
       return 'Claim';
     case 'PaymentReceipt':
       return 'Receipt';
+    case 'PaymentDeclined':
+      return 'Payment';
     case 'PaymentReminder':
       return 'Reminder';
   }

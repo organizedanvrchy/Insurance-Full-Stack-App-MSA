@@ -4,13 +4,14 @@ namespace Insurance.Notifications.Models;
 public enum NotificationKind
 {
     VerifyEmail,
-    EmailChangeRequested,
-    EmailChanged,
+    EmailChangeRequested,   // no longer sent (changing email was removed); kept so older history rows still read
+    EmailChanged,           // likewise
     PolicyActivated,
     PolicyCancelled,
     ClaimSubmitted,
     ClaimStatusChanged,
     PaymentReceipt,
+    PaymentDeclined,
     PaymentReminder     // the only kind a customer can turn off
 }
 

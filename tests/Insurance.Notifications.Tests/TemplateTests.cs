@@ -30,7 +30,7 @@ public class TemplateTests
     [Fact]
     public void The_verification_link_carries_the_token()
     {
-        var e = new EmailVerificationRequested(1, "Jane Doe", "jane@example.com", "abc_DEF-123", EmailVerificationPurpose.Registration,
+        var e = new EmailVerificationRequested(1, "Jane Doe", "jane@example.com", "abc_DEF-123",
             new DateTime(2026, 11, 3, 9, 0, 0, DateTimeKind.Utc));
 
         var email = _templates.VerifyEmail(e);
@@ -40,17 +40,6 @@ public class TemplateTests
         Assert.Contains("http://app.test/verify-email?token=abc_DEF-123", email.Text);
         Assert.Contains("November 3, 2026", email.Text);
         Assert.Contains("Hi Jane,", email.Text);
-    }
-
-    [Fact]
-    public void Confirming_a_new_address_reads_differently()
-    {
-        var e = new EmailVerificationRequested(1, "Jane Doe", "new@example.com", "t", EmailVerificationPurpose.EmailChange, DateTime.UtcNow);
-
-        var email = _templates.VerifyEmail(e);
-
-        Assert.Equal("Confirm your new email address", email.Subject);
-        Assert.Contains("new@example.com", email.Text);
     }
 
     [Theory]
@@ -90,13 +79,15 @@ public class TemplateTests
     [Fact]
     public void A_receipt_lists_the_payment_details()
     {
-        var e = new PaymentReceived(42, "PAY-00000042", 10, 1, 4, 89.99m, new DateOnly(2026, 11, 1), new DateOnly(2026, 11, 2),
-            DateTime.UtcNow, InstallmentNumber: 3, InstallmentCount: 12, new DateOnly(2026, 12, 1), 89.99m);
+        var e = new PaymentReceived(42, 7, "TXN-000007", 10, 1, 4, 89.99m, new DateOnly(2026, 11, 1), new DateOnly(2026, 11, 2),
+            DateTime.UtcNow, "Visa ending in 4242", InstallmentNumber: 3, InstallmentCount: 12, new DateOnly(2026, 12, 1), 89.99m);
 
         var email = _templates.PaymentReceipt("Jane Doe", e, "Gold Health Plan");
 
-        Assert.Equal("Payment receipt PAY-00000042", email.Subject);
-        Assert.Contains("PAY-00000042", email.Text);
+        Assert.Equal("Payment receipt TXN-000007", email.Subject);
+        Assert.Contains("TXN-000007", email.Text);
+        Assert.Contains("Visa ending in 4242", email.Text);
+        Assert.Contains("http://app.test/receipts/7", email.Text);     // the in-app receipt
         Assert.Contains("$89.99", email.Text);
         Assert.Contains("3 of 12", email.Text);
         Assert.Contains("November 2, 2026", email.Text);                   // paid on
@@ -106,13 +97,31 @@ public class TemplateTests
     [Fact]
     public void The_last_receipt_says_the_policy_is_paid_up()
     {
-        var e = new PaymentReceived(42, "PAY-00000042", 10, 1, 4, 89.99m, new DateOnly(2026, 11, 1), new DateOnly(2026, 11, 2),
-            DateTime.UtcNow, 12, 12, null, null);
+        var e = new PaymentReceived(42, 7, "TXN-000007", 10, 1, 4, 89.99m, new DateOnly(2026, 11, 1), new DateOnly(2026, 11, 2),
+            DateTime.UtcNow, "PayPal", 12, 12, null, null);
 
         var email = _templates.PaymentReceipt("Jane Doe", e, "Gold Health Plan");
 
         Assert.Contains("fully paid up", email.Text);
         Assert.Contains("last installment", email.Text);
+    }
+
+    [Theory]
+    [InlineData(false, "check the details or use a different payment method")]
+    [InlineData(true, "try again in a few minutes")]
+    public void A_declined_payment_explains_what_happened(bool canRetry, string advice)
+    {
+        var e = new PaymentDeclined(7, "TXN-000007", 42, 10, 1, 4, 89.99m, new DateOnly(2026, 11, 2), "Visa ending in 0002",
+            "Your card was declined.", canRetry, DateTime.UtcNow);
+
+        var email = _templates.PaymentDeclined("Jane Doe", e, "Gold Health Plan");
+
+        Assert.Equal("Your Gold Health Plan payment didn't go through", email.Subject);
+        Assert.Contains("Reason: Your card was declined.", email.Text);
+        Assert.Contains("You have not been charged", email.Text);
+        Assert.Contains("Visa ending in 0002", email.Text);
+        Assert.Contains(advice, email.Text);
+        Assert.Contains("http://app.test/my-policies/10/payments", email.Text);   // "Try again"
     }
 
     [Theory]

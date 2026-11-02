@@ -1,5 +1,4 @@
 import { Component, inject, input, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
 import { getErrorMessage } from '../../core/utils/http-error';
 
@@ -9,7 +8,6 @@ import { getErrorMessage } from '../../core/utils/http-error';
  */
 @Component({
   selector: 'app-verify-email-banner',
-  imports: [RouterLink],
   template: `
     @if (auth.needsEmailVerification()) {
       <div class="notice verify" role="status">
@@ -29,9 +27,6 @@ import { getErrorMessage } from '../../core/utils/http-error';
           <button type="button" class="btn-sm" [disabled]="sending()" (click)="resend()">
             {{ sending() ? 'Sending…' : 'Resend email' }}
           </button>
-          @if (showSettingsLink()) {
-            <a class="btn-sm" routerLink="/profile" fragment="email-settings">Wrong address?</a>
-          }
         </div>
       </div>
     }
@@ -72,7 +67,6 @@ export class VerifyEmailBannerComponent {
 
   /** Completes "You need a verified email to …", e.g. "enroll in a policy". Empty = the general message. */
   action = input<string>('');
-  showSettingsLink = input(true);
 
   sending = signal(false);
   message = signal<string | null>(null);

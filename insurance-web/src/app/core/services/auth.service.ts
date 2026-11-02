@@ -7,7 +7,7 @@ import { User } from '../models/auth/user';
 import { RegisterRequest } from '../models/auth/registerRequest';
 import { AuthResponse } from '../models/auth/authResponse';
 import { LoginRequest } from '../models/auth/loginRequest';
-import { ChangeEmailRequest, VerifyEmailResponse } from '../models/auth/emailVerification';
+import { VerifyEmailResponse } from '../models/auth/emailVerification';
 
 const TOKEN_KEY = 'ins_token';
 const USER_KEY = 'ins_user';
@@ -65,19 +65,6 @@ export class AuthService {
 
   resendVerification(): Observable<void> {
     return this.http.post<void>(`${API_URL}/auth/resend-verification`, {});
-  }
-
-  /** Starts a change: the new address must be confirmed from its inbox before it's used. */
-  changeEmail(req: ChangeEmailRequest): Observable<User> {
-    return this.http
-      .post<User>(`${API_URL}/auth/change-email`, req)
-      .pipe(tap((user) => this.updateUser(user)));
-  }
-
-  cancelEmailChange(): Observable<User> {
-    return this.http
-      .delete<User>(`${API_URL}/auth/change-email`)
-      .pipe(tap((user) => this.updateUser(user)));
   }
 
   /**

@@ -1,6 +1,6 @@
 using System.Data;
 using Insurance.BuildingBlocks.Data;
-using Insurance.Identity.Contracts;
+using Insurance.Identity.Models;
 using Insurance.Identity.Exceptions;
 using Microsoft.Data.SqlClient;
 
@@ -11,13 +11,12 @@ public class EmailTokenRepository : IEmailTokenRepository
     private readonly IDbConnectionFactory _db;
     public EmailTokenRepository(IDbConnectionFactory db) => _db = db;
 
-    public async Task CreateAsync(int userId, string email, EmailVerificationPurpose purpose, string tokenHash, DateTime expiresAtUtc)
+    public async Task CreateAsync(int userId, string email, string tokenHash, DateTime expiresAtUtc)
     {
         await using var conn = _db.Create();
         await using var cmd = conn.StoredProc("accounts.usp_EmailToken_Create");
         cmd.AddParam("@UserId",    SqlDbType.Int, userId);
         cmd.AddParam("@Email",     SqlDbType.NVarChar, email, 256);
-        cmd.AddParam("@Purpose",   SqlDbType.NVarChar, purpose.ToString(), 20);
         cmd.AddParam("@TokenHash", SqlDbType.Char, tokenHash, 64);
         cmd.AddParam("@ExpiresAt", SqlDbType.DateTime2, expiresAtUtc);
 
@@ -39,7 +38,7 @@ public class EmailTokenRepository : IEmailTokenRepository
             reader.GetInt32(reader.GetOrdinal("CountLastDay")));
     }
 
-    public async Task<ConsumedEmailToken> ConsumeAsync(string tokenHash)
+    public async Task<User> ConsumeAsync(string tokenHash)
     {
         await using var conn = _db.Create();
         await using var cmd = conn.StoredProc("accounts.usp_EmailToken_Consume");
@@ -51,20 +50,11 @@ public class EmailTokenRepository : IEmailTokenRepository
             await using var reader = await cmd.ExecuteReaderAsync();
             if (!await reader.ReadAsync())
                 throw new InvalidOperationException("usp_EmailToken_Consume returned no row.");
-
-            return new ConsumedEmailToken(
-                reader.GetEnum<EmailVerificationPurpose>("Purpose"),
-                reader.GetString(reader.GetOrdinal("PreviousEmail")),
-                UserRepository.Map(reader));
+            return UserRepository.Map(reader);
         }
         catch (SqlException ex) when (ex.Number == 50020)
         {
             throw new InvalidVerificationLinkException();
-        }
-        // The new address was registered by someone else after the change was requested.
-        catch (SqlException ex) when (ex.Number is 50001 or 2627 or 2601)
-        {
-            throw new DuplicateEmailException("");
         }
     }
 }

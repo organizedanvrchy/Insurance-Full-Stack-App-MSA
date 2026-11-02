@@ -27,6 +27,21 @@ public class NotificationRepository : INotificationRepository
         return await ReadPreferencesAsync(conn, cmd);
     }
 
+    public async Task SetInitialPreferencesAsync(int userId, bool paymentReminders)
+    {
+        await using var conn = _db.Create();
+        await using var cmd = conn.StoredProc("notifications.usp_Preferences_SetInitial");
+        cmd.AddParam("@UserId",           SqlDbType.Int, userId);
+        cmd.AddParam("@PaymentReminders", SqlDbType.Bit, paymentReminders);
+
+        await conn.OpenAsync();
+        try
+        {
+            await cmd.ExecuteNonQueryAsync();
+        }
+        catch (SqlException ex) when (ex.Number is 2627 or 2601) { }   // a profile change won the race: keep it
+    }
+
     public async Task<bool> BeginAsync(string notificationKey, int userId, NotificationKind kind)
     {
         await using var conn = _db.Create();

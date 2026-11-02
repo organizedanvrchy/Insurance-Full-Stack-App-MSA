@@ -58,6 +58,7 @@ export class RegisterComponent {
       postalCode: ['', [Validators.required, Validators.pattern(ZIP_PATTERN)]],
       password: ['', [Validators.required, Validators.maxLength(PASSWORD_MAX), strongPassword]],
       confirmPassword: ['', Validators.required],
+      paymentReminders: [true],   // "Email me payment reminders": changeable later on the profile page
     },
     { validators: passwordsMatch },
   );
@@ -99,6 +100,7 @@ export class RegisterComponent {
         city: v.city.trim(),
         state: v.state,
         postalCode: v.postalCode.trim(),
+        paymentReminders: v.paymentReminders,
       })
       .subscribe({
         next: () => this.router.navigate(['/dashboard']),   // API already returned a token = logged in

@@ -6,7 +6,9 @@ import { EnrollmentService } from '../../core/services/enrollment.service';
 import { PaymentService } from '../../core/services/payment.service';
 import { getErrorMessage } from '../../core/utils/http-error';
 import { Enrollment } from '../../core/models/enrollment/enrollment';
+import { Transaction } from '../../core/models/payment/checkout';
 import { Payment } from '../../core/models/payment/payment';
+import { describeMethod } from '../../core/payments/method-labels';
 
 @Component({
   selector: 'app-payment-schedule',
@@ -23,8 +25,8 @@ export class PaymentScheduleComponent {
 
   enrollment = signal<Enrollment | null>(null);
   payments = signal<Payment[]>([]);
+  transactions = signal<Transaction[]>([]);
   loading = signal(true);
-  payingId = signal<number | null>(null);
   error = signal<string | null>(null);
 
   // Derived values: recompute automatically whenever `payments` changes.
@@ -42,10 +44,12 @@ export class PaymentScheduleComponent {
     forkJoin({
       enrollment: this.enrollmentsApi.getById(this.enrollmentId),
       payments: this.paymentsApi.getSchedule(this.enrollmentId),
+      transactions: this.paymentsApi.getTransactions({ enrollmentId: this.enrollmentId }),
     }).subscribe({
-      next: ({ enrollment, payments }) => {
+      next: ({ enrollment, payments, transactions }) => {
         this.enrollment.set(enrollment);
         this.payments.set(payments);
+        this.transactions.set(transactions);
         this.loading.set(false);
       },
       error: (err) => {
@@ -55,27 +59,5 @@ export class PaymentScheduleComponent {
     });
   }
 
-  pay(p: Payment): void {
-    this.payingId.set(p.paymentId);
-    this.error.set(null);
-
-    this.paymentsApi.pay(p.paymentId).subscribe({
-      next: () => {
-        this.payingId.set(null);
-        this.refreshPayments();
-      },
-      error: (err) => {
-        this.error.set(getErrorMessage(err));   // 409: already paid / earlier installment unpaid
-        this.payingId.set(null);
-        this.refreshPayments();                 // the schedule may have changed under us, so re-sync
-      },
-    });
-  }
-
-  private refreshPayments(): void {
-    this.paymentsApi.getSchedule(this.enrollmentId).subscribe({
-      next: (list) => this.payments.set(list),
-      error: (err) => this.error.set(getErrorMessage(err)),
-    });
-  }
+  readonly methodText = describeMethod;
 }

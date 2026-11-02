@@ -57,15 +57,14 @@ public class AuthController : ControllerBase
     // ---------------- Email verification ----------------
 
     // Opened from the link in the email, possibly in a browser where nobody is signed in: no token needed.
-    // 400 if the link is invalid, expired or used; 409 if a new address was taken in the meantime.
+    // 400 if the link is invalid, expired or used.
     [HttpPost("verify-email")]
     [ProducesResponseType(typeof(VerifyEmailResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<VerifyEmailResponse>> VerifyEmail(VerifyEmailRequest request) =>
         Ok(await _verification.VerifyAsync(request.Token));
 
-    // Sends a fresh link (for the pending new address, if a change is waiting). 429 when asked too often.
+    // Sends a fresh link. 409 if already verified, 429 when asked too often.
     [Authorize]
     [HttpPost("resend-verification")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -76,20 +75,4 @@ public class AuthController : ControllerBase
         await _verification.ResendAsync(CurrentUserId);
         return NoContent();
     }
-
-    // Starts an email change. The current address stays in use until the link sent to the new one is opened.
-    [Authorize]
-    [HttpPost("change-email")]
-    [ProducesResponseType(typeof(UserDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status409Conflict)]
-    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
-    public async Task<ActionResult<UserDto>> ChangeEmail(ChangeEmailRequest request) =>
-        Ok(await _verification.RequestEmailChangeAsync(CurrentUserId, request));
-
-    [Authorize]
-    [HttpDelete("change-email")]
-    [ProducesResponseType(typeof(UserDto), StatusCodes.Status200OK)]
-    public async Task<ActionResult<UserDto>> CancelEmailChange() =>
-        Ok(await _verification.CancelEmailChangeAsync(CurrentUserId));
 }

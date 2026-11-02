@@ -30,12 +30,13 @@ public class EmailVerificationServiceTests
         _auth = new AuthService(_users, new FakeTokenService(), _sut);
     }
 
-    private async Task<User> RegisterAsync(string email = "jane.doe@example.com")
+    private async Task<User> RegisterAsync(string email = "jane.doe@example.com", bool? paymentReminders = null)
     {
         await _auth.RegisterAsync(new RegisterRequest
         {
             FirstName = "Jane", LastName = "Doe", Email = email, Password = Password,
-            Street = "48 Maple Avenue", City = "Stamford", State = "CT", PostalCode = "06902"
+            Street = "48 Maple Avenue", City = "Stamford", State = "CT", PostalCode = "06902",
+            PaymentReminders = paymentReminders
         });
         return _users.Users.Single(u => u.Email == email);
     }
@@ -56,8 +57,19 @@ public class EmailVerificationServiceTests
         Assert.False(response.User.EmailVerified);
         var sent = Assert.Single(_events.OfType<EmailVerificationRequested>());
         Assert.Equal("jane.doe@example.com", sent.Email);
-        Assert.Equal(EmailVerificationPurpose.Registration, sent.Purpose);
         Assert.Equal(_clock.Now.UtcDateTime.AddHours(24), sent.ExpiresAtUtc);
+    }
+
+    [Theory]
+    [InlineData(null, true)]      // not answered: reminders on
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    public async Task The_sign_up_email_choice_is_passed_on(bool? answer, bool expected)
+    {
+        var user = await RegisterAsync(paymentReminders: answer);
+
+        var registered = Assert.Single(_events.OfType<CustomerRegistered>());
+        Assert.Equal(new CustomerRegistered(user.UserId, expected), registered);
     }
 
     [Fact]
@@ -101,7 +113,6 @@ public class EmailVerificationServiceTests
         var result = await _sut.VerifyAsync(LastToken);
 
         Assert.True(user.EmailVerified);
-        Assert.False(result.EmailChanged);
         Assert.Equal("jane.doe@example.com", result.Email);
         Assert.True((await _auth.GetProfileAsync(user.UserId))!.EmailVerified);
     }
@@ -168,16 +179,6 @@ public class EmailVerificationServiceTests
     }
 
     [Fact]
-    public async Task Asking_for_a_change_link_twice_in_a_row_is_rate_limited()
-    {
-        var user = await VerifiedUserAsync();
-        await _sut.RequestEmailChangeAsync(user.UserId, Change("new@example.com"));
-
-        await Assert.ThrowsAsync<TooManyRequestsException>(() =>
-            _sut.RequestEmailChangeAsync(user.UserId, Change("other@example.com")));
-    }
-
-    [Fact]
     public async Task At_most_six_links_are_sent_in_a_day()
     {
         var user = await RegisterAsync();               // 1
@@ -193,134 +194,6 @@ public class EmailVerificationServiceTests
         _clock.Advance(TimeSpan.FromHours(24));         // a day later it works again
         await _sut.ResendAsync(user.UserId);
         Assert.Equal(7, _events.OfType<EmailVerificationRequested>().Count());
-    }
-
-    // ---------------- Changing the email address ----------------
-
-    private async Task<User> VerifiedUserAsync()
-    {
-        var user = await RegisterAsync();
-        await _sut.VerifyAsync(LastToken);
-        return user;
-    }
-
-    [Fact]
-    public async Task Changing_email_right_after_verifying_is_not_held_back_by_the_cooldown()
-    {
-        var user = await VerifiedUserAsync();          // the registration link was sent seconds ago, but it's used
-
-        await _sut.RequestEmailChangeAsync(user.UserId, Change("new@example.com"));
-
-        Assert.Equal("new@example.com", user.PendingEmail);
-    }
-
-    private static ChangeEmailRequest Change(string email, string password = Password) =>
-        new() { NewEmail = email, CurrentPassword = password };
-
-    [Fact]
-    public async Task Changing_email_needs_the_current_password()
-    {
-        var user = await VerifiedUserAsync();
-
-        await Assert.ThrowsAsync<BusinessRuleException>(() =>
-            _sut.RequestEmailChangeAsync(user.UserId, Change("new@example.com", "wrong-password")));
-        Assert.Null(user.PendingEmail);
-    }
-
-    [Fact]
-    public async Task Changing_to_the_same_address_is_refused()
-    {
-        var user = await VerifiedUserAsync();
-
-        await Assert.ThrowsAsync<BusinessRuleException>(() =>
-            _sut.RequestEmailChangeAsync(user.UserId, Change(" JANE.DOE@example.com ")));
-    }
-
-    [Fact]
-    public async Task Changing_to_an_address_another_account_uses_is_a_conflict()
-    {
-        var user = await VerifiedUserAsync();
-        await RegisterAsync("taken@example.com");
-
-        await Assert.ThrowsAsync<DuplicateEmailException>(() =>
-            _sut.RequestEmailChangeAsync(user.UserId, Change("taken@example.com")));
-    }
-
-    [Fact]
-    public async Task A_change_waits_for_the_new_address_to_be_confirmed()
-    {
-        var user = await VerifiedUserAsync();
-
-        var dto = await _sut.RequestEmailChangeAsync(user.UserId, Change("New.Address@Example.com"));
-
-        Assert.Equal("jane.doe@example.com", user.Email);          // still signs in with the old one
-        Assert.Equal("new.address@example.com", dto.PendingEmail);
-
-        var link = _events.OfType<EmailVerificationRequested>().Last();
-        Assert.Equal("new.address@example.com", link.Email);
-        Assert.Equal(EmailVerificationPurpose.EmailChange, link.Purpose);
-
-        var notice = Assert.Single(_events.OfType<EmailChangeRequested>());
-        Assert.Equal("jane.doe@example.com", notice.CurrentEmail);   // the heads-up goes to the current address
-        Assert.Equal("new.address@example.com", notice.NewEmail);
-    }
-
-    [Fact]
-    public async Task Confirming_the_new_address_switches_the_account_to_it()
-    {
-        var user = await VerifiedUserAsync();
-        await _sut.RequestEmailChangeAsync(user.UserId, Change("new@example.com"));
-
-        var result = await _sut.VerifyAsync(LastToken);
-
-        Assert.True(result.EmailChanged);
-        Assert.Equal("new@example.com", user.Email);
-        Assert.Null(user.PendingEmail);
-        Assert.True(user.EmailVerified);
-
-        var changed = Assert.Single(_events.OfType<EmailChanged>());
-        Assert.Equal("jane.doe@example.com", changed.OldEmail);
-        Assert.Equal("new@example.com", changed.NewEmail);
-
-        Assert.NotNull(await _auth.LoginAsync(new LoginRequest { Email = "new@example.com", Password = Password }));
-        Assert.Null(await _auth.LoginAsync(new LoginRequest { Email = "jane.doe@example.com", Password = Password }));
-    }
-
-    [Fact]
-    public async Task Cancelling_a_change_makes_its_link_useless()
-    {
-        var user = await VerifiedUserAsync();
-        await _sut.RequestEmailChangeAsync(user.UserId, Change("new@example.com"));
-        var token = LastToken;
-
-        var dto = await _sut.CancelEmailChangeAsync(user.UserId);
-
-        Assert.Null(dto.PendingEmail);
-        await Assert.ThrowsAsync<InvalidVerificationLinkException>(() => _sut.VerifyAsync(token));
-        Assert.Equal("jane.doe@example.com", user.Email);
-    }
-
-    [Fact]
-    public async Task Resending_while_a_change_is_pending_sends_the_link_to_the_new_address()
-    {
-        var user = await VerifiedUserAsync();
-        await _sut.RequestEmailChangeAsync(user.UserId, Change("new@example.com"));
-        _clock.Advance(TimeSpan.FromMinutes(2));     // the new link is still waiting, so the cooldown applies
-
-        await _sut.ResendAsync(user.UserId);
-
-        var link = _events.OfType<EmailVerificationRequested>().Last();
-        Assert.Equal("new@example.com", link.Email);
-        Assert.Equal(EmailVerificationPurpose.EmailChange, link.Purpose);
-    }
-
-    [Fact]
-    public async Task A_deactivated_account_cannot_change_its_email()
-    {
-        var user = await VerifiedUserAsync();
-        user.IsActive = false;
-
-        await Assert.ThrowsAsync<NotFoundException>(() => _sut.RequestEmailChangeAsync(user.UserId, Change("new@example.com")));
     }
 
     [Fact]
