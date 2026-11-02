@@ -56,15 +56,51 @@
           <td>{{ p.paidDate ? (p.paidDate | date: 'mediumDate') : '—' }}</td>
           <td class="actions">
             @if (e.status === 'Active' && p.paymentId === nextPayable()?.paymentId) {
-            <button class="btn-sm primary" type="button" [disabled]="payingId() !== null" (click)="pay(p)">
-              {{ payingId() === p.paymentId ? 'Paying…' : 'Pay ' + (p.amount | currency) }}
-            </button>
+            <a class="btn-sm primary" [routerLink]="['/my-policies', e.enrollmentId, 'payments', p.paymentId, 'checkout']">
+              Pay {{ p.amount | currency }}
+            </a>
             }
           </td>
         </tr>
         } @empty {
         <tr>
           <td colspan="6" class="muted">No installments to show.</td>
+        </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <h2 class="history-title">Payment history</h2>
+  <p class="muted">Every payment attempt on this policy, including declined ones.</p>
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Reference</th>
+          <th>Method</th>
+          <th class="num">Amount</th>
+          <th>Status</th>
+          <th>Details</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (t of transactions(); track t.transactionId) {
+        <tr>
+          <td>{{ t.createdAt | date: 'medium' }}</td>
+          <td class="nowrap"><a [routerLink]="['/receipts', t.transactionId]">{{ t.reference }}</a></td>
+          <td class="nowrap">{{ methodText(t) }}</td>
+          <td class="num">{{ t.amount | currency }}</td>
+          <td>
+            <span class="badge" [class.warn]="t.status === 'Declined' || t.status === 'Failed'"
+              [class.amber]="t.status === 'Refunded'" [class.off]="t.status === 'Processing'">{{ t.status }}</span>
+          </td>
+          <td class="muted">{{ t.message }}</td>
+        </tr>
+        } @empty {
+        <tr>
+          <td colspan="6" class="muted">No payments yet.</td>
         </tr>
         }
       </tbody>

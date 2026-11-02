@@ -109,6 +109,7 @@ services:
       <<: *common-env
       ConnectionStrings__Database: Server=sqlserver;Database=InsuranceBilling;User Id=sa;Password=${SA_PASSWORD};TrustServerCertificate=True;
       Services__Enrollments: http://enrollments:8080/
+      Services__Identity: http://identity:8080/
 
   claims:
     <<: *service

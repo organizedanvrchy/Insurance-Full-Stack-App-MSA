@@ -68,6 +68,18 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'my-policies/:id/payments/:paymentId/checkout',
+        canActivate: [roleGuard('Customer')],
+        loadComponent: () =>
+          import('./features/payments/checkout.component').then((m) => m.CheckoutComponent),
+      },
+      {
+        // The customer who paid, or an admin from the payment log
+        path: 'receipts/:transactionId',
+        loadComponent: () =>
+          import('./features/payments/receipt.component').then((m) => m.ReceiptComponent),
+      },
+      {
         path: 'my-policies/:id/claims/new',
         canActivate: [roleGuard('Customer')],
         loadComponent: () =>
@@ -84,6 +96,12 @@ export const routes: Routes = [
         canActivate: [roleGuard('Admin')],
         loadComponent: () =>
           import('./features/claims/admin-claims.component').then((m) => m.AdminClaimsComponent),
+      },
+      {
+        path: 'admin/payments',
+        canActivate: [roleGuard('Admin')],
+        loadComponent: () =>
+          import('./features/payments/admin-payments.component').then((m) => m.AdminPaymentsComponent),
       },
       {
         path: 'admin/customers',
