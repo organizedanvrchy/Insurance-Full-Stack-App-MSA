@@ -68,13 +68,13 @@ The backend is a set of **microservices**: seven ASP.NET Core services, each wit
 - **Simulated checkout:** pay by credit/debit card, PayPal, Apple Pay, Google Pay or Venmo. Card numbers are validated (brand, checksum, expiry, security code) and turned into a token in the browser; the server never sees them. Name and billing address are filled in from sign-up, cards can be saved for later, and every attempt gets a printable receipt.
 - **Payment history:** every attempt on a policy, including declined ones, with the reason the customer was given.
 - **Payment alerts:** a "payment due soon" or "payment overdue" badge on each policy.
-- **File claims** with incident date, amount and description. Eligibility is validated against the policy.
-- Track claims through the review workflow and read the reviewer's notes.
+- **File claims** with incident date, amount, description and supporting documents. Eligibility is validated against the policy.
+- Track claims through the review workflow, read the reviewer's notes, and send more documents when asked.
 - **Email notifications:** a receipt for every payment and a notice when one is declined; reminders 3 days before a premium is due, on the due date, when it becomes overdue, and 5 and 10 days after that; claim received, the decision (approved, or rejected with the reason), and when an approved claim's payment is sent; policy activated or cancelled. Payment reminders are opt-in/out at sign-up and on the profile page.
 
 ### Administrators
 - Create, edit and deactivate plans. Deactivated plans disappear for customers but remain on existing policies.
-- **Claims review queue** with a status filter. Buttons show only the legal next step, and a rejection requires a reason.
+- **Claims review queue** with a status filter. Admins can read a claim's documents and ask for more. Buttons show only the legal next step, and a rejection requires a reason.
 - **Customer management:** search, filter by status, see active-policy and claim counts and whether the email is verified, and deactivate or reactivate accounts (takes effect on the customer's next request).
 - **Payment log:** every payment attempt from every customer, filterable by status, with amounts collected, declines and refunds.
 
@@ -137,7 +137,7 @@ flowchart TD
 | **Quotes** (Quotes) | Rating engine, quotes | Catalog (HTTP). Consumes `EnrollmentActivated`, `EnrollmentFailed` |
 | **Enrollments** (Enrollments) | Policies, **the enrollment saga** | Identity, Quotes, Catalog, Billing (HTTP). Publishes `EnrollmentRequested`, `EnrollmentActivated`, `EnrollmentFailed`, `EnrollmentCancelled` through an outbox |
 | **Billing** | Premium schedules, payments, payment reminders | Enrollments (HTTP). Consumes `EnrollmentRequested`, `EnrollmentCancelled`, `EnrollmentFailed`; publishes `PremiumScheduleCreated`, and `PaymentReceived`, `PaymentDeclined` and `PaymentReminderDue` through an outbox |
-| **Claims** (Claims) | Claims, review workflow | Enrollments, Billing, Catalog, Identity (HTTP). Publishes `ClaimSubmitted`, `ClaimStatusChanged` through an outbox |
+| **Claims** (Claims) | Claims, claim documents, review workflow | Enrollments, Billing, Catalog, Identity (HTTP). Publishes `ClaimSubmitted`, `ClaimStatusChanged` through an outbox |
 | **Notifications** | Emails sent, customers' email preferences | Identity, Enrollments, Catalog (HTTP). Consumes the account, enrollment, claim and payment events above and emails the customer. Nothing depends on it |
 | **Gateway + BFF** | Nothing | Routes `/api/*`; checks that the caller's account is active (Identity); composes the admin customer list (Identity + Enrollments + Claims) |
 
@@ -166,7 +166,8 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the enrollment saga, the ou
 | Reminders | Emailed 3 days before the due date, on the due date, the day the installment turns Overdue, then 5 and 10 days after that. Each one at most once per installment. Customers choose at sign-up (on by default) and can change it on their profile; receipts, declines, claim and account emails always go out. |
 | Email verification | New accounts must confirm their email before **enrolling** or **filing a claim** (`403` until then). Links are single-use, expire after **15 minutes**, and only their hash is stored. Resending is limited to one per minute and ten a day. |
 | Claims | Active policy only. The incident must fall inside the coverage period and not be in the future. No overdue premiums. The amount cannot exceed the remaining coverage (policy coverage minus approved and paid claims). |
-| Claim workflow | Submitted, Under review, then Approved or Rejected, then (approved only) Paid. A rejection needs a reason. Concurrent edits are detected. |
+| Claim workflow | Submitted, Under review, then Approved or Rejected, then (approved only) Paid. A reviewer can also ask for more information, and the customer sends the claim back after responding. A rejection or a request for more information needs a note. Concurrent edits are detected. |
+| Claim documents | PDF, JPG or PNG, up to 10 MB each and 5 per claim. Customers can add them until a decision is made. They can't be deleted. |
 | Accounts | Deactivated accounts cannot sign in and existing tokens stop working. Admin accounts cannot be deactivated from the UI. |
 
 ## Getting started
@@ -315,6 +316,10 @@ Every endpoint is reached through the gateway at `/api`. Each service documents 
 | | `GET /api/claims?status=` | Admin |
 | | `GET /api/claims/{id}` | Owner or admin |
 | | `PUT /api/claims/{id}/review` | Admin |
+| | `POST /api/claims/{id}/send-to-reviewer` | Customer |
+| | `POST /api/claims/{id}/documents` | Customer |
+| | `GET /api/claims/{id}/documents` | Owner or admin |
+| | `GET /api/claims/{id}/documents/{documentId}` | Owner or admin |
 | **Notifications** (Notifications) | `GET /api/notifications/preferences`, `PUT /api/notifications/preferences` | Customer |
 | | `GET /api/notifications/history?take=` | Customer (own emails; not shown in the app, kept for future admin screens) |
 | **Customers** (gateway BFF) | `GET /api/admin/customers?search=&isActive=` | Admin |
@@ -337,6 +342,7 @@ dotnet test Insurance.sln
 | `AuthServiceTests` | Password hashing, email normalizing, role forcing, inactive users |
 | `EmailVerificationServiceTests` | Verification links (hashing, single use, expiry, replacement), resend limits, the sign-up email choice, changing the email (password, conflicts, re-verification, notice to the old address) and the password |
 | `EnrollmentServiceTests` | Start-date window, payment alerts, ownership, cancellation, the enrollment saga (completed, still running, failed, quote released), degradation when Billing is down |
+| `ClaimDocumentServiceTests` | File checks, document limits, ownership, cleaning up after a failed save |
 | `ClaimServiceTests` | Review rules, the concurrency guard, claim visibility, claim eligibility, names and plans from other services |
 | `CheckoutServiceTests` | Approved, declined and failed payments; retries never charge twice; every rule checked before charging; automatic refund when an approved charge can't be applied; saved cards; the receipt and declined emails saved with each outcome |
 | `MockPaymentGatewayTests` | Test cards and their decline reasons, expired cards, idempotent charges, malformed tokens |

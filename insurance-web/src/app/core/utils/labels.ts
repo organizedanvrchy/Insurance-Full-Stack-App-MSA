@@ -12,6 +12,7 @@ export function claimBadgeClass(status: ClaimStatus): string {
     case 'Submitted':
       return 'info';
     case 'UnderReview':
+    case 'NeedsMoreInfo':
       return 'amber';
     case 'Rejected':
       return 'warn';
@@ -24,6 +25,7 @@ export function claimBadgeClass(status: ClaimStatus): string {
 export const CLAIM_ACTION_LABELS: Record<ClaimStatus, string> = {
   Submitted: 'Submitted',
   UnderReview: 'Start review',
+  NeedsMoreInfo: 'Request more info',
   Approved: 'Approve',
   Rejected: 'Reject',
   Paid: 'Mark as paid',

@@ -134,6 +134,27 @@ public class ClaimRepository : IClaimRepository
         return updated;
     }
 
+    public async Task<InsuranceClaim> SendToReviewerAsync(int claimId, int userId)
+    {
+        await using var conn = _db.Create();
+        await using var cmd = conn.StoredProc("claims.usp_Claim_SendToReviewer");
+        cmd.AddParam("@ClaimId", SqlDbType.Int, claimId);
+        cmd.AddParam("@UserId",  SqlDbType.Int, userId);
+
+        await conn.OpenAsync();
+        try
+        {
+            await using var reader = await cmd.ExecuteReaderAsync();
+            if (!await reader.ReadAsync())
+                throw new InvalidOperationException("usp_Claim_SendToReviewer returned no row.");
+            return Map(reader);
+        }
+        catch (SqlException ex) when (ex.Number == 50021)
+        {
+            throw new ClaimConflictException(ex.Message);
+        }
+    }
+
     public async Task<Dictionary<int, ClaimCounts>> GetCountsByUserAsync(IEnumerable<int> userIds)
     {
         await using var conn = _db.Create();

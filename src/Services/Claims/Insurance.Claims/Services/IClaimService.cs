@@ -10,4 +10,5 @@ public interface IClaimService
     Task<List<ClaimDto>> GetAllAsync(ClaimStatus? status);
     Task<ClaimDto?> GetByIdAsync(int claimId, int userId, bool isAdmin);   // null => 404
     Task<ClaimDto> ReviewAsync(int claimId, int adminId, ClaimReviewRequest request);
+    Task<ClaimDto> SendToReviewerAsync(int claimId, int userId);
 }

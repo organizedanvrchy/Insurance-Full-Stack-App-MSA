@@ -52,7 +52,7 @@ public class EmailTokenRepository : IEmailTokenRepository
                 throw new InvalidOperationException("usp_EmailToken_Consume returned no row.");
             return UserRepository.Map(reader);
         }
-        catch (SqlException ex) when (ex.Number == 50020)
+        catch (SqlException ex) when (ex.Number == 50022)
         {
             throw new InvalidVerificationLinkException();
         }

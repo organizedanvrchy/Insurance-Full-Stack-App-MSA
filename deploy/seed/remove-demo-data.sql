@@ -13,6 +13,9 @@ BEGIN
                 WHERE u.Email LIKE N''%@demo.example'';');
 END
 
+DELETE d  FROM InsuranceClaims.claims.ClaimDocuments d
+  JOIN InsuranceClaims.claims.Claims c ON c.ClaimId = d.ClaimId
+  JOIN InsuranceIdentity.accounts.Users u ON u.UserId = c.UserId WHERE u.Email LIKE N'%@demo.example';
 DELETE c  FROM InsuranceClaims.claims.Claims c
           JOIN InsuranceIdentity.accounts.Users u  ON u.UserId = c.UserId
           WHERE u.Email LIKE N'%@demo.example';

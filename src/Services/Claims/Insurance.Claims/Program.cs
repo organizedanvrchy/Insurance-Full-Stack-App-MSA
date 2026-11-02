@@ -18,6 +18,9 @@ builder.AddServiceDefaults("Claims service");
 builder.Services.AddScoped<IClaimRepository, ClaimRepository>();
 builder.Services.AddScoped<IClaimService, ClaimService>();
 builder.Services.AddScoped<IClaimStatistics, ClaimStatistics>();
+builder.Services.AddScoped<IClaimDocumentRepository, ClaimDocumentRepository>();
+builder.Services.AddScoped<IClaimDocumentService, ClaimDocumentService>();
+builder.Services.AddSingleton<IDocumentStorage, LocalDocumentStorage>();
 
 builder.Services.AddServiceClient<IEnrollmentLookup, EnrollmentLookupClient>(builder.Configuration, "Enrollments");
 builder.Services.AddServiceClient<IPremiumSummaries, PremiumSummariesClient>(builder.Configuration, "Billing");

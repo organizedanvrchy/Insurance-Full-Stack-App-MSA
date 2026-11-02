@@ -19,6 +19,7 @@ import { UserProfile } from '../../core/models/profile/profile.model';
 import { Enrollment } from '../../core/models/enrollment/enrollment';
 import { Payment } from '../../core/models/payment/payment';
 import { Claim } from '../../core/models/claim/claim';
+import { OPEN_CLAIM_STATUSES } from '../../core/models/enums';
 
 @Component({
   selector: 'app-profile',
@@ -55,7 +56,7 @@ export class ProfileComponent {
     [...this.claims()].sort((a, b) => b.submittedAt.localeCompare(a.submittedAt)).slice(0, 5),
   );
   openClaims = computed(
-    () => this.claims().filter((c) => c.status === 'Submitted' || c.status === 'UnderReview').length,
+    () => this.claims().filter((c) => OPEN_CLAIM_STATUSES.includes(c.status)).length,
   );
   paidOut = computed(() =>
     this.claims().filter((c) => c.status === 'Paid').reduce((sum, c) => sum + c.claimAmount, 0),

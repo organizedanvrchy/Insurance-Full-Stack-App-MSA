@@ -72,4 +72,16 @@ public class ClaimsController : ControllerBase
         var dto = await _claims.ReviewAsync(id, CurrentUserId, request);
         return Ok(dto);
     }
+
+    // Customer: send a claim back to the reviewer after a request for more information
+    [HttpPost("{id:int}/send-to-reviewer")]
+    [Authorize(Roles = nameof(UserRole.Customer))]
+    [ProducesResponseType(typeof(ClaimDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<ClaimDto>> SendToReviewer(int id)
+    {
+        var dto = await _claims.SendToReviewerAsync(id, CurrentUserId);
+        return Ok(dto);
+    }
 }

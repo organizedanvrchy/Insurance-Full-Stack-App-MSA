@@ -2,11 +2,18 @@ import { CurrencyPipe, DatePipe } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { concatMap, from, toArray } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
 import { ClaimService } from '../../core/services/claim.service';
 import { EnrollmentService } from '../../core/services/enrollment.service';
 import { getErrorMessage } from '../../core/utils/http-error';
 import { Enrollment } from '../../core/models/enrollment/enrollment';
+import {
+  CLAIM_DOCUMENT_ACCEPT,
+  MAX_DOCUMENTS_PER_CLAIM,
+  claimDocumentProblem,
+  fileSizeLabel,
+} from '../../core/utils/claim-documents';
 
 @Component({
   selector: 'app-claim-form',
@@ -27,6 +34,12 @@ export class ClaimFormComponent {
   enrollment = signal<Enrollment | null>(null);
   saving = signal(false);
   error = signal<string | null>(null);
+  files = signal<File[]>([]);
+  fileError = signal<string | null>(null);
+
+  readonly accept = CLAIM_DOCUMENT_ACCEPT;
+  readonly maxFiles = MAX_DOCUMENTS_PER_CLAIM;
+  readonly sizeLabel = fileSizeLabel;
 
   // Latest allowed incident date: today, or the end of coverage if that has already passed.
   // (ISO "YYYY-MM-DD" strings compare correctly as plain text.)
@@ -65,6 +78,27 @@ export class ClaimFormComponent {
     });
   }
 
+  addFiles(input: HTMLInputElement): void {
+    const chosen = Array.from(input.files ?? []);
+    input.value = '';     // so choosing the same file again still fires the change event
+
+    const combined = [...this.files(), ...chosen];
+    const problem = chosen.map(claimDocumentProblem).find((p) => p !== null);
+    if (problem) {
+      this.fileError.set(problem);
+    } else if (combined.length > MAX_DOCUMENTS_PER_CLAIM) {
+      this.fileError.set(`You can attach up to ${MAX_DOCUMENTS_PER_CLAIM} documents.`);
+    } else {
+      this.fileError.set(null);
+      this.files.set(combined);
+    }
+  }
+
+  removeFile(file: File): void {
+    this.files.update((list) => list.filter((f) => f !== file));
+    this.fileError.set(null);
+  }
+
   submit(e: Enrollment): void {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
@@ -82,11 +116,26 @@ export class ClaimFormComponent {
         description: v.description!,
       })
       .subscribe({
-        next: () => this.router.navigate(['/claims']),
+        next: (claim) => this.uploadFiles(claim.claimId),
         error: (err) => {
           this.error.set(getErrorMessage(err));   // 409 overdue premiums, 400 amount/date rules
           this.saving.set(false);
         },
+      });
+  }
+
+  // The claim now exists, so a failure here must not offer "Submit" again: that would file a second claim.
+  // My claims shows what happened and lets the customer add the documents there.
+  private uploadFiles(claimId: number): void {
+    from(this.files())
+      .pipe(
+        concatMap((file) => this.claimsApi.uploadDocument(claimId, file)),
+        toArray(),
+      )
+      .subscribe({
+        next: () => this.router.navigate(['/claims']),
+        error: () =>
+          this.router.navigate(['/claims'], { queryParams: { documentsFailed: claimId } }),
       });
   }
 }

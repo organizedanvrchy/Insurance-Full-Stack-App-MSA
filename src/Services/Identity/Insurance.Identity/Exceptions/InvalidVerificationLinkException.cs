@@ -2,7 +2,7 @@ using Insurance.BuildingBlocks.Exceptions;
 
 namespace Insurance.Identity.Exceptions;
 
-/// <summary>The link's token is unknown, expired, already used or replaced by a newer one (SQL error 50020). Becomes a 400.</summary>
+/// <summary>The link's token is unknown, expired, already used or replaced by a newer one (SQL error 50022). Becomes a 400.</summary>
 public class InvalidVerificationLinkException : BusinessRuleException
 {
     public InvalidVerificationLinkException()

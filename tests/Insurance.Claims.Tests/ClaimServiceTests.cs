@@ -271,4 +271,66 @@ public class ClaimServiceTests
         Assert.Contains("file a claim", ex.Message);
         Assert.Empty(_repo.Claims);
     }
+
+    // Needs more info
+
+    [Fact]
+    public async Task Asking_for_more_information_needs_a_note_for_the_customer()
+    {
+        var claim = AddClaim(ClaimStatus.UnderReview);
+
+        await Assert.ThrowsAsync<BusinessRuleException>(() =>
+            _sut.ReviewAsync(claim.ClaimId, adminId: 7, Review(ClaimStatus.NeedsMoreInfo, "   ")));
+
+        Assert.Equal(ClaimStatus.UnderReview, claim.Status);
+    }
+
+    [Fact]
+    public async Task The_customer_sees_the_request_and_can_send_the_claim_back()
+    {
+        var claim = AddClaim(ClaimStatus.UnderReview);
+        await _sut.ReviewAsync(claim.ClaimId, adminId: 7, Review(ClaimStatus.NeedsMoreInfo, "Please upload the repair estimate"));
+
+        var waiting = await _sut.GetByIdAsync(claim.ClaimId, userId: 1, isAdmin: false);
+        Assert.Equal("Please upload the repair estimate", waiting!.AdminNotes);
+        Assert.True(waiting.CanSendToReviewer);
+        Assert.True(waiting.CanAddDocuments);
+
+        var sent = await _sut.SendToReviewerAsync(claim.ClaimId, userId: 1);
+
+        Assert.Equal(ClaimStatus.UnderReview, sent.Status);
+        Assert.False(sent.CanSendToReviewer);
+    }
+
+    [Fact]
+    public async Task Admins_are_not_offered_the_customers_actions()
+    {
+        var claim = AddClaim(ClaimStatus.NeedsMoreInfo);
+
+        var dto = await _sut.GetByIdAsync(claim.ClaimId, userId: 7, isAdmin: true);
+
+        Assert.False(dto!.CanSendToReviewer);
+        Assert.False(dto.CanAddDocuments);
+    }
+
+    [Fact]
+    public async Task Someone_elses_claim_cant_be_sent_to_the_reviewer()
+    {
+        var claim = AddClaim(ClaimStatus.NeedsMoreInfo, ownerId: 1);
+
+        await Assert.ThrowsAsync<NotFoundException>(() => _sut.SendToReviewerAsync(claim.ClaimId, userId: 3));
+
+        Assert.Equal(ClaimStatus.NeedsMoreInfo, claim.Status);
+    }
+
+    [Theory]
+    [InlineData(ClaimStatus.Submitted)]
+    [InlineData(ClaimStatus.UnderReview)]
+    [InlineData(ClaimStatus.Approved)]
+    public async Task Only_a_claim_waiting_on_the_customer_can_be_sent_back(ClaimStatus status)
+    {
+        var claim = AddClaim(status);
+
+        await Assert.ThrowsAsync<ClaimConflictException>(() => _sut.SendToReviewerAsync(claim.ClaimId, userId: 1));
+    }
 }
