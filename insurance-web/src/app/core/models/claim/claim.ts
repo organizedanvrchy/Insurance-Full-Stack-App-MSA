@@ -18,4 +18,6 @@ export interface Claim {
   reviewedAt: string | null;
   reviewedBy: string | null;
   allowedNextStatuses: ClaimStatus[];   // only populated for admins
+  canAddDocuments: boolean;             // only true for the customer
+  canSendToReviewer: boolean;           // only true for the customer
 }

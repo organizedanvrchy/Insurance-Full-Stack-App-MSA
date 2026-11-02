@@ -32,6 +32,8 @@ ENV APP_DLL=${ASSEMBLY}.dll \
     ASPNETCORE_URLS=http://+:8080
 WORKDIR /app
 COPY --from=build /app .
+# Claims keeps uploaded documents here (a named volume in docker-compose.yml, which inherits this owner).
+RUN mkdir -p /data/claim-documents && chown app /data/claim-documents
 USER app
 EXPOSE 8080
 ENTRYPOINT ["sh", "-c", "exec dotnet \"$APP_DLL\""]

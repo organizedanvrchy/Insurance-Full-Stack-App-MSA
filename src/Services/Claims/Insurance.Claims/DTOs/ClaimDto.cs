@@ -23,4 +23,8 @@ public class ClaimDto
 
     // Only filled for admins. Tells the UI which buttons to show, so Angular never duplicates the workflow rules.
     public List<ClaimStatus> AllowedNextStatuses { get; set; } = new();
+
+    // Only true for the customer. These tell the UI what to offer, for the same reason.
+    public bool CanAddDocuments { get; set; }
+    public bool CanSendToReviewer { get; set; }
 }

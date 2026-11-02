@@ -49,12 +49,14 @@
       <p class="pre">{{ c.description }}</p>
     </div>
 
+    <app-claim-documents [claimId]="c.claimId" />
+
     @if (c.reviewedBy) {
     <p class="muted">Last updated by {{ c.reviewedBy }} on {{ c.reviewedAt | date: 'medium' }}</p>
     }
 
     <label class="field">
-      Notes to the customer (required when rejecting)
+      Notes to the customer (required when rejecting or requesting more information)
       <textarea #notes rows="3" [value]="c.adminNotes ?? ''"></textarea>
     </label>
 

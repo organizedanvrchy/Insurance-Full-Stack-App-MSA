@@ -2,8 +2,10 @@ using Insurance.Billing.Contracts;
 using Insurance.Catalog.Contracts;
 using Insurance.Claims.Contracts;
 using Insurance.Claims.Enums;
+using Insurance.Claims.Exceptions;
 using Insurance.Claims.Models;
 using Insurance.Claims.Repositories;
+using Insurance.Claims.Services;
 using Insurance.Enrollments.Contracts;
 using Insurance.Identity.Contracts;
 
@@ -61,12 +63,67 @@ public class FakeClaimRepository : IClaimRepository
         return Task.FromResult(claim);
     }
 
+    public Task<InsuranceClaim> SendToReviewerAsync(int claimId, int userId)
+    {
+        var claim = Claims.Single(c => c.ClaimId == claimId && c.UserId == userId);
+        claim.Status = ClaimStatus.UnderReview;
+        return Task.FromResult(claim);
+    }
+
     public Task<Dictionary<int, ClaimCounts>> GetCountsByUserAsync(IEnumerable<int> userIds) =>
         Task.FromResult(Claims
             .Where(c => userIds.Contains(c.UserId))
             .GroupBy(c => c.UserId)
             .ToDictionary(g => g.Key, g => new ClaimCounts(
-                g.Count(), g.Count(c => c.Status is ClaimStatus.Submitted or ClaimStatus.UnderReview))));
+                g.Count(), g.Count(c => c.Status is ClaimStatus.Submitted or ClaimStatus.UnderReview or ClaimStatus.NeedsMoreInfo))));
+}
+
+public class FakeClaimDocumentRepository : IClaimDocumentRepository
+{
+    public List<ClaimDocument> Documents { get; } = new();
+
+    // Simulates the database failing after the file has been saved.
+    public bool FailNextAdd { get; set; }
+
+    public Task<ClaimDocument> AddAsync(ClaimDocument document, int maxDocuments)
+    {
+        if (FailNextAdd) throw new InvalidOperationException("Database unavailable.");
+
+        // The real check is in usp_ClaimDocument_Add, under a lock.
+        if (Documents.Count(d => d.ClaimId == document.ClaimId) >= maxDocuments)
+            throw new ClaimConflictException($"A claim can have up to {maxDocuments} documents.");
+
+        document.ClaimDocumentId = Documents.Count + 1;
+        Documents.Add(document);
+        return Task.FromResult(document);
+    }
+
+    public Task<List<ClaimDocument>> GetByClaimAsync(int claimId) =>
+        Task.FromResult(Documents.Where(d => d.ClaimId == claimId).ToList());
+
+    public Task<ClaimDocument?> GetByIdAsync(int claimId, int claimDocumentId) =>
+        Task.FromResult(Documents.FirstOrDefault(d => d.ClaimId == claimId && d.ClaimDocumentId == claimDocumentId));
+}
+
+public class FakeDocumentStorage : IDocumentStorage
+{
+    public Dictionary<string, byte[]> Files { get; } = new();
+
+    public async Task SaveAsync(string key, Stream content, CancellationToken ct = default)
+    {
+        using var copy = new MemoryStream();
+        await content.CopyToAsync(copy, ct);
+        Files[key] = copy.ToArray();
+    }
+
+    public Task<Stream?> OpenReadAsync(string key, CancellationToken ct = default) =>
+        Task.FromResult<Stream?>(Files.TryGetValue(key, out var bytes) ? new MemoryStream(bytes) : null);
+
+    public Task DeleteAsync(string key, CancellationToken ct = default)
+    {
+        Files.Remove(key);
+        return Task.CompletedTask;
+    }
 }
 
 // The other services, as the Claims service sees them through their contracts (HTTP clients in production).

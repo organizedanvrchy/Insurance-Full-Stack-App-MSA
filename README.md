@@ -63,12 +63,12 @@ The backend is a set of **microservices**: six ASP.NET Core services, each with 
 - **Simulated checkout:** pay by credit/debit card, PayPal, Apple Pay, Google Pay or Venmo. Card numbers are validated (brand, checksum, expiry, security code) and turned into a token in the browser; the server never sees them. Name and billing address are filled in from sign-up, cards can be saved for later, and every attempt gets a printable receipt.
 - **Payment history:** every attempt on a policy, including declined ones, with the reason the customer was given.
 - **Payment alerts:** a "payment due soon" or "payment overdue" badge on each policy.
-- **File claims** with incident date, amount and description. Eligibility is validated against the policy.
-- Track claims through the review workflow and read the reviewer's notes.
+- **File claims** with incident date, amount, description and supporting documents. Eligibility is validated against the policy.
+- Track claims through the review workflow, read the reviewer's notes, and send more documents when asked.
 
 ### Administrators
 - Create, edit and deactivate plans. Deactivated plans disappear for customers but remain on existing policies.
-- **Claims review queue** with a status filter. Buttons show only the legal next step, and a rejection requires a reason.
+- **Claims review queue** with a status filter. Admins can read a claim's documents and ask for more. Buttons show only the legal next step, and a rejection requires a reason.
 - **Customer management:** search, filter by status, see active-policy and claim counts, and deactivate or reactivate accounts (takes effect on the customer's next request).
 - **Payment log:** every payment attempt from every customer, filterable by status, with amounts collected, declines and refunds.
 
@@ -126,7 +126,7 @@ flowchart TD
 | **Quotes** (Quotes) | Rating engine, quotes | Catalog (HTTP). Consumes `EnrollmentActivated`, `EnrollmentFailed` |
 | **Enrollments** (Enrollments) | Policies, **the enrollment saga** | Quotes, Catalog, Billing (HTTP). Publishes `EnrollmentRequested`, `EnrollmentActivated`, `EnrollmentFailed`, `EnrollmentCancelled` through an outbox |
 | **Billing** | Premium schedules, payments | Enrollments (HTTP). Consumes `EnrollmentRequested`, `EnrollmentCancelled`, `EnrollmentFailed`; publishes `PremiumScheduleCreated` |
-| **Claims** (Claims) | Claims, review workflow | Enrollments, Billing, Catalog, Identity (HTTP) |
+| **Claims** (Claims) | Claims, claim documents, review workflow | Enrollments, Billing, Catalog, Identity (HTTP) |
 | **Gateway + BFF** | Nothing | Routes `/api/*`; checks that the caller's account is active (Identity); composes the admin customer list (Identity + Enrollments + Claims) |
 
 **Rules that keep them independent:** a service never reads another service's database, and never references another service's code, only its `*.Contracts` package (events, internal API shapes and a typed HTTP client). `Insurance.Architecture.Tests` fails the build if either rule is broken. Queries go over HTTP; anything that changes another service's data goes through an event.
@@ -152,7 +152,8 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the enrollment saga, the ou
 | Enrollment | Start date from yesterday (time-zone slack) to 90 days ahead. One active enrollment per plan per customer. The premium is copied from the quote, so later plan price changes never alter existing policies. |
 | Payments | Installments must be paid **in order**. An unpaid installment becomes **Overdue** more than **5 days** past its due date. A payment alert shows when the next due date is within **7 days**. |
 | Claims | Active policy only. The incident must fall inside the coverage period and not be in the future. No overdue premiums. The amount cannot exceed the remaining coverage (policy coverage minus approved and paid claims). |
-| Claim workflow | Submitted, Under review, then Approved or Rejected, then (approved only) Paid. A rejection needs a reason. Concurrent edits are detected. |
+| Claim workflow | Submitted, Under review, then Approved or Rejected, then (approved only) Paid. A reviewer can also ask for more information, and the customer sends the claim back after responding. A rejection or a request for more information needs a note. Concurrent edits are detected. |
+| Claim documents | PDF, JPG or PNG, up to 10 MB each and 5 per claim. Customers can add them until a decision is made. They can't be deleted. |
 | Accounts | Deactivated accounts cannot sign in and existing tokens stop working. Admin accounts cannot be deactivated from the UI. |
 
 ## Getting started
@@ -289,6 +290,10 @@ Every endpoint is reached through the gateway at `/api`. Each service documents 
 | | `GET /api/claims?status=` | Admin |
 | | `GET /api/claims/{id}` | Owner or admin |
 | | `PUT /api/claims/{id}/review` | Admin |
+| | `POST /api/claims/{id}/send-to-reviewer` | Customer |
+| | `POST /api/claims/{id}/documents` | Customer |
+| | `GET /api/claims/{id}/documents` | Owner or admin |
+| | `GET /api/claims/{id}/documents/{documentId}` | Owner or admin |
 | **Customers** (gateway BFF) | `GET /api/admin/customers?search=&isActive=` | Admin |
 | | `PUT /api/admin/customers/{id}/active` | Admin |
 
@@ -308,6 +313,7 @@ dotnet test Insurance.sln
 | `ClaimStatusTransitionsTests` | Every allowed and blocked workflow move |
 | `AuthServiceTests` | Password hashing, email normalizing, role forcing, inactive users |
 | `EnrollmentServiceTests` | Start-date window, payment alerts, ownership, cancellation, the enrollment saga (completed, still running, failed, quote released), degradation when Billing is down |
+| `ClaimDocumentServiceTests` | File checks, document limits, ownership, cleaning up after a failed save |
 | `ClaimServiceTests` | Review rules, the concurrency guard, claim visibility, claim eligibility, names and plans from other services |
 | `CheckoutServiceTests` | Approved, declined and failed payments; retries never charge twice; every rule checked before charging; automatic refund when an approved charge can't be applied; saved cards |
 | `MockPaymentGatewayTests` | Test cards and their decline reasons, expired cards, idempotent charges, malformed tokens |
