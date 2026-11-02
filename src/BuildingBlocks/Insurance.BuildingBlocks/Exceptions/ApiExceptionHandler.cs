@@ -7,9 +7,9 @@ namespace Insurance.BuildingBlocks.Exceptions;
 /// <summary>
 /// The one place that turns our typed exceptions into HTTP status codes.
 /// Controllers just call the service; anything thrown below lands here.
-/// Services derive their own exceptions (ClaimConflictException, ...) from these three base types,
+/// Services derive their own exceptions (ClaimConflictException, ...) from these base types,
 /// so this handler never needs to know about a service. Typed exceptions also cross service boundaries:
-/// the HTTP clients turn another service's 400/404/409 back into the same exception (see ServiceClients).
+/// the HTTP clients turn another service's 400/403/404/409/429 back into the same exception (see ServiceClients).
 /// Unknown exceptions return false, so ASP.NET's default 500 handling still applies.
 /// </summary>
 public class ApiExceptionHandler : IExceptionHandler
@@ -24,8 +24,14 @@ public class ApiExceptionHandler : IExceptionHandler
             // 404: it doesn't exist (or isn't yours, which we deliberately don't distinguish)
             NotFoundException e => (StatusCodes.Status404NotFound, e.Message),
 
+            // 403: signed in, but not allowed to do this (yet), e.g. before verifying their email address
+            ForbiddenException e => (StatusCodes.Status403Forbidden, e.Message),
+
             // 409: valid request, but it conflicts with the current state
             ConflictException e => (StatusCodes.Status409Conflict, e.Message),
+
+            // 429: asked for the same thing too often
+            TooManyRequestsException e => (StatusCodes.Status429TooManyRequests, e.Message),
 
             // 503: another service this request needs is down or failed. Retrying later can succeed.
             HttpRequestException => (StatusCodes.Status503ServiceUnavailable,

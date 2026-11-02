@@ -1,7 +1,7 @@
 using System.Security.Claims;
 using Insurance.BuildingBlocks.Security;
 using Insurance.Claims.DTOs;
-using Insurance.Claims.Enums;
+using Insurance.Claims.Contracts;
 using Insurance.Claims.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -19,11 +19,12 @@ public class ClaimsController : ControllerBase
 
     private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-    // Customer: file a claim. Errors (400/404/409) are translated by ApiExceptionHandler.
+    // Customer: file a claim. Errors (400/403 email not verified/404/409) are translated by ApiExceptionHandler.
     [HttpPost]
     [Authorize(Roles = nameof(UserRole.Customer))]
     [ProducesResponseType(typeof(ClaimDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<ClaimDto>> Submit(ClaimSubmitRequest request)

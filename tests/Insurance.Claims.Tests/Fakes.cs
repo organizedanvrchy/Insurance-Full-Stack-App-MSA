@@ -1,7 +1,6 @@
 using Insurance.Billing.Contracts;
 using Insurance.Catalog.Contracts;
 using Insurance.Claims.Contracts;
-using Insurance.Claims.Enums;
 using Insurance.Claims.Models;
 using Insurance.Claims.Repositories;
 using Insurance.Enrollments.Contracts;

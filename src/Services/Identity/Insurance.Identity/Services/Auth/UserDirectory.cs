@@ -12,7 +12,7 @@ public class UserDirectory : IUserDirectory
     public async Task<UserAccount?> GetAsync(int userId)
     {
         var u = await _users.GetByIdAsync(userId);
-        return u is null ? null : new UserAccount(u.UserId, u.FullName, u.Email, u.Role, u.IsActive);
+        return u is null ? null : new UserAccount(u.UserId, u.FullName, u.Email, u.Role, u.IsActive, u.EmailVerified);
     }
 
     public async Task<IReadOnlyDictionary<int, UserAccount>> GetManyAsync(IEnumerable<int> userIds) =>

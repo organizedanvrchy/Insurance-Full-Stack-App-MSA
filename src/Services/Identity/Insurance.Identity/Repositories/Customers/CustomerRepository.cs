@@ -42,5 +42,6 @@ public class CustomerRepository : ICustomerRepository
         r.GetString(r.GetOrdinal("Email")),
         r.GetStringOrNull("Phone"),
         r.GetBoolean(r.GetOrdinal("IsActive")),
-        r.GetUtcDateTime("CreatedAt"));
+        r.GetUtcDateTime("CreatedAt"),
+        r.GetBoolean(r.GetOrdinal("EmailVerified")));
 }

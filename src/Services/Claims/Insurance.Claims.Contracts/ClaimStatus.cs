@@ -1,4 +1,4 @@
-namespace Insurance.Claims.Enums;
+namespace Insurance.Claims.Contracts;
 
 public enum ClaimStatus
 {

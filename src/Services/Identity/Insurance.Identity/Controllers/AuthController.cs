@@ -12,7 +12,15 @@ namespace Insurance.Identity.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _auth;
-    public AuthController(IAuthService auth) => _auth = auth;
+    private readonly IEmailVerificationService _verification;
+
+    public AuthController(IAuthService auth, IEmailVerificationService verification)
+    {
+        _auth = auth;
+        _verification = verification;
+    }
+
+    private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
     [HttpPost("register")]
     [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status201Created)]
@@ -41,9 +49,47 @@ public class AuthController : ControllerBase
     [HttpGet("me")]
     public async Task<ActionResult<UserDto>> Me()
     {
-        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        var profile = await _auth.GetProfileAsync(userId);
+        var profile = await _auth.GetProfileAsync(CurrentUserId);
         if (profile is null) return NotFound();
         return Ok(profile);
     }
+
+    // ---------------- Email verification ----------------
+
+    // Opened from the link in the email, possibly in a browser where nobody is signed in: no token needed.
+    // 400 if the link is invalid, expired or used; 409 if a new address was taken in the meantime.
+    [HttpPost("verify-email")]
+    [ProducesResponseType(typeof(VerifyEmailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<VerifyEmailResponse>> VerifyEmail(VerifyEmailRequest request) =>
+        Ok(await _verification.VerifyAsync(request.Token));
+
+    // Sends a fresh link (for the pending new address, if a change is waiting). 429 when asked too often.
+    [Authorize]
+    [HttpPost("resend-verification")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+    public async Task<IActionResult> ResendVerification()
+    {
+        await _verification.ResendAsync(CurrentUserId);
+        return NoContent();
+    }
+
+    // Starts an email change. The current address stays in use until the link sent to the new one is opened.
+    [Authorize]
+    [HttpPost("change-email")]
+    [ProducesResponseType(typeof(UserDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+    public async Task<ActionResult<UserDto>> ChangeEmail(ChangeEmailRequest request) =>
+        Ok(await _verification.RequestEmailChangeAsync(CurrentUserId, request));
+
+    [Authorize]
+    [HttpDelete("change-email")]
+    [ProducesResponseType(typeof(UserDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<UserDto>> CancelEmailChange() =>
+        Ok(await _verification.CancelEmailChangeAsync(CurrentUserId));
 }

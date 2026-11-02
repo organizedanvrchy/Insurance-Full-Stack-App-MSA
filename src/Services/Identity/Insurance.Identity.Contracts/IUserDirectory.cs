@@ -11,7 +11,8 @@ public interface IUserDirectory
     Task<IReadOnlyDictionary<int, UserAccount>> GetManyAsync(IEnumerable<int> userIds);
 }
 
-public record UserAccount(int UserId, string FullName, string Email, UserRole Role, bool IsActive);
+/// <summary>EmailVerified: the customer has confirmed they own Email. Enrolling and filing claims require it.</summary>
+public record UserAccount(int UserId, string FullName, string Email, UserRole Role, bool IsActive, bool EmailVerified);
 
 /// <summary>Customer administration, used by the gateway's BFF (which adds policy and claim counts).</summary>
 public interface ICustomerDirectory
@@ -20,7 +21,7 @@ public interface ICustomerDirectory
     Task<CustomerInfo> SetActiveAsync(int userId, bool isActive);   // NotFoundException if not a customer
 }
 
-public record CustomerInfo(int UserId, string FullName, string Email, string? Phone, bool IsActive, DateTime CreatedAt);
+public record CustomerInfo(int UserId, string FullName, string Email, string? Phone, bool IsActive, DateTime CreatedAt, bool EmailVerified);
 
 /// <summary>Calls /internal/users and /internal/customers on the Identity service.</summary>
 public class IdentityClient : IUserDirectory, ICustomerDirectory

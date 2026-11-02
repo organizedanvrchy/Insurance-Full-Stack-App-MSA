@@ -1,0 +1,146 @@
+using System.Net;
+using System.Text;
+
+namespace Insurance.Notifications.Templates;
+
+/// <summary>A rendered email before it has a recipient.</summary>
+public record RenderedEmail(string Subject, string Html, string Text);
+
+/// <summary>
+/// Builds the HTML and the plain-text version of an email side by side, from the same blocks, so the two never
+/// drift apart. Every value is HTML-encoded here: templates can pass customer-entered text (names, claim notes)
+/// without thinking about it. The HTML uses tables and inline styles, which is what mail clients render reliably.
+/// </summary>
+public sealed class EmailBuilder
+{
+    private const string Brand = "RAINsurance";
+    private const string Primary = "#01497c";
+    private const string Ink = "#0b2233";
+    private const string Muted = "#52677a";
+    private const string Border = "#d6e4ee";
+
+    private readonly string _subject;
+    private readonly string _preheader;
+    private readonly StringBuilder _html = new();
+    private readonly StringBuilder _text = new();
+    private string? _footerNote;
+
+    /// <param name="preheader">The preview line most inboxes show next to the subject.</param>
+    public EmailBuilder(string subject, string preheader)
+    {
+        _subject = subject;
+        _preheader = preheader;
+    }
+
+    private static string E(string value) => WebUtility.HtmlEncode(value);
+
+    public EmailBuilder Heading(string text)
+    {
+        _html.Append($"<h1 style=\"margin:0 0 16px;font-size:22px;line-height:1.3;color:{Ink};\">{E(text)}</h1>");
+        _text.AppendLine(text).AppendLine(new string('=', Math.Min(text.Length, 60))).AppendLine();
+        return this;
+    }
+
+    public EmailBuilder Paragraph(string text)
+    {
+        _html.Append($"<p style=\"margin:0 0 16px;font-size:15px;line-height:1.6;color:{Ink};\">{E(text)}</p>");
+        _text.AppendLine(text).AppendLine();
+        return this;
+    }
+
+    /// <summary>A highlighted box, for the one thing the customer must not miss (e.g. a rejection reason).</summary>
+    public EmailBuilder Callout(string title, string text, bool warning = false)
+    {
+        var (bg, edge) = warning ? ("#fff4e5", "#b45309") : ("#eaf3f9", Primary);
+        _html.Append($"""
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;border-collapse:collapse;">
+              <tr><td style="background:{bg};border-left:4px solid {edge};padding:12px 16px;border-radius:4px;">
+                <p style="margin:0 0 4px;font-size:13px;font-weight:bold;color:{Ink};">{E(title)}</p>
+                <p style="margin:0;font-size:14px;line-height:1.5;color:{Ink};white-space:pre-line;">{E(text)}</p>
+              </td></tr>
+            </table>
+            """);
+        _text.AppendLine($"{title}: {text}").AppendLine();
+        return this;
+    }
+
+    /// <summary>A two-column table of facts (receipt lines, claim details).</summary>
+    public EmailBuilder Details(params (string Label, string Value)[] rows)
+    {
+        _html.Append($"<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:0 0 20px;border-collapse:collapse;border:1px solid {Border};border-radius:6px;\">");
+        foreach (var (label, value) in rows)
+        {
+            _html.Append($"""
+                <tr>
+                  <td style="padding:10px 14px;border-bottom:1px solid {Border};font-size:14px;color:{Muted};width:45%;">{E(label)}</td>
+                  <td style="padding:10px 14px;border-bottom:1px solid {Border};font-size:14px;color:{Ink};font-weight:bold;text-align:right;">{E(value)}</td>
+                </tr>
+                """);
+            _text.AppendLine($"  {label + ":",-24} {value}");
+        }
+        _html.Append("</table>");
+        _text.AppendLine();
+        return this;
+    }
+
+    public EmailBuilder Button(string label, string url)
+    {
+        _html.Append($"""
+            <table role="presentation" cellpadding="0" cellspacing="0" style="margin:4px 0 24px;">
+              <tr><td style="background:{Primary};border-radius:6px;">
+                <a href="{E(url)}" style="display:inline-block;padding:12px 22px;font-size:15px;font-weight:bold;color:#ffffff;text-decoration:none;">{E(label)}</a>
+              </td></tr>
+            </table>
+            <p style="margin:0 0 16px;font-size:12px;line-height:1.5;color:{Muted};">If the button doesn't work, copy this link into your browser:<br><a href="{E(url)}" style="color:{Primary};word-break:break-all;">{E(url)}</a></p>
+            """);
+        _text.AppendLine($"{label}: {url}").AppendLine();
+        return this;
+    }
+
+    public EmailBuilder Small(string text)
+    {
+        _html.Append($"<p style=\"margin:0 0 12px;font-size:13px;line-height:1.5;color:{Muted};\">{E(text)}</p>");
+        _text.AppendLine(text).AppendLine();
+        return this;
+    }
+
+    /// <summary>An extra line in the footer, e.g. how to turn reminders off.</summary>
+    public EmailBuilder FooterNote(string text, string? linkLabel = null, string? linkUrl = null)
+    {
+        var link = linkLabel is null || linkUrl is null ? "" : $" <a href=\"{E(linkUrl)}\" style=\"color:{Muted};\">{E(linkLabel)}</a>";
+        _footerNote = E(text) + link;
+        _text.AppendLine(linkUrl is null ? text : $"{text} {linkLabel}: {linkUrl}").AppendLine();
+        return this;
+    }
+
+    public RenderedEmail Build()
+    {
+        var footerNote = _footerNote is null ? "" : $"<p style=\"margin:0 0 8px;\">{_footerNote}</p>";
+        var html = $"""
+            <!doctype html>
+            <html lang="en">
+            <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{E(_subject)}</title></head>
+            <body style="margin:0;padding:0;background:#f2f6f9;font-family:Segoe UI,Helvetica,Arial,sans-serif;">
+              <span style="display:none;max-height:0;overflow:hidden;opacity:0;">{E(_preheader)}</span>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f2f6f9;padding:24px 12px;">
+                <tr><td align="center">
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border:1px solid {Border};border-radius:10px;overflow:hidden;">
+                    <tr><td style="background:{Primary};padding:18px 28px;">
+                      <span style="font-size:20px;font-weight:bold;color:#ffffff;letter-spacing:0.3px;">&#9730; {Brand}</span>
+                    </td></tr>
+                    <tr><td style="padding:28px;">{_html}</td></tr>
+                    <tr><td style="padding:18px 28px;border-top:1px solid {Border};font-size:12px;line-height:1.5;color:{Muted};">
+                      {footerNote}
+                      <p style="margin:0;">You're receiving this email because you have a {Brand} account. {Brand} is a fictional insurer created for a portfolio project.</p>
+                    </td></tr>
+                  </table>
+                </td></tr>
+              </table>
+            </body>
+            </html>
+            """;
+
+        var text = _text.ToString().TrimEnd() + $"\n\n--\n{Brand}. A fictional insurer created for a portfolio project.\n";
+        return new RenderedEmail(_subject, html, text);
+    }
+}

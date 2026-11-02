@@ -3,7 +3,9 @@ using Insurance.Billing.Contracts;
 using Insurance.Billing.Enums;
 using Insurance.Billing.Exceptions;
 using Insurance.Billing.Models;
+using Insurance.Billing.Services.Reminders;
 using Insurance.BuildingBlocks.Data;
+using Insurance.BuildingBlocks.Messaging;
 using Microsoft.Data.SqlClient;
 
 namespace Insurance.Billing.Repositories;
@@ -11,7 +13,13 @@ namespace Insurance.Billing.Repositories;
 public class PaymentRepository : IPaymentRepository
 {
     private readonly IDbConnectionFactory _db;
-    public PaymentRepository(IDbConnectionFactory db) => _db = db;
+    private readonly IOutbox _outbox;
+
+    public PaymentRepository(IDbConnectionFactory db, IOutbox outbox)
+    {
+        _db = db;
+        _outbox = outbox;
+    }
 
     public async Task<List<Payment>> GetByEnrollmentAsync(int enrollmentId)
     {
@@ -37,30 +45,125 @@ public class PaymentRepository : IPaymentRepository
         return await reader.ReadAsync() ? Map(reader) : null;
     }
 
-    public async Task<Payment> PayAsync(int paymentId)
+    public async Task<Payment> PayAsync(int paymentId, int userId, int policyId)
     {
         await using var conn = _db.Create();
-        await using var cmd = conn.StoredProc("billing.usp_Payment_Pay");
-        cmd.AddParam("@PaymentId", SqlDbType.Int, paymentId);
+        await conn.OpenAsync();
+        await using var tx = (SqlTransaction)await conn.BeginTransactionAsync();
+
+        Payment paid;
+        await using (var cmd = conn.StoredProc("billing.usp_Payment_Pay"))
+        {
+            cmd.Transaction = tx;
+            cmd.AddParam("@PaymentId", SqlDbType.Int, paymentId);
+            try
+            {
+                await using var reader = await cmd.ExecuteReaderAsync();
+                if (!await reader.ReadAsync())
+                    throw new InvalidOperationException("usp_Payment_Pay returned no row.");
+                paid = Map(reader);
+            }
+            catch (SqlException ex) when (ex.Number == 50004)
+            {
+                throw new PaymentNotFoundException(paymentId);
+            }
+            // 50005 already paid, 50007 earlier installment unpaid.
+            // The proc's THROW message is already user-friendly, so we pass it along.
+            catch (SqlException ex) when (ex.Number is 50005 or 50007)
+            {
+                throw new PaymentConflictException(ex.Message);
+            }
+        }
+
+        // The receipt: where this installment sits in the schedule and what's due next.
+        await using (var info = conn.StoredProc("billing.usp_Payment_GetReceiptInfo"))
+        {
+            info.Transaction = tx;
+            info.AddParam("@PaymentId", SqlDbType.Int, paymentId);
+            await using var reader = await info.ExecuteReaderAsync();
+            await reader.ReadAsync();
+
+            var nextDueOrdinal = reader.GetOrdinal("NextDueDate");
+            await _outbox.EnqueueAsync(conn, tx, new PaymentReceived(
+                paid.PaymentId,
+                ReceiptNumber(paid.PaymentId),
+                paid.EnrollmentId,
+                userId,
+                policyId,
+                paid.Amount,
+                paid.DueDate,
+                paid.PaidDate!.Value,
+                DateTime.UtcNow,
+                reader.GetInt32(reader.GetOrdinal("InstallmentNumber")),
+                reader.GetInt32(reader.GetOrdinal("InstallmentCount")),
+                reader.IsDBNull(nextDueOrdinal) ? null : reader.GetDateOnly("NextDueDate"),
+                reader.IsDBNull(nextDueOrdinal) ? null : reader.GetDecimal(reader.GetOrdinal("NextDueAmount"))));
+        }
+
+        await tx.CommitAsync();
+        _outbox.Notify();
+        return paid;
+    }
+
+    /// <summary>The number printed on a payment receipt, e.g. PAY-00001234.</summary>
+    public static string ReceiptNumber(int paymentId) => $"PAY-{paymentId:D8}";
+
+    public async Task<List<ReminderCandidate>> GetReminderCandidatesAsync(DateOnly fromDueDate, DateOnly toDueDate)
+    {
+        await using var conn = _db.Create();
+        await using var cmd = conn.StoredProc("billing.usp_Reminder_GetCandidates");
+        cmd.AddParam("@FromDate", SqlDbType.Date, fromDueDate.ToDateTime(TimeOnly.MinValue));
+        cmd.AddParam("@ToDate",   SqlDbType.Date, toDueDate.ToDateTime(TimeOnly.MinValue));
 
         await conn.OpenAsync();
+        await using var reader = await cmd.ExecuteReaderAsync();
+        var list = new List<ReminderCandidate>();
+        while (await reader.ReadAsync())
+        {
+            var sent = (reader.GetStringOrNull("SentStages") ?? "")
+                .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(Enum.Parse<PaymentReminderStage>)
+                .ToHashSet();
+
+            list.Add(new ReminderCandidate(
+                reader.GetInt32(reader.GetOrdinal("PaymentId")),
+                reader.GetInt32(reader.GetOrdinal("EnrollmentId")),
+                reader.GetDateOnly("DueDate"),
+                reader.GetDecimal(reader.GetOrdinal("Amount")),
+                reader.GetDateOnly("OverdueFrom"),
+                sent));
+        }
+        return list;
+    }
+
+    public async Task<bool> RecordReminderAsync(PaymentReminderDue reminder)
+    {
+        await using var conn = _db.Create();
+        await conn.OpenAsync();
+        await using var tx = (SqlTransaction)await conn.BeginTransactionAsync();
+
+        await using var cmd = conn.StoredProc("billing.usp_Reminder_Record");
+        cmd.Transaction = tx;
+        cmd.AddParam("@PaymentId", SqlDbType.Int, reminder.PaymentId);
+        cmd.AddParam("@Stage",     SqlDbType.NVarChar, reminder.Stage.ToString(), 30);
+
+        bool recorded;
         try
         {
-            await using var reader = await cmd.ExecuteReaderAsync();
-            if (!await reader.ReadAsync())
-                throw new InvalidOperationException("usp_Payment_Pay returned no row.");
-            return Map(reader);
+            recorded = (int)(await cmd.ExecuteScalarAsync())! == 1;
         }
-        catch (SqlException ex) when (ex.Number == 50004)
+        // Another Billing instance recorded the same reminder a moment earlier.
+        catch (SqlException ex) when (ex.Number is 2627 or 2601)
         {
-            throw new PaymentNotFoundException(paymentId);
+            return false;
         }
-        // 50005 already paid, 50007 earlier installment unpaid.
-        // The proc's THROW message is already user-friendly, so we pass it along.
-        catch (SqlException ex) when (ex.Number is 50005 or 50007)
-        {
-            throw new PaymentConflictException(ex.Message);
-        }
+
+        if (recorded)
+            await _outbox.EnqueueAsync(conn, tx, reminder);
+
+        await tx.CommitAsync();
+        if (recorded) _outbox.Notify();
+        return recorded;
     }
 
     public async Task CreateScheduleAsync(int enrollmentId, DateOnly startDate, int termMonths, decimal monthlyPremium)

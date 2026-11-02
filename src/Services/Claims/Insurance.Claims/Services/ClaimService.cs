@@ -2,7 +2,7 @@ using Insurance.Billing.Contracts;
 using Insurance.BuildingBlocks.Exceptions;
 using Insurance.Catalog.Contracts;
 using Insurance.Claims.DTOs;
-using Insurance.Claims.Enums;
+using Insurance.Claims.Contracts;
 using Insurance.Claims.Exceptions;
 using Insurance.Claims.Models;
 using Insurance.Claims.Repositories;
@@ -33,6 +33,9 @@ public class ClaimService : IClaimService
     {
         var incidentDate = request.IncidentDate!.Value;
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        // 403 until the customer has clicked the link in their verification email.
+        await _users.EnsureEmailVerifiedAsync(userId, "file a claim");
 
         // Same answer for "doesn't exist" and "not yours", so ids can't be probed.
         var enrollment = await _enrollments.GetAsync(request.EnrollmentId);

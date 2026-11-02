@@ -47,7 +47,8 @@ public class PaymentService : IPaymentService
         if (enrollment.Status is not (EnrollmentStatus.Active or EnrollmentStatus.Expired))
             throw new PaymentConflictException("Payments can only be made on an active enrollment.");
 
-        return MapToDto(await _payments.PayAsync(paymentId));
+        // The repository saves the PaymentReceived event with the payment; the customer gets an emailed receipt.
+        return MapToDto(await _payments.PayAsync(paymentId, enrollment.UserId, enrollment.PolicyId));
     }
 
     // Cancelling removes the unpaid installments, but that happens when this service receives EnrollmentCancelled,

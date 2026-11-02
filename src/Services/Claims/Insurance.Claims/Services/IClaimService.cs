@@ -1,5 +1,5 @@
 using Insurance.Claims.DTOs;
-using Insurance.Claims.Enums;
+using Insurance.Claims.Contracts;
 
 namespace Insurance.Claims.Services;
 

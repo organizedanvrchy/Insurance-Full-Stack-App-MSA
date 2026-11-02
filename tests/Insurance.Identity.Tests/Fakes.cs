@@ -1,4 +1,5 @@
 using Insurance.Identity.Contracts;
+using Insurance.Identity.Messaging;
 using Insurance.Identity.Exceptions;
 using Insurance.Identity.Models;
 using Insurance.Identity.Repositories;
@@ -36,7 +37,112 @@ public class FakeUserRepository : IUserRepository
 
     public Task<List<UserAccount>> GetManyAsync(IEnumerable<int> userIds) =>
         Task.FromResult(Users.Where(u => userIds.Contains(u.UserId))
-            .Select(u => new UserAccount(u.UserId, u.FullName, u.Email, u.Role, u.IsActive)).ToList());
+            .Select(u => new UserAccount(u.UserId, u.FullName, u.Email, u.Role, u.IsActive, u.EmailVerified)).ToList());
+
+    // Like usp_User_SetPendingEmail: refuses an address another account uses. Cancelling also kills change links.
+    public FakeEmailTokenRepository? Tokens { get; set; }
+
+    public Task SetPendingEmailAsync(int userId, string? pendingEmail)
+    {
+        if (pendingEmail is not null && Users.Any(u => u.UserId != userId && u.Email == pendingEmail))
+            throw new DuplicateEmailException(pendingEmail);
+
+        Users.Single(u => u.UserId == userId).PendingEmail = pendingEmail;
+        if (pendingEmail is null)
+            Tokens?.Rows.Where(t => t.UserId == userId && t.Purpose == EmailVerificationPurpose.EmailChange)
+                .ToList().ForEach(t => t.Used = true);
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>Mimics accounts.usp_EmailToken_* (create, recent count, consume) in memory.</summary>
+public class FakeEmailTokenRepository : IEmailTokenRepository
+{
+    public class Row
+    {
+        public int UserId;
+        public string Email = "";
+        public EmailVerificationPurpose Purpose;
+        public string Hash = "";
+        public DateTime CreatedAt;
+        public DateTime ExpiresAt;
+        public bool Used;
+    }
+
+    private readonly FakeUserRepository _users;
+    private readonly TimeProvider _clock;
+    public List<Row> Rows { get; } = new();
+
+    public FakeEmailTokenRepository(FakeUserRepository users, TimeProvider clock)
+    {
+        _users = users;
+        _clock = clock;
+        users.Tokens = this;
+    }
+
+    private DateTime Now => _clock.GetUtcNow().UtcDateTime;
+
+    public Task CreateAsync(int userId, string email, EmailVerificationPurpose purpose, string tokenHash, DateTime expiresAtUtc)
+    {
+        Rows.Where(r => r.UserId == userId && r.Purpose == purpose && !r.Used).ToList().ForEach(r => r.Used = true);
+        Rows.Add(new Row { UserId = userId, Email = email, Purpose = purpose, Hash = tokenHash, CreatedAt = Now, ExpiresAt = expiresAtUtc });
+        return Task.CompletedTask;
+    }
+
+    public Task<RecentEmailTokens> GetRecentAsync(int userId)
+    {
+        var recent = Rows.Where(r => r.UserId == userId && r.CreatedAt > Now.AddHours(-24)).ToList();
+        return Task.FromResult(new RecentEmailTokens(recent.Count == 0 ? null : recent.Max(r => r.CreatedAt), recent.Count));
+    }
+
+    public Task<ConsumedEmailToken> ConsumeAsync(string tokenHash)
+    {
+        var row = Rows.FirstOrDefault(r => r.Hash == tokenHash && !r.Used && r.ExpiresAt > Now)
+            ?? throw new InvalidVerificationLinkException();
+        var user = _users.Users.Single(u => u.UserId == row.UserId);
+        var previous = user.Email;
+
+        if (row.Purpose == EmailVerificationPurpose.EmailChange)
+        {
+            if (user.PendingEmail != row.Email) throw new InvalidVerificationLinkException();
+            if (_users.Users.Any(u => u.UserId != user.UserId && u.Email == row.Email)) throw new DuplicateEmailException(row.Email);
+            user.Email = row.Email;
+            user.PendingEmail = null;
+            user.EmailVerifiedAt = Now;
+        }
+        else
+        {
+            if (user.Email != row.Email) throw new InvalidVerificationLinkException();
+            user.EmailVerifiedAt ??= Now;
+        }
+
+        row.Used = true;
+        return Task.FromResult(new ConsumedEmailToken(row.Purpose, previous, user));
+    }
+}
+
+/// <summary>Captures what would have been published to the bus.</summary>
+public class FakeIdentityEvents : IIdentityEvents
+{
+    public List<object> Published { get; } = new();
+    public bool Fail { get; set; }   // simulates RabbitMQ being down
+
+    public Task PublishAsync<T>(T message) where T : class
+    {
+        if (Fail) throw new InvalidOperationException("Broker unreachable");
+        Published.Add(message);
+        return Task.CompletedTask;
+    }
+
+    public IEnumerable<T> OfType<T>() => Published.OfType<T>();
+}
+
+/// <summary>A clock the test moves by hand.</summary>
+public class ManualClock : TimeProvider
+{
+    public DateTimeOffset Now { get; set; } = new(2026, 11, 2, 9, 0, 0, TimeSpan.Zero);
+    public override DateTimeOffset GetUtcNow() => Now;
+    public void Advance(TimeSpan by) => Now += by;
 }
 
 public class FakeTokenService : ITokenService

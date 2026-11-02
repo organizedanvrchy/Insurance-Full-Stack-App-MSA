@@ -1,0 +1,127 @@
+using Insurance.Billing.Contracts;
+using Insurance.Claims.Contracts;
+using Insurance.Enrollments.Contracts;
+using Insurance.Identity.Contracts;
+using Insurance.Notifications.Email;
+using Insurance.Notifications.Messaging;
+using Insurance.Notifications.Repositories;
+using Insurance.Notifications.Services;
+using Insurance.Notifications.Templates;
+using MassTransit;
+using MassTransit.Testing;
+using Microsoft.Extensions.DependencyInjection;
+using Xunit;
+
+namespace Insurance.Notifications.Tests;
+
+// The consumers on MassTransit's in-memory test bus: an event goes in, an email (or none) comes out.
+public class ConsumerTests : IAsyncLifetime
+{
+    private readonly FakeNotificationRepository _repo = new();
+    private readonly FakeEmailSender _smtp = new();
+    private ServiceProvider _provider = null!;
+    private ITestHarness _harness = null!;
+
+    public async Task InitializeAsync()
+    {
+        _provider = new ServiceCollection()
+            .AddLogging()
+            .AddOptions()
+            .AddSingleton<INotificationRepository>(_repo)
+            .AddSingleton<IUserDirectory, FakeUserDirectory>()
+            .AddSingleton<IEmailSender>(_smtp)
+            .AddSingleton<IPolicyDetails, FakePolicyDetails>()
+            .AddSingleton(new AppLinks("http://app.test"))
+            .AddSingleton<EmailTemplates>()
+            .AddScoped<INotificationDispatcher, NotificationDispatcher>()
+            .AddMassTransitTestHarness(x =>
+            {
+                x.AddConsumer<EmailVerificationRequestedConsumer>();
+                x.AddConsumer<ClaimStatusChangedConsumer>();
+                x.AddConsumer<PaymentReceivedConsumer>();
+                x.AddConsumer<PaymentReminderDueConsumer>();
+                x.AddConsumer<EnrollmentActivatedConsumer>();
+            })
+            .BuildServiceProvider(true);
+
+        _harness = _provider.GetRequiredService<ITestHarness>();
+        await _harness.Start();
+    }
+
+    public async Task DisposeAsync()
+    {
+        await _harness.Stop();
+        await _provider.DisposeAsync();
+    }
+
+    private async Task PublishAndWaitAsync<T>(T message) where T : class
+    {
+        await _harness.Bus.Publish(message);
+        Assert.True(await _harness.Consumed.Any<T>());
+        await _harness.InactivityTask;     // let the consumer finish
+    }
+
+    [Fact]
+    public async Task A_claim_decision_is_emailed_with_the_plan_name()
+    {
+        await PublishAndWaitAsync(new ClaimStatusChanged(7, "CLM-2026-000007", 1, 10, 500m,
+            ClaimStatus.UnderReview, ClaimStatus.Approved, null, DateTime.UtcNow));
+
+        var email = Assert.Single(_smtp.Sent);
+        Assert.Equal("Good news: claim CLM-2026-000007 was approved", email.Subject);
+        Assert.Contains("Homeowners Preferred", email.TextBody);
+        Assert.True(_repo.Emails.ContainsKey("claim-status:7:Approved"));
+    }
+
+    [Fact]
+    public async Task A_payment_produces_a_receipt()
+    {
+        await PublishAndWaitAsync(new PaymentReceived(42, "PAY-00000042", 10, 1, 4, 89.99m, new DateOnly(2026, 11, 1),
+            new DateOnly(2026, 11, 2), DateTime.UtcNow, 1, 12, new DateOnly(2026, 12, 1), 89.99m));
+
+        Assert.Equal("Payment receipt PAY-00000042", Assert.Single(_smtp.Sent).Subject);
+    }
+
+    [Fact]
+    public async Task Reminders_respect_the_opt_out()
+    {
+        _repo.PaymentReminders[1] = false;
+
+        await PublishAndWaitAsync(new PaymentReminderDue(42, 10, 1, 4, new DateOnly(2026, 11, 5), 89.99m,
+            PaymentReminderStage.DueSoon, -3));
+
+        Assert.Empty(_smtp.Sent);
+    }
+
+    [Fact]
+    public async Task The_same_reminder_published_twice_is_emailed_once()
+    {
+        var reminder = new PaymentReminderDue(42, 10, 1, 4, new DateOnly(2026, 11, 2), 89.99m, PaymentReminderStage.DueToday, 0);
+
+        await PublishAndWaitAsync(reminder);
+        await PublishAndWaitAsync(reminder);     // e.g. the outbox republished it after a crash
+
+        Assert.Single(_smtp.Sent);
+    }
+
+    [Fact]
+    public async Task A_verification_link_goes_to_the_new_address()
+    {
+        await PublishAndWaitAsync(new EmailVerificationRequested(1, "Jane Doe", "jane.new@example.com", "tok",
+            EmailVerificationPurpose.EmailChange, DateTime.UtcNow.AddDays(1)));
+
+        var email = Assert.Single(_smtp.Sent);
+        Assert.Equal("jane.new@example.com", email.ToAddress);
+        Assert.Contains("http://app.test/verify-email?token=tok", email.TextBody);
+    }
+
+    [Fact]
+    public async Task An_active_policy_gets_a_welcome_email()
+    {
+        await PublishAndWaitAsync(new EnrollmentActivated(10, 1, 4, 99));
+
+        var email = Assert.Single(_smtp.Sent);
+        Assert.Equal("Your Homeowners Preferred policy is active", email.Subject);
+        Assert.Contains("$250,000.00", email.TextBody);
+    }
+}

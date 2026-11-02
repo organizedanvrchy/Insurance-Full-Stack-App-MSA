@@ -19,7 +19,7 @@ CREATE INDEX IX_Payments_EnrollmentId ON billing.PremiumPayments(EnrollmentId);
 GO
 
 /* Overdue is derived on read, so no job ever has to update it. An installment is Overdue only once
-   it is MORE than 5 days past its due date. To change the grace period, change the 5 here and nowhere else. */
+   it is MORE than 5 days past its due date. (002_notifications.sql moves the 5 into billing.ufn_OverdueGraceDays.) */
 CREATE OR ALTER VIEW billing.vw_PaymentDetails
 AS
 SELECT  PaymentId, EnrollmentId, DueDate, Amount, PaidDate,

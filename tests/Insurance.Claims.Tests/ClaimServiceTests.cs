@@ -1,7 +1,7 @@
 using Insurance.BuildingBlocks.Exceptions;
 using Insurance.BuildingBlocks.Security;
 using Insurance.Claims.DTOs;
-using Insurance.Claims.Enums;
+using Insurance.Claims.Contracts;
 using Insurance.Claims.Exceptions;
 using Insurance.Claims.Models;
 using Insurance.Claims.Services;
@@ -28,8 +28,9 @@ public class ClaimServiceTests
         // Customer 1 holds enrollment 1, customer 3 holds enrollment 5; both are active on plan 1 for a year.
         AddEnrollment(1, ownerId: 1);
         AddEnrollment(5, ownerId: 3);
-        _users.Users[1] = new UserAccount(1, "Cal Tester", "cal@test.example", UserRole.Customer, true);
-        _users.Users[7] = new UserAccount(7, "Ada Admin", "ada@test.example", UserRole.Admin, true);
+        _users.Users[1] = new UserAccount(1, "Cal Tester", "cal@test.example", UserRole.Customer, true, EmailVerified: true);
+        _users.Users[3] = new UserAccount(3, "Dee Tester", "dee@test.example", UserRole.Customer, true, EmailVerified: true);
+        _users.Users[7] = new UserAccount(7, "Ada Admin", "ada@test.example", UserRole.Admin, true, EmailVerified: true);
     }
 
     private void AddEnrollment(int id, int ownerId, EnrollmentStatus status = EnrollmentStatus.Active) =>
@@ -255,5 +256,19 @@ public class ClaimServiceTests
         var submitted = await _sut.GetAllAsync(ClaimStatus.Submitted);
 
         Assert.Single(submitted);
+    }
+
+    // ---------------- Email verification ----------------
+
+    [Fact]
+    public async Task A_customer_must_verify_their_email_before_filing_a_claim()
+    {
+        _users.Users[3] = _users.Users[3] with { EmailVerified = false };
+
+        var ex = await Assert.ThrowsAsync<EmailNotVerifiedException>(() => _sut.SubmitAsync(3, Submit()));
+
+        Assert.IsAssignableFrom<ForbiddenException>(ex);          // a 403
+        Assert.Contains("file a claim", ex.Message);
+        Assert.Empty(_repo.Claims);
     }
 }

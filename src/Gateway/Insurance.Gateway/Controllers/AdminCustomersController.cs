@@ -65,6 +65,7 @@ public class AdminCustomersController : ControllerBase
                 Email = c.Email,
                 Phone = c.Phone,
                 IsActive = c.IsActive,
+                EmailVerified = c.EmailVerified,
                 CreatedAt = c.CreatedAt,
                 ActivePolicies = policies.Result.GetValueOrDefault(c.UserId),
                 TotalClaims = counts?.TotalClaims ?? 0,
@@ -81,6 +82,7 @@ public class CustomerDto
     public string Email { get; set; } = string.Empty;
     public string? Phone { get; set; }
     public bool IsActive { get; set; }
+    public bool EmailVerified { get; set; }
     public DateTime CreatedAt { get; set; }
     public int ActivePolicies { get; set; }
     public int TotalClaims { get; set; }

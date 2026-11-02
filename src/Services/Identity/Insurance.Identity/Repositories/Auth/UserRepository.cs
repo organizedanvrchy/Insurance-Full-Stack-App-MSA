@@ -71,7 +71,26 @@ public class UserRepository : IUserRepository
         return list;
     }
 
-    private static User Map(SqlDataReader r) => new()
+    // Start an email change (null cancels one). Throws DuplicateEmailException if another account uses the address.
+    public async Task SetPendingEmailAsync(int userId, string? pendingEmail)
+    {
+        await using var conn = _db.Create();
+        await using var cmd = conn.StoredProc("accounts.usp_User_SetPendingEmail");
+        cmd.AddParam("@UserId",       SqlDbType.Int, userId);
+        cmd.AddParam("@PendingEmail", SqlDbType.NVarChar, pendingEmail, 256);
+
+        await conn.OpenAsync();
+        try
+        {
+            await cmd.ExecuteNonQueryAsync();
+        }
+        catch (SqlException ex) when (ex.Number == 50001)
+        {
+            throw new DuplicateEmailException(pendingEmail ?? "");
+        }
+    }
+
+    internal static User Map(SqlDataReader r) => new()
     {
         UserId       = r.GetInt32(r.GetOrdinal("UserId")),
         FullName     = r.GetString(r.GetOrdinal("FullName")),
@@ -81,7 +100,9 @@ public class UserRepository : IUserRepository
         Address      = r.GetStringOrNull("Address"),
         Role         = r.GetEnum<UserRole>("Role"),
         IsActive     = r.GetBoolean(r.GetOrdinal("IsActive")),
-        CreatedAt    = r.GetDateTime(r.GetOrdinal("CreatedAt"))
+        CreatedAt    = r.GetDateTime(r.GetOrdinal("CreatedAt")),
+        EmailVerifiedAt = r.GetUtcDateTimeOrNull("EmailVerifiedAt"),
+        PendingEmail = r.GetStringOrNull("PendingEmail")
     };
 
     // No password hash: this shape is for other services.
@@ -90,5 +111,6 @@ public class UserRepository : IUserRepository
         r.GetString(r.GetOrdinal("FullName")),
         r.GetString(r.GetOrdinal("Email")),
         r.GetEnum<UserRole>("Role"),
-        r.GetBoolean(r.GetOrdinal("IsActive")));
+        r.GetBoolean(r.GetOrdinal("IsActive")),
+        r.GetBoolean(r.GetOrdinal("EmailVerified")));
 }

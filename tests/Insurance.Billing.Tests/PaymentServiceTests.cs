@@ -105,4 +105,18 @@ public class PaymentServiceTests
 
         Assert.Equal(visible, schedule is not null);
     }
+
+    [Fact]
+    public async Task Paying_sends_the_owner_and_plan_along_for_the_emailed_receipt()
+    {
+        await _sut.PayAsync(100, userId: 1);
+
+        Assert.Equal((100, 1, 1), Assert.Single(_repo.Receipts));
+    }
+
+    [Fact]
+    public void Receipt_numbers_are_padded_payment_ids()
+    {
+        Assert.Equal("PAY-00000042", Insurance.Billing.Repositories.PaymentRepository.ReceiptNumber(42));
+    }
 }

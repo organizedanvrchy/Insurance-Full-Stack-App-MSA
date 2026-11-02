@@ -16,7 +16,11 @@ public class AuthServiceTests
 
     public AuthServiceTests()
     {
-        _sut = new AuthService(_users, new FakeTokenService());
+        var clock = new ManualClock();
+        var verification = new EmailVerificationService(_users, new FakeEmailTokenRepository(_users, clock), new FakeIdentityEvents(),
+            Microsoft.Extensions.Options.Options.Create(new EmailVerificationOptions()), clock,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<EmailVerificationService>.Instance);
+        _sut = new AuthService(_users, new FakeTokenService(), verification);
     }
 
     private static RegisterRequest NewRegistration(string email = "jane.doe@example.com") => new()

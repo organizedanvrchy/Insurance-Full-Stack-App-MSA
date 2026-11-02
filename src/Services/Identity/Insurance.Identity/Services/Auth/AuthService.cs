@@ -12,11 +12,13 @@ public class AuthService : IAuthService
 {
     private readonly IUserRepository _users;
     private readonly ITokenService _tokens;
+    private readonly IEmailVerificationService _verification;
 
-    public AuthService(IUserRepository users, ITokenService tokens)
+    public AuthService(IUserRepository users, ITokenService tokens, IEmailVerificationService verification)
     {
         _users = users;
         _tokens = tokens;
+        _verification = verification;
     }
 
     public async Task<AuthResponse> RegisterAsync(RegisterRequest request)
@@ -33,6 +35,9 @@ public class AuthService : IAuthService
         };
 
         user.UserId = await _users.CreateAsync(user);
+
+        // New accounts start unverified: they can sign in and browse, but not enroll or file claims yet.
+        await _verification.SendRegistrationLinkAsync(user);
         return BuildResponse(user);
     }
 
@@ -59,7 +64,7 @@ public class AuthService : IAuthService
         return new AuthResponse { Token = token, ExpiresAtUtc = expires, User = MapToDto(user) };
     }
 
-    private static UserDto MapToDto(User u) => new()
+    internal static UserDto MapToDto(User u) => new()
     {
         UserId = u.UserId,
         FullName = u.FullName,
@@ -68,6 +73,8 @@ public class AuthService : IAuthService
         Phone = u.Phone,
         Address = u.Address,
         // ADO.NET returns DATETIME2 with an unspecified kind, but the column holds UTC.
-        CreatedAt = DateTime.SpecifyKind(u.CreatedAt, DateTimeKind.Utc)
+        CreatedAt = DateTime.SpecifyKind(u.CreatedAt, DateTimeKind.Utc),
+        EmailVerified = u.EmailVerified,
+        PendingEmail = u.PendingEmail
     };
 }
