@@ -129,6 +129,7 @@ public class TemplateTests
     [Theory]
     [InlineData(ClaimStatus.Approved, "Good news: claim CLM-1 was approved")]
     [InlineData(ClaimStatus.Rejected, "An update on your claim CLM-1")]
+    [InlineData(ClaimStatus.Paid, "Your payment for claim CLM-1 is on its way")]
     public void Each_claim_status_has_its_own_subject(ClaimStatus status, string subject)
     {
         var e = new ClaimStatusChanged(1, "CLM-1", 1, 10, 500m, ClaimStatus.Submitted, status, null, DateTime.UtcNow);
@@ -200,7 +201,18 @@ public class TemplateTests
     public void A_received_claim_sets_expectations_for_the_review()
     {
         Assert.Contains("Your claim is under review and we'll email you when a decision has been made. "
-            + "Please allow at least 2 business days for a response.", Render("claim-received").Text);
+            + "Please allow at least 5-7 business days for a response.", Render("claim-received").Text);
+    }
+
+    [Fact]
+    public void An_approval_says_when_the_payment_goes_out_and_the_payment_email_when_the_check_arrives()
+    {
+        ClaimStatusChanged To(ClaimStatus s) => new(1, "CLM-1", 1, 10, 500m, ClaimStatus.UnderReview, s, null, DateTime.UtcNow);
+
+        Assert.Contains("Your claim has been processed and approved. Your payment of $500.00 will be sent out in about 2-3 business days",
+            _templates.ClaimStatusChanged("Jane Doe", To(ClaimStatus.Approved), "Gold").Text);
+        Assert.Contains("You'll receive your check in about 5-10 business days.",
+            _templates.ClaimStatusChanged("Jane Doe", To(ClaimStatus.Paid), "Gold").Text);
     }
 
     [Fact]

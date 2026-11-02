@@ -50,7 +50,7 @@ The application simulates the core operations of an insurer:
 3. The customer **enrolls** from the quote. A **saga** across three services reserves the quote, creates the policy and its monthly **premium schedule**, and confirms the quote.
 4. The customer pays installments, and can **file claims** against active, paid-up policies.
 5. Admins move claims through a **review workflow**, and manage customer access.
-6. Along the way, customers get **emails**: a verification link at sign-up, a confirmation for each policy, a receipt for each payment (or a notice if it's declined), reminders before and after premiums are due, and the decision on each claim.
+6. Along the way, customers get **emails**: a verification link at sign-up, a confirmation for each policy, a receipt for each payment (or a notice if it's declined), reminders before and after premiums are due, and the decision and payment on each claim.
 
 The backend is a set of **microservices**: seven ASP.NET Core services, each with its own database, behind an **API gateway + BFF**. Services call each other over HTTP for queries and exchange **events over RabbitMQ** for everything that changes state in another service. The Angular frontend talks only to the gateway. Inside each service, data access uses **ADO.NET with parameterized stored procedures**.
 
@@ -70,7 +70,7 @@ The backend is a set of **microservices**: seven ASP.NET Core services, each wit
 - **Payment alerts:** a "payment due soon" or "payment overdue" badge on each policy.
 - **File claims** with incident date, amount and description. Eligibility is validated against the policy.
 - Track claims through the review workflow and read the reviewer's notes.
-- **Email notifications:** a receipt for every payment and a notice when one is declined; reminders 3 days before a premium is due, on the due date, when it becomes overdue, and 5 and 10 days after that; claim received, then the decision (approved, or rejected with the reason); policy activated or cancelled. Payment reminders are opt-in/out at sign-up and on the profile page.
+- **Email notifications:** a receipt for every payment and a notice when one is declined; reminders 3 days before a premium is due, on the due date, when it becomes overdue, and 5 and 10 days after that; claim received, the decision (approved, or rejected with the reason), and when an approved claim's payment is sent; policy activated or cancelled. Payment reminders are opt-in/out at sign-up and on the profile page.
 
 ### Administrators
 - Create, edit and deactivate plans. Deactivated plans disappear for customers but remain on existing policies.
@@ -426,7 +426,7 @@ flowchart LR
 | Payment receipt | Every installment paid at checkout (receipt number, payment method, installment *n* of *N*, next payment, link to the in-app receipt) | No |
 | Payment didn't go through | A declined or failed checkout attempt (the reason, nothing charged, a "try again" link) | No |
 | Payment reminder | 3 days before, on the due date, when Overdue, +5 days, +10 days | **Yes**: at sign-up, and in the profile's "Email settings" |
-| Claim received / Claim approved / Claim rejected (with the reason) | When a claim is filed ("a decision will follow within 2 business days"), and when it's approved or rejected. Moving to "under review" or "paid" sends nothing | No |
+| Claim received / approved / rejected (with the reason) / payment sent | Filed ("allow 5-7 business days for a decision"); approved ("payment goes out in about 2-3 business days"); rejected; paid ("your check arrives in about 5-10 business days"). Moving to "under review" sends nothing | No |
 
 How it stays reliable:
 

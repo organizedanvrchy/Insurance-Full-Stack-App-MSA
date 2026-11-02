@@ -32,8 +32,8 @@ public class ClaimSubmittedConsumer : IConsumer<ClaimSubmitted>
 }
 
 /// <summary>
-/// The decision: one email when a claim is approved or rejected (a claim can only move forward, so each happens
-/// once). "Under review" and "paid" send nothing; the claim-received email already says a decision will follow.
+/// One email each when a claim is approved, rejected or paid (a claim only moves forward, so each happens once).
+/// "Under review" sends nothing: the claim-received email already says a decision will follow.
 /// </summary>
 public class ClaimStatusChangedConsumer : IConsumer<ClaimStatusChanged>
 {
@@ -51,7 +51,7 @@ public class ClaimStatusChangedConsumer : IConsumer<ClaimStatusChanged>
     public Task Consume(ConsumeContext<ClaimStatusChanged> context)
     {
         var e = context.Message;
-        if (e.NewStatus is not (ClaimStatus.Approved or ClaimStatus.Rejected))
+        if (e.NewStatus is not (ClaimStatus.Approved or ClaimStatus.Rejected or ClaimStatus.Paid))
             return Task.CompletedTask;
 
         return _dispatcher.SendAsync(new Notification(

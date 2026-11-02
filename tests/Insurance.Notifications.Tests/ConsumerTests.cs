@@ -75,14 +75,22 @@ public class ConsumerTests : IAsyncLifetime
         Assert.True(_repo.Emails.ContainsKey("claim-status:7:Approved"));
     }
 
-    [Theory]
-    [InlineData(ClaimStatus.Submitted, ClaimStatus.UnderReview)]
-    [InlineData(ClaimStatus.Approved, ClaimStatus.Paid)]
-    public async Task Only_the_decision_on_a_claim_is_emailed(ClaimStatus from, ClaimStatus to)
+    [Fact]
+    public async Task Moving_a_claim_to_under_review_sends_no_email()
     {
-        await PublishAndWaitAsync(new ClaimStatusChanged(7, "CLM-2026-000007", 1, 10, 500m, from, to, null, DateTime.UtcNow));
+        await PublishAndWaitAsync(new ClaimStatusChanged(7, "CLM-2026-000007", 1, 10, 500m,
+            ClaimStatus.Submitted, ClaimStatus.UnderReview, null, DateTime.UtcNow));
 
         Assert.Empty(_smtp.Sent);
+    }
+
+    [Fact]
+    public async Task A_paid_claim_tells_the_customer_the_check_is_coming()
+    {
+        await PublishAndWaitAsync(new ClaimStatusChanged(9, "CLM-2026-000009", 1, 10, 500m,
+            ClaimStatus.Approved, ClaimStatus.Paid, null, DateTime.UtcNow));
+
+        Assert.Equal("Your payment for claim CLM-2026-000009 is on its way", Assert.Single(_smtp.Sent).Subject);
     }
 
     [Fact]
