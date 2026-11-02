@@ -11,8 +11,9 @@ export type EnrollmentStatus = (typeof ENROLLMENT_STATUSES)[number];
 export const PAYMENT_STATUSES = ['Pending', 'Paid', 'Overdue'] as const;
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 
-export const CLAIM_STATUSES = ['Submitted', 'UnderReview', 'Approved', 'Rejected', 'Paid'] as const;
+export const CLAIM_STATUSES = ['Submitted', 'UnderReview', 'NeedsMoreInfo', 'Approved', 'Rejected', 'Paid'] as const;
 export type ClaimStatus = (typeof CLAIM_STATUSES)[number];
+export const OPEN_CLAIM_STATUSES: readonly ClaimStatus[] = ['Submitted', 'UnderReview', 'NeedsMoreInfo'];
 
 // Computed by the API (not stored in the database):
 // what a customer needs to do about premiums.

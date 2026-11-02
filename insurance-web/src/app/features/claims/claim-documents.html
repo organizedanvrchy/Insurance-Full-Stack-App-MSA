@@ -1,0 +1,36 @@
+<div>
+  <strong>Documents</strong>
+
+  @if (error()) {
+  <div class="alert" role="alert">{{ error() }}</div>
+  }
+
+  @if (loading()) {
+  <p class="muted">Loading documents…</p>
+  } @else {
+  <ul class="document-list">
+    @for (d of documents(); track d.claimDocumentId) {
+    <li>
+      <span>
+        {{ d.fileName }}
+        <span class="muted">({{ sizeLabel(d.sizeBytes) }}, added {{ d.uploadedAt | date: 'mediumDate' }})</span>
+      </span>
+      <button class="btn-sm" type="button" [attr.aria-label]="'Download ' + d.fileName" (click)="download(d)">
+        Download
+      </button>
+    </li>
+    } @empty {
+    <li class="muted">No documents have been added.</li>
+    }
+  </ul>
+  }
+
+  @if (canAdd()) {
+  <div class="field add-document">
+    <label [attr.for]="'add-document-' + claimId()">Add documents</label>
+    <input [id]="'add-document-' + claimId()" #fileInput type="file" multiple [accept]="accept" [disabled]="busy()"
+      (change)="upload(fileInput)" />
+    <small class="muted">PDF, JPG or PNG, 10 MB each, up to 5 on a claim.</small>
+  </div>
+  }
+</div>

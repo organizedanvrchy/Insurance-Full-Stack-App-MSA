@@ -3,7 +3,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { BRAND } from '../../core/brand';
-import { CLAIM_STATUSES, ClaimStatus } from '../../core/models/enums';
+import { CLAIM_STATUSES, ClaimStatus, OPEN_CLAIM_STATUSES } from '../../core/models/enums';
 import { AuthService } from '../../core/services/auth.service';
 import { ClaimService } from '../../core/services/claim.service';
 import { CustomerService } from '../../core/services/customer.service';
@@ -65,7 +65,7 @@ export class DashboardComponent {
   overdue = computed(() => this.activeEnrollments().filter((e) => e.paymentAlert === 'Overdue'));
   dueSoon = computed(() => this.activeEnrollments().filter((e) => e.paymentAlert === 'DueSoon'));
   openClaims = computed(
-    () => this.myClaims().filter((c) => c.status === 'Submitted' || c.status === 'UnderReview').length,
+    () => this.myClaims().filter((c) => OPEN_CLAIM_STATUSES.includes(c.status)).length,
   );
   claimUpdates = computed(() =>
     this.myClaims()

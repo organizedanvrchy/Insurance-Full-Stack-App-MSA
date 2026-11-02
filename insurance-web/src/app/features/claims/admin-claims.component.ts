@@ -5,10 +5,11 @@ import { ClaimService } from '../../core/services/claim.service';
 import { getErrorMessage } from '../../core/utils/http-error';
 import { CLAIM_ACTION_LABELS, claimBadgeClass, statusLabel } from '../../core/utils/labels';
 import { Claim } from '../../core/models/claim/claim';
+import { ClaimDocumentsComponent } from './claim-documents.component';
 
 @Component({
   selector: 'app-admin-claims',
-  imports: [CurrencyPipe, DatePipe],
+  imports: [CurrencyPipe, DatePipe, ClaimDocumentsComponent],
   templateUrl: "admin-claims.html",
   styleUrl: "admin-claims.component.css",
 })
@@ -40,6 +41,10 @@ export class AdminClaimsComponent {
     const trimmed = notes.trim();
     if (status === 'Rejected' && !trimmed) {
       this.error.set('Please enter a reason before rejecting this claim.');
+      return;
+    }
+    if (status === 'NeedsMoreInfo' && !trimmed) {
+      this.error.set('Please tell the customer what information you need.');
       return;
     }
 

@@ -78,7 +78,7 @@ flowchart TD
 | **Quotes** | `InsuranceQuotes` | Rating engine, quotes and their reservations | `/api/quotes/*` |
 | **Enrollments** | `InsuranceEnrollments` | Policies held by customers, the enrollment saga, the outbox | `/api/enrollments/*` |
 | **Billing** | `InsuranceBilling` | Premium schedules and payments | `/api/enrollments/{id}/payments`, `/api/payments/*` |
-| **Claims** | `InsuranceClaims` | Claims and the review workflow | `/api/claims/*` |
+| **Claims** | `InsuranceClaims` plus document storage | Claims, their documents and the review workflow | `/api/claims/*` |
 | **Gateway + BFF** | none | Routing, the active-account check, composition | `/api/admin/customers` (composed) |
 
 ### 3.2 How services talk
@@ -241,6 +241,7 @@ erDiagram
     POLICIES ||--o{ QUOTES : "is priced by"
     ENROLLMENTS ||--o{ PREMIUM_PAYMENTS : "is billed by"
     ENROLLMENTS ||--o{ CLAIMS : "is the basis of"
+    CLAIMS ||--o{ CLAIM_DOCUMENTS : "is supported by"
     ENROLLMENTS |o--o| QUOTES : "created from"
 
     USERS {
@@ -311,9 +312,19 @@ erDiagram
         datetime ReviewedAt
         int ReviewedByUserId FK
     }
+    CLAIM_DOCUMENTS {
+        int ClaimDocumentId PK
+        int ClaimId FK
+        string FileName "for display only"
+        string ContentType "detected from the contents"
+        int SizeBytes
+        string StorageKey UK "generated, locates the file"
+        int UploadedByUserId FK
+        datetime UploadedAt
+    }
 ```
 
-> In the database the payments table is named `PremiumPayments`. It is written with an underscore in the diagram only because Mermaid requires it.
+> In the database the payments table is named `PremiumPayments` and the documents table `ClaimDocuments`. They are written with an underscore in the diagram only because Mermaid requires it.
 
 **One database per service.** `accounts.Users` lives in `InsuranceIdentity`, `catalog.Policies` in `InsuranceCatalog`, `quotes.Quotes` in `InsuranceQuotes`, `enrollments.Enrollments` (and `dbo.OutboxMessages`) in `InsuranceEnrollments`, `billing.PremiumPayments` in `InsuranceBilling`, and `claims.Claims` (and `claims.ClaimNumberSeq`) in `InsuranceClaims`. The relationships in the diagram are logical: a column holds another service's id, but **there are no foreign keys between services**, because no database can enforce them across databases. The services keep them consistent through the rules in section 11.
 
@@ -325,6 +336,7 @@ erDiagram
 - **Derived statuses.** `Expired` (an enrollment past its end date) and `Overdue` (a payment more than 5 days late) are computed in views at read time, so no background job has to keep a column in sync.
 - **Constraints as a backstop.** `CHECK` constraints mirror each C# enum (roles, plan types, statuses), and `UNIQUE` constraints protect emails and claim numbers.
 - **Quotes keep an audit trail.** The raw answers and the factor breakdown are stored as JSON (guarded by `ISJSON` checks), so any price can be explained later.
+- **Claim documents.** The table holds a file's details and `StorageKey`; the file itself is in document storage (`IDocumentStorage`), so the database stays small. `ClaimDocuments.ClaimId` is a real foreign key, because both tables belong to the Claims service.
 - **Claim numbers** come from a database `SEQUENCE` (`claims.ClaimNumberSeq`), formatted `CLM-<year>-<6 digits>`. A rolled-back insert can leave a gap, which is normal.
 
 ## 6. Domain workflows
@@ -352,12 +364,19 @@ stateDiagram-v2
     Submitted --> UnderReview : admin starts review
     UnderReview --> Approved : admin approves
     UnderReview --> Rejected : admin rejects with a reason
+    UnderReview --> NeedsMoreInfo : admin asks for more, with a note
+    NeedsMoreInfo --> UnderReview : customer sends it back, or admin resumes
+    NeedsMoreInfo --> Rejected : admin rejects with a reason
     Approved --> Paid : admin marks as paid
     Rejected --> [*]
     Paid --> [*]
 ```
 
 The allowed moves live in **one** place, the `ClaimStatusTransitions` class. The API returns `allowedNextStatuses` on each claim for admins, so the UI shows only legal buttons and holds no copy of the rules. `usp_Claim_Review` takes the status the caller *believes* the claim is in (`@FromStatus`) and only updates if it still matches. This is optimistic concurrency: two admins acting on the same claim cannot silently overwrite each other, and the loser receives a `409`.
+
+**Evidence is judged per claim, not per document.** An admin reads the documents and decides on the claim as a whole. If the evidence isn't enough, they move the claim to `NeedsMoreInfo` with a note saying what's needed. The customer sees the note on My claims, adds documents, and sends the claim back with `POST /api/claims/{id}/send-to-reviewer`, which is why that move is the one transition not made through `usp_Claim_Review`. If the customer never responds, the admin can reject the claim.
+
+**Claim documents.** Customers can add documents to their own claim until a decision is made (`ClaimStatusTransitions.AcceptsDocuments`): up to 5 per claim, 10 MB each, one file per request. Documents can't be deleted, so the evidence an admin reviewed stays on the claim. `ClaimDocumentService` saves the file first and then its row, and removes the file if the row fails, so a row always has a file. A claim is created before its documents are uploaded; if an upload fails, the customer is sent to My claims to retry, so they never submit the claim twice.
 
 **Claim eligibility.** Rules 1 to 4 need other services' data, so `ClaimService` checks them by asking those services. Rule 5 needs a lock on the Claims service's own rows, so it stays in `claims.usp_Claim_Submit`:
 
@@ -471,6 +490,8 @@ Roles are enforced with `[Authorize(Roles = ...)]`, and **ownership is enforced 
 | View an enrollment or payment schedule | | yes (own) | yes (any) |
 | File claims, list own claims | | yes | |
 | List all claims, review claims | | | yes |
+| Add documents to a claim | | yes (own, until decided) | |
+| View and download a claim's documents | | yes (own) | yes (any) |
 | Manage customer accounts | | | yes |
 
 ### Other protections
@@ -480,6 +501,7 @@ Roles are enforced with `[Authorize(Roles = ...)]`, and **ownership is enforced 
 - **Mass assignment:** request DTOs expose only the fields a client may set. For example, `RegisterRequest` has no `Role`, and the service forces `Customer`. The caller's id always comes from the token, never from the request.
 - **Data exposure:** responses use DTOs, so `PasswordHash` never leaves the Identity service.
 - **Enums on the wire:** values travel as names, and unknown names or numbers are rejected with a `400`. Required enum and boolean request fields are nullable plus `[Required]`, so a missing field cannot silently become a default (such as "deactivate").
+- **Uploaded files:** a file's type is decided from its first bytes (PDF, JPEG or PNG), not its name or the browser's content type. Files are stored under a generated key, never the uploaded name, and are always served as downloads with `X-Content-Type-Options: nosniff`, so they can't run in the application's origin. There is no malware scanning yet.
 - **Secrets:** the JWT key and connection strings are kept in user secrets or `deploy/.env` locally (ignored by Git), and in a secret store when hosted. They are never committed.
 - **CORS:** handled by the gateway; allowed origins come from configuration (`Cors:AllowedOrigins`), not code.
 
@@ -541,13 +563,15 @@ Some rules read another service's data, so they are checked in a service's C# co
 | 50017 | Quotes: `quotes.usp_Quote_Reserve` | Quote has expired | `BusinessRuleException` | 400 |
 | 50018 | Quotes: `quotes.usp_Quote_Reserve` | Quote already used, or held by an enrollment in progress | `ConflictException` | 409 |
 | 50019 | Claims: `claims.usp_Claim_Review` | Approving without `@CoverageAmount` (a bug in the caller, never a user error) | none | 500 |
+| 50020 | Claims: `claims.usp_ClaimDocument_Add` | The claim already has the maximum number of documents | `ClaimConflictException` | 409 |
+| 50021 | Claims: `claims.usp_Claim_SendToReviewer` | The claim isn't waiting on the customer (and checked first by `ClaimService`) | `ClaimConflictException` | 409 |
 | 50100 | `deploy/seed/demo-data.sql` | Required plans missing (script only, never raised by the API) | none | none |
 
 **SQL Server engine errors also handled:** `2601` and `2627` (unique index or constraint violation), which `UserRepository` maps to `DuplicateEmailException` so two simultaneous sign-ups with the same email still get a clean `409`.
 
 **Adding a new error number**
 
-1. Take the next unused number (**50020**).
+1. Take the next unused number (**50022**).
 2. `THROW` it in the service's stored procedure with a user-friendly message.
 3. Add a `catch (SqlException ex) when (ex.Number == 50019)` in the repository that throws a typed exception.
 4. If the exception is new, derive it from `BusinessRuleException`, `NotFoundException` or `ConflictException`.
@@ -564,7 +588,7 @@ Each service creates its own database from the scripts in its `Database/` folder
 | `InsuranceQuotes` | `quotes.Quotes` | `usp_Quote_Create`, `usp_Quote_GetById`, `usp_Quote_Reserve`, `usp_Quote_Release`, `usp_Quote_MarkUsed` |
 | `InsuranceEnrollments` | `enrollments.Enrollments`, `enrollments.vw_EnrollmentDetails` (derived `Expired`), `dbo.OutboxMessages` | `usp_Enrollment_CreatePending`, `usp_Enrollment_Complete`, `usp_Enrollment_GetByUser`, `usp_Enrollment_GetById`, `usp_Enrollment_GetMany`, `usp_Enrollment_CountActiveByUser`, `usp_Enrollment_Cancel` |
 | `InsuranceBilling` | `billing.PremiumPayments`, `billing.vw_PaymentDetails` (derived `Overdue`, with the grace period) | `usp_Premium_CreateSchedule` (idempotent), `usp_Premium_RemoveUnpaid`, `usp_Premium_GetSummaries`, `usp_Payment_GetByEnrollment`, `usp_Payment_GetById`, `usp_Payment_Pay` |
-| `InsuranceClaims` | `claims.Claims`, `claims.ClaimNumberSeq`, `claims.vw_ClaimDetails` | `usp_Claim_Submit`, `usp_Claim_GetByUser`, `usp_Claim_GetAll`, `usp_Claim_GetById`, `usp_Claim_Review`, `usp_Claim_CountByUser` |
+| `InsuranceClaims` | `claims.Claims`, `claims.ClaimDocuments`, `claims.ClaimNumberSeq`, `claims.vw_ClaimDetails` | `usp_Claim_Submit`, `usp_Claim_GetByUser`, `usp_Claim_GetAll`, `usp_Claim_GetById`, `usp_Claim_Review`, `usp_Claim_SendToReviewer`, `usp_Claim_CountByUser`, `usp_ClaimDocument_Add`, `usp_ClaimDocument_GetByClaim`, `usp_ClaimDocument_GetById` |
 
 ## 11. Consistency: transactions, the saga and the outbox
 
@@ -578,6 +602,7 @@ A transaction never spans two services. Each service keeps its own invariants wi
 | Cancel | Enrollments: `usp_Enrollment_Cancel` | The `WHERE` clause enforces ownership and `Active` status; `EnrollmentCancelled` commits with it through the outbox. Billing removes the unpaid installments when it receives it |
 | Pay | Billing: `PaymentService`; `usp_Payment_Pay` | Ownership and status come from the Enrollments service. The proc takes `UPDLOCK` on the payment, so two "Pay" clicks cannot both succeed, and re-checks "already paid" and ordering |
 | File a claim | Claims: `ClaimService`; `usp_Claim_Submit` | Eligibility from other services. The proc takes `UPDLOCK, HOLDLOCK` on the enrollment's approved claims while checking remaining coverage |
+| Add a claim document | Claims: `ClaimDocumentService`; `usp_ClaimDocument_Add` | Owner, status and file checks in the service. The proc takes `UPDLOCK, HOLDLOCK` on the claim's documents while checking the limit |
 | Review a claim | Claims: `usp_Claim_Review` | **Optimistic concurrency** through `WHERE Status = @FromStatus`. On approval, locks the enrollment's claims and re-checks remaining coverage against the plan coverage the service passes in |
 | Set customer active | Identity: `usp_Customer_SetActive` | A single `UPDATE`, restricted to `Role = 'Customer'` so admins cannot be deactivated through this path |
 
@@ -676,7 +701,8 @@ Unit tests (xUnit) target the layers that contain decisions, using small in-memo
 | Claim transitions | Every allowed and blocked move, and that every status has a rule |
 | `AuthService` | Hash stored (never plain text), normalized email, forced customer role, inactive users refused |
 | `EnrollmentService` | Start-date window edges, alert thresholds, ownership, cancellation, the saga (completed, still pending, failed), releasing the quote when the plan or the duplicate check refuses, degradation when Billing is down |
-| `ClaimService` | Workflow enforcement, reason required to reject, the `@FromStatus` guard, visibility rules, claim eligibility, composing names and plans from other services |
+| `ClaimDocumentService` | File type from contents, size and count limits, ownership, a saved file removed if its row fails, a document reached only through its own claim |
+| `ClaimService` | Workflow enforcement, the request for more information, reason required to reject, the `@FromStatus` guard, visibility rules, claim eligibility, composing names and plans from other services |
 | `PaymentService` | Ownership, already paid, cancelled, pending and expired policies |
 | `InternalQuotesController` | A quote can only be reserved for the caller |
 | Service boundaries | No service references another's implementation, and no service's SQL touches another service's schema |
@@ -685,7 +711,7 @@ Unit tests (xUnit) target the layers that contain decisions, using small in-memo
 
 ## 16. Limitations and future work
 
-**Limitations:** simulated payments (cancelling deletes unpaid installments rather than voiding them), hard-coded illustrative rating factors, UTC-based date rules, JWT in `localStorage` with no refresh tokens, no pagination, attachments or notifications, no frontend tests, and the end-to-end suite is not yet automated in CI.
+**Limitations:** simulated payments (cancelling deletes unpaid installments rather than voiding them), hard-coded illustrative rating factors, UTC-based date rules, JWT in `localStorage` with no refresh tokens, no pagination or notifications, no malware scanning of claim documents, local document storage only (no blob storage yet), no frontend tests, and the end-to-end suite is not yet automated in CI.
 
 **Platform next steps:**
 
@@ -700,6 +726,6 @@ Unit tests (xUnit) target the layers that contain decisions, using small in-memo
 1. Store rating factors in tables with an admin editor.
 2. Pagination and sorting for large lists.
 3. Admin dashboard statistics and a "My quotes" screen.
-4. Claim attachments (blob storage) and email notifications.
+4. Blob storage for claim documents, and email notifications.
 5. Refresh tokens or httpOnly cookie sessions.
 6. Integration tests with a disposable database, and a CI pipeline on GitHub Actions.

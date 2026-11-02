@@ -121,10 +121,13 @@ services:
     environment:
       <<: *common-env
       ConnectionStrings__Database: Server=sqlserver;Database=InsuranceClaims;User Id=sa;Password=${SA_PASSWORD};TrustServerCertificate=True;
+      ClaimDocuments__RootPath: /data/claim-documents
       Services__Identity: http://identity:8080/
       Services__Catalog: http://catalog:8080/
       Services__Enrollments: http://enrollments:8080/
       Services__Billing: http://billing:8080/
+    volumes:
+      - claimdocuments:/data/claim-documents   # uploaded files, kept when the container is recreated
 
   gateway:
     <<: *service
@@ -152,3 +155,4 @@ services:
 
 volumes:
   sqldata:
+  claimdocuments:
