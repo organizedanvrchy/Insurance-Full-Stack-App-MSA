@@ -43,7 +43,10 @@ CREATE TABLE billing.PaymentReminders (
 );
 GO
 
-CREATE INDEX IX_Payments_Unpaid_DueDate ON billing.PremiumPayments(DueDate) INCLUDE (EnrollmentId, Amount) WHERE PaidDate IS NULL;
+-- For the reminder job's "unpaid installments due between two dates". Deliberately NOT a filtered index
+-- (WHERE PaidDate IS NULL): those make every INSERT/UPDATE from a session with QUOTED_IDENTIFIER OFF fail,
+-- which is sqlcmd's default, and would break deploy/seed/demo-data.sql.
+CREATE INDEX IX_Payments_DueDate ON billing.PremiumPayments(DueDate) INCLUDE (EnrollmentId, Amount, PaidDate);
 GO
 
 /* Unpaid installments due between @FromDate and @ToDate, with the first day each one counts as Overdue

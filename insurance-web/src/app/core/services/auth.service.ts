@@ -7,6 +7,7 @@ import { User } from '../models/auth/user';
 import { RegisterRequest } from '../models/auth/registerRequest';
 import { AuthResponse } from '../models/auth/authResponse';
 import { LoginRequest } from '../models/auth/loginRequest';
+import { ChangeEmailRequest, VerifyEmailResponse } from '../models/auth/emailVerification';
 
 const TOKEN_KEY = 'ins_token';
 const USER_KEY = 'ins_user';
@@ -22,6 +23,12 @@ export class AuthService {
   readonly isLoggedIn = computed(() => this._user() !== null);
   readonly isAdmin = computed(() => this._user()?.role === 'Admin');
 
+  /** A signed-in customer who hasn't clicked the link in their verification email yet. */
+  readonly needsEmailVerification = computed(() => {
+    const user = this._user();
+    return user !== null && user.role === 'Customer' && user.emailVerified === false;
+  });
+
   get token(): string | null {
     return localStorage.getItem(TOKEN_KEY);
   }
@@ -36,6 +43,50 @@ export class AuthService {
     return this.http
       .post<AuthResponse>(`${API_URL}/auth/login`, req)
       .pipe(tap((res) => this.setSession(res)));
+  }
+
+  // ---------------- Email verification ----------------
+
+  /** Uses the token from the emailed link. Works whether or not anyone is signed in. */
+  verifyEmail(token: string): Observable<VerifyEmailResponse> {
+    return this.http
+      .post<VerifyEmailResponse>(`${API_URL}/auth/verify-email`, { token })
+      .pipe(tap(() => this.refreshUser()));
+  }
+
+  resendVerification(): Observable<void> {
+    return this.http.post<void>(`${API_URL}/auth/resend-verification`, {});
+  }
+
+  /** Starts a change: the new address must be confirmed from its inbox before it's used. */
+  changeEmail(req: ChangeEmailRequest): Observable<User> {
+    return this.http
+      .post<User>(`${API_URL}/auth/change-email`, req)
+      .pipe(tap((user) => this.updateUser(user)));
+  }
+
+  cancelEmailChange(): Observable<User> {
+    return this.http
+      .delete<User>(`${API_URL}/auth/change-email`)
+      .pipe(tap((user) => this.updateUser(user)));
+  }
+
+  /**
+   * Reloads the signed-in user from the server (e.g. after they verified their email in another tab).
+   * Errors are ignored: a 401 is already handled by the interceptor.
+   */
+  refreshUser(): void {
+    if (!this.token) return;
+    this.http.get<User>(`${API_URL}/auth/me`).subscribe({
+      next: (user) => this.updateUser(user),
+      error: () => {},
+    });
+  }
+
+  private updateUser(user: User): void {
+    if (!this._user()) return;
+    localStorage.setItem(USER_KEY, JSON.stringify(user));
+    this._user.set(user);
   }
 
   logout(): void {

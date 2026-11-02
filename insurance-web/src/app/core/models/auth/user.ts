@@ -5,4 +5,6 @@ export interface User {
   fullName: string;
   email: string;
   role: UserRole;
+  emailVerified: boolean;          // enrolling and filing claims need a verified email
+  pendingEmail?: string | null;    // a requested email change, waiting to be confirmed
 }

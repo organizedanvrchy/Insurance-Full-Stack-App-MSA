@@ -76,6 +76,10 @@ public class PaymentRepository : IPaymentRepository
         }
 
         // The receipt: where this installment sits in the schedule and what's due next.
+        // (Read and close the reader first: the outbox insert needs the same connection.)
+        int installmentNumber, installmentCount;
+        DateOnly? nextDueDate;
+        decimal? nextDueAmount;
         await using (var info = conn.StoredProc("billing.usp_Payment_GetReceiptInfo"))
         {
             info.Transaction = tx;
@@ -83,22 +87,27 @@ public class PaymentRepository : IPaymentRepository
             await using var reader = await info.ExecuteReaderAsync();
             await reader.ReadAsync();
 
-            var nextDueOrdinal = reader.GetOrdinal("NextDueDate");
-            await _outbox.EnqueueAsync(conn, tx, new PaymentReceived(
-                paid.PaymentId,
-                ReceiptNumber(paid.PaymentId),
-                paid.EnrollmentId,
-                userId,
-                policyId,
-                paid.Amount,
-                paid.DueDate,
-                paid.PaidDate!.Value,
-                DateTime.UtcNow,
-                reader.GetInt32(reader.GetOrdinal("InstallmentNumber")),
-                reader.GetInt32(reader.GetOrdinal("InstallmentCount")),
-                reader.IsDBNull(nextDueOrdinal) ? null : reader.GetDateOnly("NextDueDate"),
-                reader.IsDBNull(nextDueOrdinal) ? null : reader.GetDecimal(reader.GetOrdinal("NextDueAmount"))));
+            installmentNumber = reader.GetInt32(reader.GetOrdinal("InstallmentNumber"));
+            installmentCount = reader.GetInt32(reader.GetOrdinal("InstallmentCount"));
+            var hasNext = !reader.IsDBNull(reader.GetOrdinal("NextDueDate"));
+            nextDueDate = hasNext ? reader.GetDateOnly("NextDueDate") : null;
+            nextDueAmount = hasNext ? reader.GetDecimal(reader.GetOrdinal("NextDueAmount")) : null;
         }
+
+        await _outbox.EnqueueAsync(conn, tx, new PaymentReceived(
+            paid.PaymentId,
+            ReceiptNumber(paid.PaymentId),
+            paid.EnrollmentId,
+            userId,
+            policyId,
+            paid.Amount,
+            paid.DueDate,
+            paid.PaidDate!.Value,
+            DateTime.UtcNow,
+            installmentNumber,
+            installmentCount,
+            nextDueDate,
+            nextDueAmount));
 
         await tx.CommitAsync();
         _outbox.Notify();
