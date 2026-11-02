@@ -76,6 +76,34 @@ public class ConsumerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Moving_a_claim_to_under_review_sends_no_email()
+    {
+        await PublishAndWaitAsync(new ClaimStatusChanged(7, "CLM-2026-000007", 1, 10, 500m,
+            ClaimStatus.Submitted, ClaimStatus.UnderReview, null, DateTime.UtcNow));
+
+        Assert.Empty(_smtp.Sent);
+    }
+
+    [Fact]
+    public async Task A_paid_claim_tells_the_customer_the_check_is_coming()
+    {
+        await PublishAndWaitAsync(new ClaimStatusChanged(9, "CLM-2026-000009", 1, 10, 500m,
+            ClaimStatus.Approved, ClaimStatus.Paid, null, DateTime.UtcNow));
+
+        Assert.Equal("Your payment for claim CLM-2026-000009 is on its way", Assert.Single(_smtp.Sent).Subject);
+    }
+
+    [Fact]
+    public async Task A_rejection_is_emailed_with_the_reason()
+    {
+        await PublishAndWaitAsync(new ClaimStatusChanged(8, "CLM-2026-000008", 1, 10, 500m,
+            ClaimStatus.UnderReview, ClaimStatus.Rejected, "Not covered by this plan.", DateTime.UtcNow));
+
+        var email = Assert.Single(_smtp.Sent);
+        Assert.Contains("Reason: Not covered by this plan.", email.TextBody);
+    }
+
+    [Fact]
     public async Task A_payment_produces_a_receipt()
     {
         await PublishAndWaitAsync(new PaymentReceived(42, 7, "TXN-000007", 10, 1, 4, 89.99m, new DateOnly(2026, 11, 1),

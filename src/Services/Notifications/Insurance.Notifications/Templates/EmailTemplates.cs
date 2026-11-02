@@ -59,7 +59,7 @@ public class EmailTemplates
         var expires = e.ValidForMinutes > 0
             ? $"This link works once and expires in {e.ValidForMinutes} minutes, at {TimeText(e.ExpiresAtUtc)}."
             : $"This link works once and expires on {DateTimeText(e.ExpiresAtUtc)}.";
-        var expired = "If it expires, sign in and send yourself a new one from your profile.";
+        var expired = "If it expires, resend another verification email.";
 
         if (e.AfterEmailChange)
         {
@@ -135,7 +135,7 @@ public class EmailTemplates
         Email($"We received your claim {e.ClaimNumber}", "We'll email you whenever its status changes.")
             .Heading("Claim received")
             .Paragraph($"Hi {FirstName(fullName)},")
-            .Paragraph("Thanks, we've received your claim. A claims specialist will review your claim, and we'll email you when it has been reviewed. Please allow at least 2 business days for a response.")
+            .Paragraph("Thanks, we've received your claim. Your claim is under review and we'll email you when a decision has been made. Please allow at least 5-7 business days for a response.")
             .Details(
                 ("Claim number", e.ClaimNumber),
                 ("Policy", policyName),
@@ -145,18 +145,17 @@ public class EmailTemplates
             .Button("Track my claim", _links.MyClaims)
             .Build();
 
+    /// <summary>The decision on a claim (approved or rejected, with the reviewer's reason or notes), and the payment.</summary>
     public RenderedEmail ClaimStatusChanged(string fullName, ClaimStatusChanged e, string policyName)
     {
         var (subject, heading, message) = e.NewStatus switch
         {
-            ClaimStatus.UnderReview => ($"Your claim {e.ClaimNumber} is under review", "Your claim is being reviewed",
-                "A claims specialist has started reviewing your claim. We'll let you know as soon as there's a decision."),
             ClaimStatus.Approved => ($"Good news: claim {e.ClaimNumber} was approved", "Your claim was approved",
-                $"Your claim for {Money(e.ClaimAmount)} has been approved. We'll email you again when the payment is on its way."),
+                $"Your claim has been processed and approved. Your payment of {Money(e.ClaimAmount)} will be sent out in about 2-3 business days, and we'll email you as soon as it's on its way."),
             ClaimStatus.Rejected => ($"An update on your claim {e.ClaimNumber}", "We couldn't approve your claim",
                 "After reviewing your claim, we're unable to approve it. The reviewer's reason is below."),
-            ClaimStatus.Paid => ($"Claim {e.ClaimNumber} has been paid", "Your claim has been paid",
-                $"We've paid {Money(e.ClaimAmount)} for your claim. Depending on your bank, it can take a few business days to arrive."),
+            ClaimStatus.Paid => ($"Your payment for claim {e.ClaimNumber} is on its way", "Your claim payment has been sent",
+                $"We've sent your payment of {Money(e.ClaimAmount)} for this claim. You'll receive your check in about 5-10 business days."),
             _ => ($"Your claim {e.ClaimNumber} was updated", "Your claim was updated", "The status of your claim has changed.")
         };
 

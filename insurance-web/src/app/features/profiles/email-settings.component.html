@@ -40,8 +40,8 @@
     @if (step() === 'edit') {
       <form class="change" [formGroup]="changeForm" (ngSubmit)="review()" novalidate>
         <p class="muted">
-          You will have to verify this new email address. You will be unable to enroll in policies or file claims
-          until you click it.
+          You will have to verify this new email address. You will be unable to enroll in policies or file a claim
+          until you verify it.
         </p>
 
         @if (changeError(); as e) {
@@ -93,7 +93,7 @@
           <span>
             <strong>Payment reminders</strong>
             <small id="reminders-help" class="muted">
-              Opt into reminders about upcoming and overdue payments.
+              Opt-in to reminders about upcoming and overdue payments.
             </small>
           </span>
         </label>
