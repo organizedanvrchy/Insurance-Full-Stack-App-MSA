@@ -199,6 +199,13 @@ public class TemplateTests
     }
 
     [Fact]
+    public void A_received_claim_sets_expectations_for_the_review()
+    {
+        Assert.Contains("A claims specialist will review your claim, and we'll email you when it has been reviewed. "
+            + "Please allow at least 2 business days for a response.", Render("claim-received").Text);
+    }
+
+    [Fact]
     public void The_policy_email_no_longer_promises_reminders()
     {
         Assert.DoesNotContain("We'll remind you", Render("policy-active").Text);

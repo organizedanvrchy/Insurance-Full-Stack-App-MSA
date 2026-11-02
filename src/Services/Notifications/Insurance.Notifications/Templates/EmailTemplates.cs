@@ -135,7 +135,7 @@ public class EmailTemplates
         Email($"We received your claim {e.ClaimNumber}", "We'll email you whenever its status changes.")
             .Heading("Claim received")
             .Paragraph($"Hi {FirstName(fullName)},")
-            .Paragraph("Thanks, we've received your claim. A claims specialist will review it, and we'll email you each time its status changes.")
+            .Paragraph("Thanks, we've received your claim. A claims specialist will review your claim, and we'll email you when it has been reviewed. Please allow at least 2 business days for a response.")
             .Details(
                 ("Claim number", e.ClaimNumber),
                 ("Policy", policyName),

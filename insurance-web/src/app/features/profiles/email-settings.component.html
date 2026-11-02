@@ -40,9 +40,8 @@
     @if (step() === 'edit') {
       <form class="change" [formGroup]="changeForm" (ngSubmit)="review()" novalidate>
         <p class="muted">
-          You'll sign in with the new address straight away. We'll send it a verification link, and you won't be
-          able to enroll in policies or file claims until you click it. Your current address will be told about the
-          change.
+          You will have to verify this new email address. You will be unable to enroll in policies or file claims
+          until you click it.
         </p>
 
         @if (changeError(); as e) {
@@ -94,8 +93,7 @@
           <span>
             <strong>Payment reminders</strong>
             <small id="reminders-help" class="muted">
-              3 days before a premium is due, on the due date, and if it becomes overdue (then again
-              5 and 10 days later).
+              Opt into reminders about upcoming and overdue payments.
             </small>
           </span>
         </label>
@@ -103,10 +101,6 @@
           <p class="ok" role="status">{{ m }}</p>
         }
 
-        <p class="muted always">
-          Always sent: payment receipts, declined-payment notices, policy confirmations, claim updates
-          and your verification email.
-        </p>
       </div>
     }
   }
