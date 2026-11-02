@@ -3,9 +3,9 @@ import { BRAND_LABELS } from './card-utils';
 
 export const METHOD_LABELS: Record<PaymentMethodType, string> = {
   Card: 'Credit/debit card',
-  PayPal: 'PayPal',
   ApplePay: 'Apple Pay',
   GooglePay: 'Google Pay',
+  PayPal: 'PayPal',
   Venmo: 'Venmo',
 };
 
