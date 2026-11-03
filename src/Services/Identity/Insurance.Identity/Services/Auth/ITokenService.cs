@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Text;
+using Insurance.Identity.Contracts;
 using Insurance.Identity.Models;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.JsonWebTokens;
@@ -22,15 +23,20 @@ public class JwtTokenService : ITokenService
         var expires = DateTime.UtcNow.AddMinutes(int.Parse(_config["Jwt:ExpiryMinutes"] ?? "60"));
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Key"]!));
 
+        var claims = new List<Claim>
+        {
+            new(ClaimTypes.NameIdentifier, user.UserId.ToString()),
+            new(ClaimTypes.Email, user.Email),
+            new(ClaimTypes.Name, user.FullName),
+            new(ClaimTypes.Role, user.Role.ToString())          // powers [Authorize(Roles = "Admin")]
+        };
+        // While an admin reset is pending, the only password that signs in is the emailed one-time password.
+        if (user.MustChangePassword)
+            claims.Add(new Claim(AuthClaims.SignedInWithOneTimePassword, "true"));
+
         var descriptor = new SecurityTokenDescriptor
         {
-            Subject = new ClaimsIdentity(new[]
-            {
-                new Claim(ClaimTypes.NameIdentifier, user.UserId.ToString()),
-                new Claim(ClaimTypes.Email, user.Email),
-                new Claim(ClaimTypes.Name, user.FullName),
-                new Claim(ClaimTypes.Role, user.Role.ToString())          // powers [Authorize(Roles = "Admin")]
-            }),
+            Subject = new ClaimsIdentity(claims),
             Issuer = _config["Jwt:Issuer"],
             Audience = _config["Jwt:Audience"],
             Expires = expires,

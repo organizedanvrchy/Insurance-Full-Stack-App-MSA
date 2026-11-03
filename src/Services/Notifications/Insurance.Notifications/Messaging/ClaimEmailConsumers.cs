@@ -30,8 +30,8 @@ public class ClaimSubmittedConsumer : IConsumer<ClaimSubmitted>
 }
 
 /// <summary>
-/// One email each when a claim is approved, rejected or paid (a claim only moves forward, so each happens once).
-/// "Under review" sends nothing: the claim-received email already says a decision will follow.
+/// One email each when a claim is approved, rejected or paid (each happens once), and one every time the reviewer
+/// asks for more information. "Under review" sends nothing: the claim-received email already says a decision will follow.
 /// </summary>
 public class ClaimStatusChangedConsumer : IConsumer<ClaimStatusChanged>
 {
@@ -49,11 +49,17 @@ public class ClaimStatusChangedConsumer : IConsumer<ClaimStatusChanged>
     public Task Consume(ConsumeContext<ClaimStatusChanged> context)
     {
         var e = context.Message;
-        if (e.NewStatus is not (ClaimStatus.Approved or ClaimStatus.Rejected or ClaimStatus.Paid))
+        if (e.NewStatus is not (ClaimStatus.Approved or ClaimStatus.Rejected or ClaimStatus.Paid or ClaimStatus.NeedsMoreInfo))
             return Task.CompletedTask;
 
+        // A reviewer can ask for more information more than once, so each request gets its own key (a redelivered
+        // message keeps its id). The other statuses happen at most once per claim.
+        var key = e.NewStatus == ClaimStatus.NeedsMoreInfo
+            ? $"claim-status:{e.ClaimId}:{e.NewStatus}:{context.MessageId?.ToString() ?? e.ChangedAtUtc.Ticks.ToString()}"
+            : $"claim-status:{e.ClaimId}:{e.NewStatus}";
+
         return _dispatcher.SendAsync(new Notification(
-            $"claim-status:{e.ClaimId}:{e.NewStatus}", e.UserId, NotificationKind.ClaimStatusChanged,
+            key, e.UserId, NotificationKind.ClaimStatusChanged,
             async user => _templates.ClaimStatusChanged(user.FullName, e, await _policies.PlanNameForEnrollmentAsync(e.EnrollmentId))),
             context.CancellationToken);
     }

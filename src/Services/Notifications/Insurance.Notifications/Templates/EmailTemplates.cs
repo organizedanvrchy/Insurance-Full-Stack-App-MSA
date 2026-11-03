@@ -61,12 +61,22 @@ public class EmailTemplates
             : $"This link works once and expires on {DateTimeText(e.ExpiresAtUtc)}.";
         var expired = "If it expires, resend another verification email.";
 
+        // An administrator only changes the email when the customer asks, so this simply asks them to verify it.
+        if (e.AfterEmailChange && e.ByAdmin)
+            return Email("Verify your new RAINsurance email address", "Verify your new email address.")
+                .Heading("Verify your new email address")
+                .Paragraph($"Hi {FirstName(e.FullName)},")
+                .Paragraph($"At your request, an administrator has changed the sign-in email for your RAINsurance account to {e.Email}. Please verify your new email address.")
+                .Paragraph(Paused)
+                .Button("Verify my email", link)
+                .Small($"{expires} {expired}")
+                .Small($"Didn't ask for this change? Contact us right away at {_links.SupportEmail}.")
+                .Build();
+
         if (e.AfterEmailChange)
         {
             // Worded as something that happened to the account, not something the reader did: it may not have been them.
-            var changed = e.ByAdmin
-                ? $"An administrator has changed the sign-in email for your RAINsurance account to {e.Email}. Confirm this is you."
-                : $"The sign-in email for your RAINsurance account has been changed to {e.Email}. Confirm this is you.";
+            var changed = $"The sign-in email for your RAINsurance account has been changed to {e.Email}. Confirm this is you.";
             return Email("Your RAINsurance email address has been changed", "Confirm this is you.")
                 .Heading("Your email address has been changed")
                 .Paragraph($"Hi {FirstName(e.FullName)},")
@@ -98,7 +108,7 @@ public class EmailTemplates
 
         if (e.ByAdmin)
             return email
-                .Paragraph($"An administrator changed the sign-in email for your RAINsurance account from {e.OldEmail} to {e.NewEmail} on {DateTimeText(e.ChangedAtUtc)}. We'll send everything to the new address from now on.")
+                .Paragraph($"At your request, an administrator changed the sign-in email for your RAINsurance account from {e.OldEmail} to {e.NewEmail} on {DateTimeText(e.ChangedAtUtc)}. We'll send everything to the new address from now on.")
                 .Paragraph("You'll have to verify the new email address before you can enroll in policies or file claims. We've sent a link to it.")
                 .Callout("Didn't ask for this change?", $"Contact support immediately at {_links.SupportEmail}.", warning: true)
                 .Build();
@@ -222,7 +232,9 @@ public class EmailTemplates
             ClaimStatus.Approved => ($"Good news: claim {e.ClaimNumber} was approved", "Your claim was approved",
                 $"Your claim has been processed and approved. Your payment of {Money(e.ClaimAmount)} will be sent out in about 2-3 business days, and we'll email you as soon as it's on its way."),
             ClaimStatus.Rejected => ($"An update on your claim {e.ClaimNumber}", "We couldn't approve your claim",
-                "After reviewing your claim, we're unable to approve it. The reviewer's reason is below."),
+                "We apologize, but after reviewing your claim, we've decided that we're unable to approve it. The reviewer's reason is below."),
+            ClaimStatus.NeedsMoreInfo => ($"We need more information about claim {e.ClaimNumber}", "We need more information about your claim",
+                "Our claims department needs more information about your claim before they can make a decision. Their questions are below."),
             ClaimStatus.Paid => ($"Your payment for claim {e.ClaimNumber} is on its way", "Your claim payment has been sent",
                 $"We've sent your payment of {Money(e.ClaimAmount)} for this claim. You'll receive your check in about 5-10 business days."),
             _ => ($"Your claim {e.ClaimNumber} was updated", "Your claim was updated", "The status of your claim has changed.")
@@ -240,8 +252,18 @@ public class EmailTemplates
                 ("Updated", Date(e.ChangedAtUtc)));
 
         if (!string.IsNullOrWhiteSpace(e.Notes))
-            email.Callout(e.NewStatus == ClaimStatus.Rejected ? "Reason" : "Reviewer's notes", e.Notes.Trim(),
-                warning: e.NewStatus == ClaimStatus.Rejected);
+            email.Callout(e.NewStatus switch
+                {
+                    ClaimStatus.Rejected => "Reason",
+                    ClaimStatus.NeedsMoreInfo => "Questions from the claims department",
+                    _ => "Reviewer's notes"
+                }, e.Notes.Trim(), warning: e.NewStatus == ClaimStatus.Rejected);
+
+        if (e.NewStatus == ClaimStatus.Rejected)
+            email.Paragraph($"If you'd like to dispute this decision, contact us at {_links.SupportEmail}.");
+
+        if (e.NewStatus == ClaimStatus.NeedsMoreInfo)
+            email.Paragraph("We recommend adding images or documents that give more evidence, and answering the questions above. You can add them to the claim from My claims, then choose \"Send to reviewer\" when you're done.");
 
         return email.Button("View my claims", _links.MyClaims).Build();
     }
@@ -249,6 +271,7 @@ public class EmailTemplates
     public static string StatusLabel(ClaimStatus status) => status switch
     {
         ClaimStatus.UnderReview => "Under review",
+        ClaimStatus.NeedsMoreInfo => "Needs more information",
         _ => status.ToString()
     };
 

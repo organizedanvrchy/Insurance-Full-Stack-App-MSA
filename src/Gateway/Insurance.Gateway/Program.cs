@@ -74,22 +74,26 @@ app.Use(async (context, next) =>
     await next();
 });
 
-// After an admin reset, the customer must choose a new password before doing anything else: until then only "who am I"
-// and "change password" get through. Checked against the account on every request, so it also locks sessions that
-// were already signed in when the reset happened.
+// After an admin reset, the customer must choose a new password before doing anything else. Checked against the account
+// on every request: sessions that were open before the reset are signed out (401), and the session that signed in with
+// the one-time password can only ask "who am I" and choose the new password until it does.
 app.Use(async (context, next) =>
 {
-    var path = context.Request.Path;
-    if (context.Items[nameof(UserAccount)] is UserAccount { MustChangePassword: true }
-        && !path.StartsWithSegments("/api/auth/me") && !path.StartsWithSegments("/api/auth/change-password"))
+    if (context.Items[nameof(UserAccount)] is UserAccount { MustChangePassword: true })
     {
-        context.Response.StatusCode = StatusCodes.Status403Forbidden;
-        await context.Response.WriteAsJsonAsync(new Microsoft.AspNetCore.Mvc.ProblemDetails
+        var path = context.Request.Path;
+        if (!context.User.HasClaim(AuthClaims.SignedInWithOneTimePassword, "true"))
         {
-            Status = 403,
-            Title = "Your password was reset. Please choose a new password to continue."
-        });
-        return;
+            await WriteProblemAsync(context, StatusCodes.Status401Unauthorized,
+                "Your password was reset. Sign in with the one-time password we emailed you.");
+            return;
+        }
+        if (!path.StartsWithSegments("/api/auth/me") && !path.StartsWithSegments("/api/auth/choose-new-password"))
+        {
+            await WriteProblemAsync(context, StatusCodes.Status403Forbidden,
+                "Your password was reset. Please choose a new password to continue.");
+            return;
+        }
     }
     await next();
 });
@@ -99,3 +103,9 @@ app.MapControllers();
 app.MapReverseProxy();
 app.MapHealthChecks("/health");
 app.Run();
+
+static Task WriteProblemAsync(HttpContext context, int status, string title)
+{
+    context.Response.StatusCode = status;
+    return context.Response.WriteAsJsonAsync(new Microsoft.AspNetCore.Mvc.ProblemDetails { Status = status, Title = title });
+}

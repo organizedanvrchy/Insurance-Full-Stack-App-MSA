@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Insurance.Identity.Contracts;
 using Insurance.Identity.DTOs;
 using Insurance.Identity.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -93,6 +94,20 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> ChangePassword(ChangePasswordRequest request)
     {
         await _auth.ChangePasswordAsync(CurrentUserId, request);
+        return NoContent();
+    }
+
+    // After an admin reset: the session signed in with the one-time password picks the new password. 400 if the rules
+    // aren't met or the one-time password has expired, 403 for a session that didn't sign in with it.
+    [Authorize]
+    [HttpPost("choose-new-password")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> ChooseNewPassword(ChooseNewPasswordRequest request)
+    {
+        var withOneTimePassword = User.HasClaim(AuthClaims.SignedInWithOneTimePassword, "true");
+        await _auth.ChooseNewPasswordAsync(CurrentUserId, withOneTimePassword, request);
         return NoContent();
     }
 

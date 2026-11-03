@@ -10,6 +10,7 @@ import { LoginRequest } from '../models/auth/loginRequest';
 import {
   ChangeEmailRequest,
   ChangePasswordRequest,
+  ChooseNewPasswordRequest,
   VerifyEmailResponse,
 } from '../models/auth/emailVerification';
 
@@ -83,19 +84,21 @@ export class AuthService {
       .pipe(tap((user) => this.updateUser(user)));
   }
 
-  /** After an admin reset, this also ends the reset (the stored user is refreshed). */
   changePassword(req: ChangePasswordRequest): Observable<void> {
-    return this.http
-      .post<void>(`${API_URL}/auth/change-password`, req)
-      .pipe(
-        tap(() => {
-          // A successful change always ends a pending admin reset. Clear it now, so the
-          // guards let the user through before the refreshed profile arrives.
-          const user = this._user();
-          if (user?.mustChangePassword) this.updateUser({ ...user, mustChangePassword: false });
-          this.refreshUser();
-        }),
-      );
+    return this.http.post<void>(`${API_URL}/auth/change-password`, req).pipe(tap(() => this.refreshUser()));
+  }
+
+  /** Finishes an admin reset, for a session signed in with the one-time password. */
+  chooseNewPassword(req: ChooseNewPasswordRequest): Observable<void> {
+    return this.http.post<void>(`${API_URL}/auth/choose-new-password`, req).pipe(
+      tap(() => {
+        // The reset is over. Clear the flag now, so the guards let the user through
+        // before the refreshed profile arrives.
+        const user = this._user();
+        if (user) this.updateUser({ ...user, mustChangePassword: false });
+        this.refreshUser();
+      }),
+    );
   }
 
   /**

@@ -3,7 +3,15 @@
     @if (pending(); as action) {
       <!-- ============ Step 2: Are you sure? ============ -->
       <div class="confirm" role="alertdialog" aria-labelledby="confirm-title" aria-describedby="confirm-text">
-        <p id="confirm-title"><strong>Are you sure?</strong></p>
+        <p id="confirm-title">
+          <strong>
+            @switch (action) {
+              @case ('reset') { Reset {{ c.fullName }}'s password? }
+              @case ('deactivate') { Deactivate {{ c.fullName }}'s account? }
+              @default { Are you sure? }
+            }
+          </strong>
+        </p>
         <p id="confirm-text">
           @switch (action) {
             @case ('save') {
@@ -14,12 +22,12 @@
               }
             }
             @case ('reset') {
-              Reset {{ c.fullName }}'s password? Their current password will stop working right away, and a one-time
-              password will be emailed to {{ c.email }}. It works for 30 minutes, and they'll have to choose a new
-              password when they sign in with it.
+              Their current password will stop working right away, and a one-time password will be emailed to
+              {{ c.email }}. The one-time password will expire after 30 minutes and the customer will have to sign in
+              and change their password in that time frame.
             }
             @case ('deactivate') {
-              Deactivate {{ c.fullName }}'s account? They won't be able to sign in. Their policies and claims are kept.
+              They won't be able to sign in. Their policies and claims are kept.
             }
             @case ('reactivate') {
               Reactivate {{ c.fullName }}'s account? They'll be able to sign in again.
@@ -166,10 +174,6 @@
             <button type="button" class="btn-sm" (click)="ask('reactivate')">Reactivate account</button>
           }
         </div>
-        <p class="muted note">
-          Resetting emails the customer a one-time password that works for 30 minutes; their current password stops
-          working right away. To send a new one later, reset again.
-        </p>
       </section>
     }
   }

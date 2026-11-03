@@ -106,6 +106,22 @@ public class ConsumerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Every_request_for_more_information_is_emailed()
+    {
+        await _harness.Bus.Publish(new ClaimStatusChanged(8, "CLM-2026-000008", 1, 10, 500m,
+            ClaimStatus.UnderReview, ClaimStatus.NeedsMoreInfo, "Please send a photo of the damage.", DateTime.UtcNow));
+        await _harness.Bus.Publish(new ClaimStatusChanged(8, "CLM-2026-000008", 1, 10, 500m,
+            ClaimStatus.UnderReview, ClaimStatus.NeedsMoreInfo, "Please send the repair estimate too.", DateTime.UtcNow));
+
+        // Wait for both: the harness's inactivity signal can fire between the two messages.
+        for (var i = 0; i < 100 && _smtp.Sent.Count < 2; i++)
+            await Task.Delay(50);
+
+        Assert.Equal(2, _smtp.Sent.Count);
+        Assert.All(_smtp.Sent, m => Assert.Equal("We need more information about claim CLM-2026-000008", m.Subject));
+    }
+
+    [Fact]
     public async Task A_new_claim_waits_for_its_documents_before_emailing()
     {
         await PublishAndWaitAsync(new ClaimSubmitted(5, "CLM-2026-000005", 1, 10, new DateOnly(2026, 11, 1), 250m, DateTime.UtcNow));

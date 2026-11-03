@@ -90,10 +90,34 @@ public class AuthService : IAuthService
         if (OneTimePasswordExpired(user))
             throw new OneTimePasswordExpiredException();
 
-        if (BCrypt.Net.BCrypt.Verify(request.NewPassword, user.PasswordHash))
+        await SetNewPasswordAsync(user, request.NewPassword);
+    }
+
+    public async Task ChooseNewPasswordAsync(int userId, bool signedInWithOneTimePassword, ChooseNewPasswordRequest request)
+    {
+        var user = await _users.GetByIdAsync(userId);
+        if (user is null || !user.IsActive)
+            throw new NotFoundException("Account not found.");
+
+        if (!user.MustChangePassword)
+            throw new BusinessRuleException("Your password doesn't need to be reset. Change it from your profile instead.");
+
+        // A session from before the reset never gets here (the gateway signs it out), but check anyway.
+        if (!signedInWithOneTimePassword)
+            throw new ForbiddenException("Sign in with the one-time password from your email to choose a new password.");
+
+        if (OneTimePasswordExpired(user))
+            throw new OneTimePasswordExpiredException();
+
+        await SetNewPasswordAsync(user, request.NewPassword);
+    }
+
+    private async Task SetNewPasswordAsync(User user, string newPassword)
+    {
+        if (BCrypt.Net.BCrypt.Verify(newPassword, user.PasswordHash))
             throw new BusinessRuleException("Choose a new password that is different from your current one.");
 
-        await _users.ChangePasswordAsync(user.UserId, BCrypt.Net.BCrypt.HashPassword(request.NewPassword));
+        await _users.ChangePasswordAsync(user.UserId, BCrypt.Net.BCrypt.HashPassword(newPassword));
 
         // A security notice to the account's email, in case it wasn't its owner. Never fails the change.
         try

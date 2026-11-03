@@ -20,7 +20,7 @@ const newPasswordsMatch: ValidatorFn = (g: AbstractControl): ValidationErrors | 
 
 /**
  * After an administrator reset the password, the customer signs in with the one-time password from their email and
- * lands here. There's no way into the rest of the app until a new password is chosen (the gateway refuses every other
+ * lands here, and only chooses the new password (signing in with the one-time password was the proof). There's no way into the rest of the app until a new password is chosen (the gateway refuses every other
  * request too); signing out is the only other option.
  */
 @Component({
@@ -40,7 +40,6 @@ export class ChooseNewPasswordComponent {
 
   form = this.fb.nonNullable.group(
     {
-      currentPassword: ['', Validators.required],
       newPassword: ['', [Validators.required, Validators.maxLength(PASSWORD_MAX), strongPassword]],
       confirmNewPassword: ['', Validators.required],
     },
@@ -64,10 +63,10 @@ export class ChooseNewPasswordComponent {
     this.saving.set(true);
     this.error.set(null);
 
-    this.auth.changePassword(this.form.getRawValue()).subscribe({
+    this.auth.chooseNewPassword(this.form.getRawValue()).subscribe({
       next: () => this.router.navigate(['/dashboard']),
       error: (err) => {
-        this.error.set(getErrorMessage(err)); // wrong or expired one-time password, or rules not met
+        this.error.set(getErrorMessage(err)); // the one-time password expired, or the rules aren't met
         this.saving.set(false);
       },
     });

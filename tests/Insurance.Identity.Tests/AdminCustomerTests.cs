@@ -5,6 +5,7 @@ using Insurance.Identity.DTOs;
 using Insurance.Identity.Exceptions;
 using Insurance.Identity.Models;
 using Insurance.Identity.Services;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -177,6 +178,71 @@ public class AdminCustomerTests
         Assert.False(user.MustChangePassword);
         var signedIn = await _auth.LoginAsync(new LoginRequest { Email = user.Email, Password = "N3w!Passw0rd" });
         Assert.False(signedIn!.User.MustChangePassword);
+    }
+
+    private static ChooseNewPasswordRequest NewPassword(string password = "N3w!Passw0rd") =>
+        new() { NewPassword = password, ConfirmNewPassword = password };
+
+    [Fact]
+    public async Task After_signing_in_with_the_one_time_password_only_the_new_password_is_needed()
+    {
+        var user = await CustomerAsync();
+        await _sut.ResetPasswordAsync(user.UserId);
+
+        await _auth.ChooseNewPasswordAsync(user.UserId, signedInWithOneTimePassword: true, NewPassword());
+
+        Assert.False(user.MustChangePassword);
+        Assert.NotNull(await _auth.LoginAsync(new LoginRequest { Email = user.Email, Password = "N3w!Passw0rd" }));
+        Assert.Contains(_events.Published, e => e is PasswordChanged);
+    }
+
+    [Fact]
+    public async Task A_session_from_before_the_reset_cannot_choose_the_new_password()
+    {
+        var user = await CustomerAsync();
+        await _sut.ResetPasswordAsync(user.UserId);
+
+        await Assert.ThrowsAsync<ForbiddenException>(() =>
+            _auth.ChooseNewPasswordAsync(user.UserId, signedInWithOneTimePassword: false, NewPassword()));
+        Assert.True(user.MustChangePassword);
+    }
+
+    [Fact]
+    public async Task Choosing_a_new_password_without_a_reset_is_refused()
+    {
+        var user = await CustomerAsync();
+
+        await Assert.ThrowsAsync<BusinessRuleException>(() =>
+            _auth.ChooseNewPasswordAsync(user.UserId, signedInWithOneTimePassword: true, NewPassword()));
+    }
+
+    [Fact]
+    public async Task The_new_password_must_be_chosen_within_the_30_minutes()
+    {
+        var user = await CustomerAsync();
+        await _sut.ResetPasswordAsync(user.UserId);
+        _clock.Advance(TimeSpan.FromMinutes(31));
+
+        await Assert.ThrowsAsync<OneTimePasswordExpiredException>(() =>
+            _auth.ChooseNewPasswordAsync(user.UserId, signedInWithOneTimePassword: true, NewPassword()));
+    }
+
+    [Fact]
+    public void Only_a_sign_in_during_a_reset_is_marked_as_using_the_one_time_password()
+    {
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Jwt:Key"] = "unit-test-key-that-is-at-least-32-characters", ["Jwt:Issuer"] = "i", ["Jwt:Audience"] = "a"
+        }).Build();
+        var tokens = new JwtTokenService(config);
+        var user = new User { UserId = 1, Email = "a@b.c", FullName = "A B", Role = UserRole.Customer };
+
+        bool Marked(User u) => new Microsoft.IdentityModel.JsonWebTokens.JsonWebToken(tokens.CreateToken(u).Token)
+            .Claims.Any(c => c.Type == AuthClaims.SignedInWithOneTimePassword && c.Value == "true");
+
+        Assert.False(Marked(user));
+        user.MustChangePassword = true;
+        Assert.True(Marked(user));
     }
 
     [Fact]

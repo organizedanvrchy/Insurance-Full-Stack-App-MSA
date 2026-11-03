@@ -169,7 +169,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the enrollment saga, the ou
 | Claim workflow | Submitted, Under review, then Approved or Rejected, then (approved only) Paid. A reviewer can also ask for more information, and the customer sends the claim back after responding. A rejection or a request for more information needs a note. Concurrent edits are detected. |
 | Claim documents | PDF, JPG or PNG, up to 10 MB each and 5 per claim. Customers can add them until a decision is made. They can't be deleted. |
 | Accounts | Deactivated accounts cannot sign in and existing tokens stop working. Admin accounts cannot be deactivated from the UI. |
-| Admin password reset | The customer's password stops working right away, and a 14-character **one-time password** valid for **30 minutes** is emailed to them (only its hash is stored). Signing in with it lets them do nothing but choose a new password: the gateway answers `403` to every other request until they do. Once it expires, signing in with it gets a `401` saying so, and the admin presses "Reset password" again. |
+| Admin password reset | The customer's password stops working right away, and a 14-character **one-time password** valid for **30 minutes** is emailed to them (only its hash is stored). Signing in with it takes them straight to "Choose a new password" (the new password twice; the one-time password isn't asked for again), and the gateway answers `403` to every other request until they do. Sessions that were open before the reset are signed out. They must sign in and choose the password within the 30 minutes; after that, signing in gets a `401` saying it expired, and the admin presses "Reset password" again. |
 
 ## Getting started
 
@@ -432,15 +432,15 @@ flowchart LR
 
 | Email | Sent when | Can be turned off |
 |---|---|---|
-| Verify your email / Confirm your new email address | Sign-up, resend, email change | No |
-| Your email address was changed | To the **old** address after a change (saying so when an administrator made it): "if this was you, ignore it; if not, contact support immediately" | No |
+| Verify your email / Confirm your new email address / Verify your new email address | Sign-up, resend, email change. When an administrator changed it at the customer's request, the email simply asks them to verify the new address | No |
+| Your email address was changed | To the **old** address after a change (when an administrator made it at the customer's request, it says so): "if this was you, ignore it; if not, contact support immediately" | No |
 | Your password was changed | After a password change, with the same warning | No |
 | Your password has been reset | An admin reset the password: the one-time password, "enter it the next time you sign in", and when its 30 minutes run out | No |
 | Policy active / Policy cancelled | The enrollment saga completes, the customer cancels | No |
 | Payment receipt | Every installment paid at checkout (receipt number, payment method, installment *n* of *N*, next payment, link to the in-app receipt) | No |
 | Payment didn't go through | A declined or failed checkout attempt (the reason, nothing charged, a "try again" link) | No |
 | Payment reminder | 3 days before, on the due date, when Overdue, +5 days, +10 days | **Yes**: at sign-up, and in the profile's "Email settings" |
-| Claim received / approved / rejected (with the reason) / payment sent | Filed: the customer's copy of the claim, listing its documents with **copies attached** (sent about 2 minutes after filing, once the documents have uploaded; up to 15 MB of attachments, larger files are listed with a link to My claims), "allow 5-7 business days for a decision"; approved ("payment goes out in about 2-3 business days"); rejected; paid ("your check arrives in about 5-10 business days"). Moving to "under review" sends nothing | No |
+| Claim received / needs more information / approved / rejected (with the reason) / payment sent | Filed: the customer's copy of the claim, listing its documents with **copies attached** (sent about 2 minutes after filing, once the documents have uploaded; up to 15 MB of attachments, larger files are listed with a link to My claims), "allow 5-7 business days for a decision"; approved ("payment goes out in about 2-3 business days"); rejected ("We apologize, but…", the reviewer's reason, and the support address to dispute the decision); needs more information (the reviewer's questions, and a suggestion to add images or documents and answer them; sent every time it's asked); paid ("your check arrives in about 5-10 business days"). Moving to "under review" sends nothing | No |
 
 How it stays reliable:
 
