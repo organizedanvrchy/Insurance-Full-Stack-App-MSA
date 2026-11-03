@@ -11,14 +11,15 @@ import {
 import { AuthService } from '../../core/services/auth.service';
 import { getErrorMessage } from '../../core/utils/http-error';
 import { PASSWORD_MAX, PASSWORD_RULES, strongPassword } from '../../core/utils/validators';
+import { ModalComponent } from '../../shared/components/modal.component';
 
 const newPasswordsMatch: ValidatorFn = (g: AbstractControl): ValidationErrors | null =>
   g.get('newPassword')?.value === g.get('confirmNewPassword')?.value ? null : { mismatch: true };
 
-/** The "Password" section of the profile page: current password, new password and its confirmation. */
+/** The "Password" section of the profile page: a pop-up with the current password, the new one and its confirmation. */
 @Component({
   selector: 'app-change-password',
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, ModalComponent],
   templateUrl: './change-password.component.html',
   styleUrl: './change-password.component.css',
 })

@@ -14,4 +14,5 @@ public class UserDto
     public DateTime CreatedAt { get; set; }
 
     public bool EmailVerified { get; set; }
+    public bool MustChangePassword { get; set; }   // true after an admin reset, until a new password is chosen
 }

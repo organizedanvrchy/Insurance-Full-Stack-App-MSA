@@ -3,6 +3,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { AuthService } from '../../core/services/auth.service';
 import { NotificationService } from '../../core/services/notification.service';
 import { getErrorMessage } from '../../core/utils/http-error';
+import { ModalComponent } from '../../shared/components/modal.component';
 import { EMAIL_PATTERN } from '../../core/utils/validators';
 
 type ChangeStep = 'closed' | 'edit' | 'confirm';
@@ -13,7 +14,7 @@ type ChangeStep = 'closed' | 'edit' | 'confirm';
  */
 @Component({
   selector: 'app-email-settings',
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, ModalComponent],
   templateUrl: './email-settings.component.html',
   styleUrl: './email-settings.component.css',
 })

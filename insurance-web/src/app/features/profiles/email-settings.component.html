@@ -15,9 +15,7 @@
           }
         </div>
       </div>
-      @if (step() === 'closed') {
-        <button type="button" class="btn-sm" (click)="openChange()">Change email</button>
-      }
+      <button type="button" class="btn-sm" (click)="openChange()">Change email</button>
     </div>
 
     @if (!u.emailVerified) {
@@ -36,46 +34,48 @@
       <div class="alert" role="alert">{{ e }}</div>
     }
 
-    <!-- ============ Change email: the new address, then "Are you sure?" ============ -->
-    @if (step() === 'edit') {
-      <form class="change" [formGroup]="changeForm" (ngSubmit)="review()" novalidate>
-        <p class="muted">
-          You will have to verify this new email address. You will be unable to enroll in policies or file a claim
-          until you verify it.
-        </p>
+    <!-- ============ Change email pop-up: the new address, then Confirm / Cancel ============ -->
+    <app-modal [title]="step() === 'confirm' ? 'Confirm your new email' : 'Change email'"
+      [open]="step() !== 'closed'" (openChange)="$event || closeChange()">
+      @if (step() === 'edit') {
+        <form class="change" [formGroup]="changeForm" (ngSubmit)="review()" novalidate>
+          <p class="muted">
+            You will have to verify this new email address. You will be unable to enroll in policies or file a claim
+            until you verify it.
+          </p>
 
-        @if (changeError(); as e) {
-          <div class="alert" role="alert">{{ e }}</div>
-        }
-
-        <label class="field">
-          New email address
-          <input type="email" formControlName="newEmail" autocomplete="email" />
-          @if (newEmail.touched && newEmail.invalid) {
-            <small class="err">Enter a valid email address, like name&#64;example.com.</small>
+          @if (changeError(); as e) {
+            <div class="alert" role="alert">{{ e }}</div>
           }
-        </label>
 
-        <div class="form-actions">
-          <button type="button" class="btn-sm" (click)="closeChange()">Cancel</button>
-          <button type="submit" class="btn-sm primary">Change email</button>
+          <label class="field">
+            New email address
+            <input type="email" formControlName="newEmail" autocomplete="email" />
+            @if (newEmail.touched && newEmail.invalid) {
+              <small class="err">Enter a valid email address, like name&#64;example.com.</small>
+            }
+          </label>
+
+          <div class="form-actions">
+            <button type="button" class="btn-sm" (click)="closeChange()">Cancel</button>
+            <button type="submit" class="btn-sm primary">Continue</button>
+          </div>
+        </form>
+      } @else if (step() === 'confirm') {
+        <div class="change">
+          <p>
+            Change your email from <strong>{{ u.email }}</strong> to <strong>{{ newEmail.value.trim() }}</strong>?
+          </p>
+          <p class="muted">You'll need to verify the new address before you can enroll in policies or file claims.</p>
+          <div class="form-actions">
+            <button type="button" class="btn-sm" [disabled]="changing()" (click)="closeChange()">Cancel</button>
+            <button type="button" class="btn-sm primary" [disabled]="changing()" (click)="confirmChange()">
+              {{ changing() ? 'Changing…' : 'Confirm' }}
+            </button>
+          </div>
         </div>
-      </form>
-    } @else if (step() === 'confirm') {
-      <div class="change" role="alertdialog" aria-labelledby="confirm-title" aria-describedby="confirm-text">
-        <p id="confirm-title"><strong>Are you sure?</strong></p>
-        <p id="confirm-text">
-          Change your email from <strong>{{ u.email }}</strong> to <strong>{{ newEmail.value.trim() }}</strong>?
-          You'll need to verify the new address before you can enroll in policies or file claims.
-        </p>
-        <div class="form-actions">
-          <button type="button" class="btn-sm" [disabled]="changing()" (click)="step.set('edit')">Go back</button>
-          <button type="button" class="btn-sm primary" [disabled]="changing()" (click)="confirmChange()">
-            {{ changing() ? 'Changing…' : 'Yes, change my email' }}
-          </button>
-        </div>
-      </div>
-    }
+      }
+    </app-modal>
 
     <!-- ============ Preferences (customers) ============ -->
     @if (isCustomer()) {

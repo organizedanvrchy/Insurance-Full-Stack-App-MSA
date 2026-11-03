@@ -290,4 +290,36 @@ public class TemplateTests
         Assert.Equal(new DateOnly(2026, 11, 3), BusinessTime.TodayAt(new DateTimeOffset(2026, 11, 3, 5, 30, 0, TimeSpan.Zero)));
         Assert.Equal("Eastern Standard Time", BusinessTime.SqlServerZoneName);
     }
+
+    // ---------------- Admin actions ----------------
+
+    [Fact]
+    public void The_reset_email_gives_the_one_time_password_and_its_30_minutes()
+    {
+        var e = new PasswordResetByAdmin(1, "Jane Doe", "jane@example.com", "Ab3$xyzPQRst7k",
+            new DateTime(2026, 11, 3, 15, 30, 0, DateTimeKind.Utc), 30);
+
+        var email = _templates.PasswordResetByAdmin(e);
+
+        Assert.Equal("Your RAINsurance password has been reset", email.Subject);
+        Assert.Contains("Your one-time password: Ab3$xyzPQRst7k", email.Text);
+        Assert.Contains("Enter this one-time password the next time you sign in.", email.Text);
+        Assert.Contains("expires in 30 minutes, at 10:30 AM EST", email.Text);
+        Assert.Contains("Your previous password no longer works.", email.Text);
+        Assert.Contains("This is an automated message. Please don't reply to this email", email.Text);
+        Assert.Contains("Ab3$xyzPQRst7k", email.Html);
+    }
+
+    [Fact]
+    public void An_email_changed_by_an_admin_says_so_in_both_inboxes()
+    {
+        var old = _templates.EmailChanged(new EmailChanged(1, "Jane Doe", "old@example.com", "new@example.com", DateTime.UtcNow, ByAdmin: true));
+        var link = _templates.VerifyEmail(new EmailVerificationRequested(1, "Jane Doe", "new@example.com", "t", DateTime.UtcNow,
+            AfterEmailChange: true, ValidForMinutes: 15, ByAdmin: true));
+
+        Assert.Contains("An administrator changed the sign-in email for your RAINsurance account from old@example.com to new@example.com", old.Text);
+        Assert.Contains("You'll have to verify the new email address before you can enroll in policies or file claims.", old.Text);
+        Assert.Contains("An administrator has changed the sign-in email for your RAINsurance account to new@example.com. Confirm this is you.", link.Text);
+        Assert.Contains("You won't be able to enroll in any policies or file claims until you verify your email.", link.Text);
+    }
 }

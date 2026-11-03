@@ -17,5 +17,10 @@ public class User
 
     public DateTime? EmailVerifiedAt { get; set; }    // null until the customer clicks the link in their email
 
+    // An admin reset the password: PasswordHash is a one-time password, valid until PasswordResetExpiresAt, and the
+    // customer must choose a new password before doing anything else.
+    public bool MustChangePassword { get; set; }
+    public DateTime? PasswordResetExpiresAt { get; set; }
+
     public bool EmailVerified => EmailVerifiedAt is not null;
 }

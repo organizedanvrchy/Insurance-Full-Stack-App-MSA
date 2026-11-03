@@ -58,7 +58,7 @@ The backend is a set of **microservices**: seven ASP.NET Core services, each wit
 
 ### Customers
 - Register, sign in and sign out. Passwords are hashed with BCrypt and sessions use JWTs.
-- **Change their email or password** from the profile page. A new email only needs to be a valid address and an "Are you sure?" confirmation; it works at once but has to be verified, and the old address gets a "was this you?" email. Changing the password needs the current one and the new one twice; it's announced by email too.
+- **Change their email or password** from pop-ups on the profile page (both can be cancelled). A new email only needs to be a valid address and an "Are you sure?" confirmation; it works at once but has to be verified, and the old address gets a "was this you?" email. Changing the password needs the current one and the new one twice; it's announced by email too.
 - **Verify their email address** from a link sent at sign-up. Until then they can browse and get quotes, but not enroll or file claims.
 - **Choose their emails:** a "Email me payment reminders" box on the sign-up form, changeable any time on the profile page.
 - Browse the plan catalog and filter by type.
@@ -75,7 +75,7 @@ The backend is a set of **microservices**: seven ASP.NET Core services, each wit
 ### Administrators
 - Create, edit and deactivate plans. Deactivated plans disappear for customers but remain on existing policies.
 - **Claims review queue** with a status filter. Admins can read a claim's documents and ask for more. Buttons show only the legal next step, and a rejection requires a reason.
-- **Customer management:** search, filter by status, see active-policy and claim counts and whether the email is verified, and deactivate or reactivate accounts (takes effect on the customer's next request).
+- **Customer management:** search, filter by status, and see active-policy and claim counts and whether the email is verified. Clicking a customer opens a pop-up where the admin can edit their name, email, phone and address, **reset their password** and deactivate or reactivate the account. Each action asks "Are you sure?" first. A new email has to be verified by the customer, as if they had changed it themselves, and both inboxes are told an administrator made the change.
 - **Payment log:** every payment attempt from every customer, filterable by status, with amounts collected, declines and refunds.
 
 ### Platform
@@ -169,6 +169,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the enrollment saga, the ou
 | Claim workflow | Submitted, Under review, then Approved or Rejected, then (approved only) Paid. A reviewer can also ask for more information, and the customer sends the claim back after responding. A rejection or a request for more information needs a note. Concurrent edits are detected. |
 | Claim documents | PDF, JPG or PNG, up to 10 MB each and 5 per claim. Customers can add them until a decision is made. They can't be deleted. |
 | Accounts | Deactivated accounts cannot sign in and existing tokens stop working. Admin accounts cannot be deactivated from the UI. |
+| Admin password reset | The customer's password stops working right away, and a 14-character **one-time password** valid for **30 minutes** is emailed to them (only its hash is stored). Signing in with it lets them do nothing but choose a new password: the gateway answers `403` to every other request until they do. Once it expires, signing in with it gets a `401` saying so, and the admin presses "Reset password" again. |
 
 ## Getting started
 
@@ -277,6 +278,7 @@ Every setting can also be given as an environment variable (`:` becomes `__`), w
 | `Email:SkipDomains` | Notifications | Recipient domains never emailed (e.g. `demo.example` against a real mail server) |
 | `Reminders:Enabled`, `Interval` | Billing | The payment reminder job (default on, every hour) |
 | `EmailVerification:LinkLifetime`, `ResendCooldown`, `MaxEmailsPerDay` | Identity | Defaults 15 minutes, 1 minute, 10 |
+| `Customers:OneTimePasswordLifetime` | Identity | How long an admin-reset one-time password works (default 30 minutes) |
 | `Services:<Name>` | Callers of another service | Base address of that service's internal API, for example `Services:Catalog` |
 | `ReverseProxy:Clusters:<name>:Destinations:d1:Address` | Gateway | Where each service runs |
 | `Cors:AllowedOrigins` | Gateway | Frontend origins allowed to call the API |
@@ -325,6 +327,9 @@ Every endpoint is reached through the gateway at `/api`. Each service documents 
 | **Notifications** (Notifications) | `GET /api/notifications/preferences`, `PUT /api/notifications/preferences` | Customer |
 | | `GET /api/notifications/history?take=` | Customer (own emails; not shown in the app, kept for future admin screens) |
 | **Customers** (gateway BFF) | `GET /api/admin/customers?search=&isActive=` | Admin |
+| | `GET /api/admin/customers/{id}` | Admin |
+| | `PUT /api/admin/customers/{id}` (name, email, phone, address) | Admin |
+| | `POST /api/admin/customers/{id}/reset-password` | Admin |
 | | `PUT /api/admin/customers/{id}/active` | Admin |
 
 Services also expose `/internal/*` endpoints for each other (for example `GET /internal/plans?ids=`). The gateway never routes them, so they are not reachable from outside.
@@ -416,7 +421,7 @@ The **Notifications service** sends every email. It listens to events the other 
 
 ```mermaid
 flowchart LR
-    ID["Identity"] -- "CustomerRegistered<br/>EmailVerificationRequested" --> BUS[["RabbitMQ"]]
+    ID["Identity"] -- "CustomerRegistered<br/>EmailVerificationRequested<br/>PasswordResetByAdmin" --> BUS[["RabbitMQ"]]
     EN["Enrollments"] -- "EnrollmentActivated<br/>EnrollmentCancelled" --> BUS
     BI["Billing<br/>(checkout + hourly reminder job)"] -- "PaymentReceived, PaymentDeclined<br/>PaymentReminderDue" --> BUS
     CL["Claims"] -- "ClaimSubmitted<br/>ClaimStatusChanged" --> BUS
@@ -428,8 +433,9 @@ flowchart LR
 | Email | Sent when | Can be turned off |
 |---|---|---|
 | Verify your email / Confirm your new email address | Sign-up, resend, email change | No |
-| Your email address was changed | To the **old** address after a change: "if this was you, ignore it; if not, contact support immediately" | No |
+| Your email address was changed | To the **old** address after a change (saying so when an administrator made it): "if this was you, ignore it; if not, contact support immediately" | No |
 | Your password was changed | After a password change, with the same warning | No |
+| Your password has been reset | An admin reset the password: the one-time password, "enter it the next time you sign in", and when its 30 minutes run out | No |
 | Policy active / Policy cancelled | The enrollment saga completes, the customer cancels | No |
 | Payment receipt | Every installment paid at checkout (receipt number, payment method, installment *n* of *N*, next payment, link to the in-app receipt) | No |
 | Payment didn't go through | A declined or failed checkout attempt (the reason, nothing charged, a "try again" link) | No |

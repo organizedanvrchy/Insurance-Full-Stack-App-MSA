@@ -22,4 +22,7 @@ public interface IEmailVerificationService
     /// 400 invalid or same address, 409 address taken, 429 too many emails.
     /// </summary>
     Task<UserDto> ChangeEmailAsync(int userId, ChangeEmailRequest request);
+
+    /// <summary>The same, made by an administrator: no rate limit, and the emails say an administrator did it.</summary>
+    Task ChangeEmailByAdminAsync(int userId, string newEmail);
 }

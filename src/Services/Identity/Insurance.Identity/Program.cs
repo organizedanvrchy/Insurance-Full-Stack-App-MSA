@@ -20,6 +20,7 @@ builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<IUserDirectory, UserDirectory>();
 
 builder.Services.Configure<EmailVerificationOptions>(builder.Configuration.GetSection("EmailVerification"));
+builder.Services.Configure<CustomerOptions>(builder.Configuration.GetSection("Customers"));
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IEmailTokenRepository, EmailTokenRepository>();
 builder.Services.AddScoped<IEmailVerificationService, EmailVerificationService>();

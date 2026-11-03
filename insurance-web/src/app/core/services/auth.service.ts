@@ -27,6 +27,9 @@ export class AuthService {
   readonly isLoggedIn = computed(() => this._user() !== null);
   readonly isAdmin = computed(() => this._user()?.role === 'Admin');
 
+  /** An admin reset the password: until a new one is chosen, the app only shows the "choose a new password" screen. */
+  readonly mustChangePassword = computed(() => this._user()?.mustChangePassword === true);
+
   /** A signed-in customer who hasn't clicked the link in their verification email yet. */
   readonly needsEmailVerification = computed(() => {
     const user = this._user();
@@ -80,8 +83,19 @@ export class AuthService {
       .pipe(tap((user) => this.updateUser(user)));
   }
 
+  /** After an admin reset, this also ends the reset (the stored user is refreshed). */
   changePassword(req: ChangePasswordRequest): Observable<void> {
-    return this.http.post<void>(`${API_URL}/auth/change-password`, req);
+    return this.http
+      .post<void>(`${API_URL}/auth/change-password`, req)
+      .pipe(
+        tap(() => {
+          // A successful change always ends a pending admin reset. Clear it now, so the
+          // guards let the user through before the refreshed profile arrives.
+          const user = this._user();
+          if (user?.mustChangePassword) this.updateUser({ ...user, mustChangePassword: false });
+          this.refreshUser();
+        }),
+      );
   }
 
   /**

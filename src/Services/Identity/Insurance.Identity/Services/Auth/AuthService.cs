@@ -1,6 +1,7 @@
 using Insurance.BuildingBlocks.Exceptions;
 using Insurance.BuildingBlocks.Security;
 using Insurance.Identity.Contracts;
+using Insurance.Identity.Exceptions;
 using Insurance.Identity.Messaging;
 using Microsoft.Extensions.Logging;
 using Insurance.Identity.DTOs;
@@ -19,10 +20,13 @@ public class AuthService : IAuthService
     private readonly IEmailVerificationService _verification;
     private readonly IIdentityEvents _events;
     private readonly ILogger<AuthService> _logger;
+    private readonly TimeProvider _clock;
 
+    // The clock decides when a one-time password expires; tests pass their own.
     public AuthService(IUserRepository users, ITokenService tokens, IEmailVerificationService verification,
-        IIdentityEvents events, ILogger<AuthService> logger)
+        IIdentityEvents events, ILogger<AuthService> logger, TimeProvider? clock = null)
     {
+        _clock = clock ?? TimeProvider.System;
         _users = users;
         _tokens = tokens;
         _verification = verification;
@@ -59,6 +63,10 @@ public class AuthService : IAuthService
         if (user is null || !user.IsActive || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
             return null;
 
+        // The right one-time password, but too late. Only someone who has it learns this, so it's safe to say.
+        if (OneTimePasswordExpired(user))
+            throw new OneTimePasswordExpiredException();
+
         return BuildResponse(user);
     }
 
@@ -75,7 +83,12 @@ public class AuthService : IAuthService
             throw new NotFoundException("Account not found.");
 
         if (!BCrypt.Net.BCrypt.Verify(request.CurrentPassword, user.PasswordHash))
-            throw new BusinessRuleException("Your current password is incorrect.");
+            throw new BusinessRuleException(user.MustChangePassword
+                ? "That one-time password is incorrect."
+                : "Your current password is incorrect.");
+
+        if (OneTimePasswordExpired(user))
+            throw new OneTimePasswordExpiredException();
 
         if (BCrypt.Net.BCrypt.Verify(request.NewPassword, user.PasswordHash))
             throw new BusinessRuleException("Choose a new password that is different from your current one.");
@@ -93,6 +106,9 @@ public class AuthService : IAuthService
         }
     }
 
+    private bool OneTimePasswordExpired(User user) =>
+        user.MustChangePassword && user.PasswordResetExpiresAt is { } expires && expires <= _clock.GetUtcNow().UtcDateTime;
+
     private AuthResponse BuildResponse(User user)
     {
         var (token, expires) = _tokens.CreateToken(user);
@@ -109,6 +125,7 @@ public class AuthService : IAuthService
         Address = u.Address,
         // ADO.NET returns DATETIME2 with an unspecified kind, but the column holds UTC.
         CreatedAt = DateTime.SpecifyKind(u.CreatedAt, DateTimeKind.Utc),
-        EmailVerified = u.EmailVerified
+        EmailVerified = u.EmailVerified,
+        MustChangePassword = u.MustChangePassword
     };
 }

@@ -39,7 +39,15 @@ public class AuthController : ControllerBase
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<AuthResponse>> Login(LoginRequest request)
     {
-        var result = await _auth.LoginAsync(request);
+        AuthResponse? result;
+        try
+        {
+            result = await _auth.LoginAsync(request);
+        }
+        catch (Exceptions.OneTimePasswordExpiredException ex)
+        {
+            return Unauthorized(new ProblemDetails { Title = ex.Message, Status = 401 });
+        }
         if (result is null)
             return Unauthorized(new ProblemDetails { Title = "Invalid email or password.", Status = 401 });
         return Ok(result);

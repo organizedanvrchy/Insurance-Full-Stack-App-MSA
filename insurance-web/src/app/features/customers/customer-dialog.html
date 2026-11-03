@@ -1,0 +1,176 @@
+<app-modal [title]="current()?.fullName ?? 'Customer'" width="640px" [(open)]="open">
+  @if (current(); as c) {
+    @if (pending(); as action) {
+      <!-- ============ Step 2: Are you sure? ============ -->
+      <div class="confirm" role="alertdialog" aria-labelledby="confirm-title" aria-describedby="confirm-text">
+        <p id="confirm-title"><strong>Are you sure?</strong></p>
+        <p id="confirm-text">
+          @switch (action) {
+            @case ('save') {
+              Save the changes to {{ c.fullName }}'s details?
+              @if (emailChanges()) {
+                Their email will change to <strong>{{ f.email.value.trim() }}</strong>: they'll have to verify it before
+                they can enroll in policies or file claims, and {{ c.email }} will be told.
+              }
+            }
+            @case ('reset') {
+              Reset {{ c.fullName }}'s password? Their current password will stop working right away, and a one-time
+              password will be emailed to {{ c.email }}. It works for 30 minutes, and they'll have to choose a new
+              password when they sign in with it.
+            }
+            @case ('deactivate') {
+              Deactivate {{ c.fullName }}'s account? They won't be able to sign in. Their policies and claims are kept.
+            }
+            @case ('reactivate') {
+              Reactivate {{ c.fullName }}'s account? They'll be able to sign in again.
+            }
+          }
+        </p>
+        <div class="form-actions">
+          <button type="button" class="btn-sm" [disabled]="busy()" (click)="cancelPending()">Cancel</button>
+          <button type="button" class="btn-sm primary" [class.danger]="action === 'deactivate'" [disabled]="busy()"
+            (click)="confirm()">
+            {{ busy() ? 'Working…' : 'Confirm' }}
+          </button>
+        </div>
+      </div>
+    } @else {
+      @if (message(); as m) {
+        <p class="ok" role="status">{{ m }}</p>
+      }
+      @if (error(); as e) {
+        <div class="alert" role="alert">{{ e }}</div>
+      }
+
+      <!-- ============ At a glance ============ -->
+      <dl class="facts">
+        <div><dt>Customer #</dt><dd>{{ c.userId }}</dd></div>
+        <div>
+          <dt>Status</dt>
+          <dd class="badges">
+            <span class="badge" [class.off]="!c.isActive">{{ c.isActive ? 'Active' : 'Inactive' }}</span>
+            @if (!c.emailVerified) {
+              <span class="badge amber">Email not verified</span>
+            }
+            @if (c.passwordResetPending) {
+              <span class="badge info">Password reset pending</span>
+            }
+          </dd>
+        </div>
+        <div><dt>Joined</dt><dd>{{ c.createdAt | date: 'mediumDate' }}</dd></div>
+        <div>
+          <dt>Activity</dt>
+          <dd>
+            {{ c.activePolicies }} active {{ c.activePolicies === 1 ? 'policy' : 'policies' }} ·
+            {{ c.openClaims }} open of {{ c.totalClaims }} {{ c.totalClaims === 1 ? 'claim' : 'claims' }}
+          </dd>
+        </div>
+      </dl>
+
+      <!-- ============ Edit details ============ -->
+      <form class="edit" [formGroup]="form" (ngSubmit)="askSave()" novalidate>
+        <h3>Details</h3>
+
+        <div class="row">
+          <label class="field">
+            First name
+            <input type="text" formControlName="firstName" autocomplete="off" />
+            @if (f.firstName.touched && f.firstName.invalid) {
+              <small class="err">Use letters, spaces, hyphens and apostrophes.</small>
+            }
+          </label>
+          <label class="field">
+            Last name
+            <input type="text" formControlName="lastName" autocomplete="off" />
+            @if (f.lastName.touched && f.lastName.invalid) {
+              <small class="err">Use letters, spaces, hyphens and apostrophes.</small>
+            }
+          </label>
+        </div>
+
+        <div class="row">
+          <label class="field">
+            Email
+            <input type="email" formControlName="email" autocomplete="off" />
+            @if (f.email.touched && f.email.invalid) {
+              <small class="err">Enter a valid email address, like name&#64;example.com.</small>
+            }
+          </label>
+          <label class="field">
+            Phone (optional)
+            <input type="tel" formControlName="phone" autocomplete="off" placeholder="(203) 555-0141" />
+            @if (f.phone.touched && f.phone.invalid) {
+              <small class="err">Enter a valid US phone number.</small>
+            }
+          </label>
+        </div>
+
+        <div class="row">
+          <label class="field">
+            Street address
+            <input type="text" formControlName="street" autocomplete="off" />
+            @if (f.street.touched && f.street.invalid) {
+              <small class="err">Enter the street address.</small>
+            }
+          </label>
+          <label class="field">
+            Apt, suite or unit (optional)
+            <input type="text" formControlName="unit" autocomplete="off" />
+          </label>
+        </div>
+
+        <div class="row three">
+          <label class="field">
+            City
+            <input type="text" formControlName="city" autocomplete="off" />
+            @if (f.city.touched && f.city.invalid) {
+              <small class="err">Enter the city.</small>
+            }
+          </label>
+          <label class="field">
+            State
+            <select formControlName="state">
+              <option value="" disabled>Select</option>
+              @for (s of states; track s.code) {
+                <option [value]="s.code">{{ s.name }}</option>
+              }
+            </select>
+            @if (f.state.touched && f.state.invalid) {
+              <small class="err">Choose a state.</small>
+            }
+          </label>
+          <label class="field">
+            ZIP code
+            <input type="text" inputmode="numeric" formControlName="postalCode" maxlength="10" />
+            @if (f.postalCode.touched && f.postalCode.invalid) {
+              <small class="err">Enter a 5-digit ZIP code.</small>
+            }
+          </label>
+        </div>
+
+        <p class="muted note">A new email address has to be verified by the customer before they can enroll or file claims.</p>
+
+        <div class="form-actions">
+          <button type="submit" class="btn-sm primary">Save changes</button>
+        </div>
+      </form>
+
+      <!-- ============ Account ============ -->
+      <section class="account">
+        <h3>Account</h3>
+        <div class="account-actions">
+          <button type="button" class="btn-sm" (click)="ask('reset')">Reset password</button>
+          @if (c.isActive) {
+            <button type="button" class="btn-sm danger" (click)="ask('deactivate')">Deactivate account</button>
+          } @else {
+            <button type="button" class="btn-sm" (click)="ask('reactivate')">Reactivate account</button>
+          }
+        </div>
+        <p class="muted note">
+          Resetting emails the customer a one-time password that works for 30 minutes; their current password stops
+          working right away. To send a new one later, reset again.
+        </p>
+      </section>
+    }
+  }
+</app-modal>

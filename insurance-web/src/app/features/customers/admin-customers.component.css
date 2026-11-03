@@ -10,3 +10,28 @@ sits in the shared toolbar.
   min-width: 240px;
   margin-left: 0.5rem;
 }
+
+/* Each row opens the customer's pop-up. */
+tr.clickable {
+  cursor: pointer;
+}
+
+tr.clickable:hover td {
+  background: var(--hover-bg);
+}
+
+.name-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  color: var(--link);
+  cursor: pointer;
+  text-align: left;
+}
+
+.name-btn:hover,
+.name-btn:focus-visible {
+  text-decoration: underline;
+}

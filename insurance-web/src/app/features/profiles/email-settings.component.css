@@ -26,10 +26,6 @@
 .change {
   display: grid;
   gap: 0.75rem;
-  max-width: 480px;
-  padding: 1rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
 }
 
 .change p {

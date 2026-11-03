@@ -42,6 +42,8 @@ builder.Services.AddInsuranceJwt(builder.Configuration, events => events.OnToken
         ctx.Fail("Account is inactive.");
     else if (!ctx.Principal!.IsInRole(user.Role.ToString()))
         ctx.Fail("Role has changed. Please sign in again.");
+    else
+        ctx.HttpContext.Items[nameof(UserAccount)] = user;   // for the password-reset lock below
 });
 
 builder.Services.AddReverseProxy().LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
@@ -67,6 +69,26 @@ app.Use(async (context, next) =>
     if (!isSignIn && context.Request.Headers.Authorization.Count > 0 && context.User.Identity?.IsAuthenticated != true)
     {
         context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+        return;
+    }
+    await next();
+});
+
+// After an admin reset, the customer must choose a new password before doing anything else: until then only "who am I"
+// and "change password" get through. Checked against the account on every request, so it also locks sessions that
+// were already signed in when the reset happened.
+app.Use(async (context, next) =>
+{
+    var path = context.Request.Path;
+    if (context.Items[nameof(UserAccount)] is UserAccount { MustChangePassword: true }
+        && !path.StartsWithSegments("/api/auth/me") && !path.StartsWithSegments("/api/auth/change-password"))
+    {
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        await context.Response.WriteAsJsonAsync(new Microsoft.AspNetCore.Mvc.ProblemDetails
+        {
+            Status = 403,
+            Title = "Your password was reset. Please choose a new password to continue."
+        });
         return;
     }
     await next();
