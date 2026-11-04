@@ -180,4 +180,3 @@ jobs:
           action: upload
           app_location: site/browser             # already built: upload as is
           skip_app_build: true
-          skip_api_build: true
