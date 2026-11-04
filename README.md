@@ -465,7 +465,7 @@ How it stays reliable:
 - **No pagination, file attachments or push notifications** yet.
 - **Development emails go to Mailpit.** Sending to real inboxes needs an SMTP provider (see `Email:*` in the configuration reference); the live demo doesn't send email yet.
 - **Reminders are not sent late.** The reminder job runs hourly and sends a reminder on its day or the day after. If Billing is down for longer, that reminder is skipped rather than sent late (the next stage still goes out).
-- **Test scope.** Business logic is unit-tested. The end-to-end run with Docker Compose is a script, not yet part of an automated pipeline. There are no frontend tests.
+- **Test scope.** Business logic is unit-tested, and CI runs the frontend tests and the end-to-end test against the full Docker Compose stack on every pull request. Frontend test coverage is still minimal.
 - **Single admin role** with no admin-management screen. Admins are promoted by SQL.
 
 ## CI/CD
