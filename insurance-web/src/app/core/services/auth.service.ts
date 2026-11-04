@@ -10,6 +10,7 @@ import { LoginRequest } from '../models/auth/loginRequest';
 import {
   ChangeEmailRequest,
   ChangePasswordRequest,
+  ChooseNewPasswordRequest,
   VerifyEmailResponse,
 } from '../models/auth/emailVerification';
 
@@ -26,6 +27,9 @@ export class AuthService {
   readonly user = this._user.asReadonly();
   readonly isLoggedIn = computed(() => this._user() !== null);
   readonly isAdmin = computed(() => this._user()?.role === 'Admin');
+
+  /** An admin reset the password: until a new one is chosen, the app only shows the "choose a new password" screen. */
+  readonly mustChangePassword = computed(() => this._user()?.mustChangePassword === true);
 
   /** A signed-in customer who hasn't clicked the link in their verification email yet. */
   readonly needsEmailVerification = computed(() => {
@@ -81,7 +85,20 @@ export class AuthService {
   }
 
   changePassword(req: ChangePasswordRequest): Observable<void> {
-    return this.http.post<void>(`${API_URL}/auth/change-password`, req);
+    return this.http.post<void>(`${API_URL}/auth/change-password`, req).pipe(tap(() => this.refreshUser()));
+  }
+
+  /** Finishes an admin reset, for a session signed in with the one-time password. */
+  chooseNewPassword(req: ChooseNewPasswordRequest): Observable<void> {
+    return this.http.post<void>(`${API_URL}/auth/choose-new-password`, req).pipe(
+      tap(() => {
+        // The reset is over. Clear the flag now, so the guards let the user through
+        // before the refreshed profile arrives.
+        const user = this._user();
+        if (user) this.updateUser({ ...user, mustChangePassword: false });
+        this.refreshUser();
+      }),
+    );
   }
 
   /**

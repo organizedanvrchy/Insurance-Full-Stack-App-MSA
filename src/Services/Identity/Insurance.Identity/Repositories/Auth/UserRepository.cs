@@ -112,8 +112,18 @@ public class UserRepository : IUserRepository
         Role         = r.GetEnum<UserRole>("Role"),
         IsActive     = r.GetBoolean(r.GetOrdinal("IsActive")),
         CreatedAt    = r.GetDateTime(r.GetOrdinal("CreatedAt")),
-        EmailVerifiedAt = r.GetUtcDateTimeOrNull("EmailVerifiedAt")
+        EmailVerifiedAt = r.GetUtcDateTimeOrNull("EmailVerifiedAt"),
+        // Not every proc that returns a user has these (usp_EmailToken_Consume doesn't): default to "no reset".
+        MustChangePassword = HasColumn(r, "MustChangePassword") && r.GetBoolean(r.GetOrdinal("MustChangePassword")),
+        PasswordResetExpiresAt = HasColumn(r, "PasswordResetExpiresAt") ? r.GetUtcDateTimeOrNull("PasswordResetExpiresAt") : null
     };
+
+    private static bool HasColumn(SqlDataReader r, string name)
+    {
+        for (var i = 0; i < r.FieldCount; i++)
+            if (string.Equals(r.GetName(i), name, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
 
     // No password hash: this shape is for other services.
     private static UserAccount MapAccount(SqlDataReader r) => new(
@@ -122,5 +132,6 @@ public class UserRepository : IUserRepository
         r.GetString(r.GetOrdinal("Email")),
         r.GetEnum<UserRole>("Role"),
         r.GetBoolean(r.GetOrdinal("IsActive")),
-        r.GetBoolean(r.GetOrdinal("EmailVerified")));
+        r.GetBoolean(r.GetOrdinal("EmailVerified")),
+        r.GetBoolean(r.GetOrdinal("MustChangePassword")));
 }

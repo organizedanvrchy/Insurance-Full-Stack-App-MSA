@@ -57,7 +57,8 @@ public class FakeUserRepository : IUserRepository
 
     public Task ChangePasswordAsync(int userId, string passwordHash)
     {
-        Users.Single(u => u.UserId == userId).PasswordHash = passwordHash;
+        var u = Users.Single(u => u.UserId == userId);
+        (u.PasswordHash, u.MustChangePassword, u.PasswordResetExpiresAt) = (passwordHash, false, null);
         return Task.CompletedTask;
     }
 }
@@ -143,4 +144,43 @@ public class FakeTokenService : ITokenService
 {
     public (string Token, DateTime ExpiresAtUtc) CreateToken(User user) =>
         ($"token-for-{user.UserId}", DateTime.UtcNow.AddHours(1));
+}
+
+/// <summary>Mimics accounts.usp_Customer_* on top of the fake users: customers only.</summary>
+public class FakeCustomerRepository : ICustomerRepository
+{
+    private readonly FakeUserRepository _users;
+    public FakeCustomerRepository(FakeUserRepository users) => _users = users;
+
+    private Models.User? Customer(int id) =>
+        _users.Users.FirstOrDefault(u => u.UserId == id && u.Role == Insurance.BuildingBlocks.Security.UserRole.Customer);
+
+    private static CustomerInfo Info(Models.User u) =>
+        new(u.UserId, u.FullName, u.Email, u.Phone, u.IsActive, u.CreatedAt, u.EmailVerified, u.Address, u.MustChangePassword);
+
+    public Task<List<CustomerInfo>> GetAllAsync(string? search, bool? isActive) =>
+        Task.FromResult(_users.Users.Where(u => u.Role == Insurance.BuildingBlocks.Security.UserRole.Customer).Select(Info).ToList());
+
+    public Task<CustomerInfo?> GetAsync(int userId) => Task.FromResult(Customer(userId) is { } u ? Info(u) : null);
+
+    public Task<CustomerInfo?> SetActiveAsync(int userId, bool isActive)
+    {
+        if (Customer(userId) is not { } u) return Task.FromResult<CustomerInfo?>(null);
+        u.IsActive = isActive;
+        return Task.FromResult<CustomerInfo?>(Info(u));
+    }
+
+    public Task<CustomerInfo?> UpdateDetailsAsync(int userId, string fullName, string? phone, string? address)
+    {
+        if (Customer(userId) is not { } u) return Task.FromResult<CustomerInfo?>(null);
+        (u.FullName, u.Phone, u.Address) = (fullName, phone, address);
+        return Task.FromResult<CustomerInfo?>(Info(u));
+    }
+
+    public Task<CustomerInfo?> ResetPasswordAsync(int userId, string passwordHash, DateTime expiresAtUtc)
+    {
+        if (Customer(userId) is not { } u) return Task.FromResult<CustomerInfo?>(null);
+        (u.PasswordHash, u.MustChangePassword, u.PasswordResetExpiresAt) = (passwordHash, true, expiresAtUtc);
+        return Task.FromResult<CustomerInfo?>(Info(u));
+    }
 }

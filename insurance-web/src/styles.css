@@ -402,6 +402,18 @@ Both button styles can sit on <a> elements
   background: var(--danger-bg);
 }
 
+/* A destructive confirm button: solid red, text in the surface colour so it reads in both themes */
+.btn-sm.primary.danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: var(--surface);
+}
+
+.btn-sm.primary.danger:hover:not(:disabled) {
+  background: var(--danger-text);
+  border-color: var(--danger-text);
+}
+
 /*
 --------------------------------------------------------------------------
 8. Feedback: alerts, notices, inline errors, badges

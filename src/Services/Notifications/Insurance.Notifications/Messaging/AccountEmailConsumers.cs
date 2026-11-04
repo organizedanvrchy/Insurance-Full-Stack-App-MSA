@@ -75,6 +75,28 @@ public class PasswordChangedConsumer : IConsumer<PasswordChanged>
     }
 }
 
+/// <summary>The one-time password from an admin reset. Always sent: it's the only way to sign in again.</summary>
+public class PasswordResetByAdminConsumer : IConsumer<PasswordResetByAdmin>
+{
+    private readonly INotificationDispatcher _dispatcher;
+    private readonly EmailTemplates _templates;
+
+    public PasswordResetByAdminConsumer(INotificationDispatcher dispatcher, EmailTemplates templates)
+    {
+        _dispatcher = dispatcher;
+        _templates = templates;
+    }
+
+    public Task Consume(ConsumeContext<PasswordResetByAdmin> context)
+    {
+        var e = context.Message;
+        return _dispatcher.SendAsync(new Notification(
+            $"password-reset:{context.MessageId}", e.UserId, NotificationKind.PasswordResetByAdmin,
+            _ => Task.FromResult(_templates.PasswordResetByAdmin(e)),
+            ToEmail: e.Email), context.CancellationToken);
+    }
+}
+
 /// <summary>Saves the "email me payment reminders" answer from the sign-up form, unless the customer already chose.</summary>
 public class CustomerRegisteredConsumer : IConsumer<CustomerRegistered>
 {

@@ -14,6 +14,19 @@ public class ChangeEmailRequest
     public string NewEmail { get; set; } = string.Empty;
 }
 
+/// <summary>
+/// POST /api/auth/choose-new-password, after signing in with an admin-reset one-time password. Signing in with it was
+/// the proof, so no current password is asked for.
+/// </summary>
+public class ChooseNewPasswordRequest
+{
+    [Required, StringLength(PasswordPolicy.MaxLength, ErrorMessage = "Password can be at most 72 characters."), StrongPassword]
+    public string NewPassword { get; set; } = string.Empty;
+
+    [Required, Compare(nameof(NewPassword), ErrorMessage = "The new passwords don't match.")]
+    public string ConfirmNewPassword { get; set; } = string.Empty;
+}
+
 /// <summary>POST /api/auth/change-password. The new password follows the same rules as at sign-up.</summary>
 public class ChangePasswordRequest
 {

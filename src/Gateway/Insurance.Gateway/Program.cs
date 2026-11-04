@@ -42,6 +42,8 @@ builder.Services.AddInsuranceJwt(builder.Configuration, events => events.OnToken
         ctx.Fail("Account is inactive.");
     else if (!ctx.Principal!.IsInRole(user.Role.ToString()))
         ctx.Fail("Role has changed. Please sign in again.");
+    else
+        ctx.HttpContext.Items[nameof(UserAccount)] = user;   // for the password-reset lock below
 });
 
 builder.Services.AddReverseProxy().LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
@@ -72,8 +74,38 @@ app.Use(async (context, next) =>
     await next();
 });
 
+// After an admin reset, the customer must choose a new password before doing anything else. Checked against the account
+// on every request: sessions that were open before the reset are signed out (401), and the session that signed in with
+// the one-time password can only ask "who am I" and choose the new password until it does.
+app.Use(async (context, next) =>
+{
+    if (context.Items[nameof(UserAccount)] is UserAccount { MustChangePassword: true })
+    {
+        var path = context.Request.Path;
+        if (!context.User.HasClaim(AuthClaims.SignedInWithOneTimePassword, "true"))
+        {
+            await WriteProblemAsync(context, StatusCodes.Status401Unauthorized,
+                "Your password was reset. Sign in with the one-time password we emailed you.");
+            return;
+        }
+        if (!path.StartsWithSegments("/api/auth/me") && !path.StartsWithSegments("/api/auth/choose-new-password"))
+        {
+            await WriteProblemAsync(context, StatusCodes.Status403Forbidden,
+                "Your password was reset. Please choose a new password to continue.");
+            return;
+        }
+    }
+    await next();
+});
+
 app.UseAuthorization();
 app.MapControllers();
 app.MapReverseProxy();
 app.MapHealthChecks("/health");
 app.Run();
+
+static Task WriteProblemAsync(HttpContext context, int status, string title)
+{
+    context.Response.StatusCode = status;
+    return context.Response.WriteAsJsonAsync(new Microsoft.AspNetCore.Mvc.ProblemDetails { Status = status, Title = title });
+}

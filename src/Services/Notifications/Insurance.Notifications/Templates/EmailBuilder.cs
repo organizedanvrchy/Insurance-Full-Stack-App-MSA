@@ -73,6 +73,17 @@ public sealed class EmailBuilder
         return this;
     }
 
+    /// <summary>A code the customer has to type, e.g. a one-time password: large, monospaced, easy to select.</summary>
+    public EmailBuilder Code(string label, string code)
+    {
+        _html.Append($"""
+            <p style="margin:0 0 6px;font-size:13px;color:{Muted};">{E(label)}</p>
+            <p style="margin:0 0 20px;padding:14px 16px;background:#eaf3f9;border-radius:6px;text-align:center;font-family:Consolas,Menlo,monospace;font-size:22px;letter-spacing:2px;color:{Ink};">{E(code)}</p>
+            """);
+        _text.AppendLine($"{label}: {code}").AppendLine();
+        return this;
+    }
+
     /// <summary>A two-column table of facts (receipt lines, claim details).</summary>
     public EmailBuilder Details(params (string Label, string Value)[] rows)
     {

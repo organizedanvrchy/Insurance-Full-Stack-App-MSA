@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { authGuard, roleGuard } from './core/guards/auth.guard';
+import { authGuard, mustChangePasswordGuard, roleGuard } from './core/guards/auth.guard';
 
 export const routes: Routes = [
   // Public pages (no nav bar)
@@ -13,6 +13,13 @@ export const routes: Routes = [
       import('./features/auth/register.component').then((m) => m.RegisterComponent),
   },
 
+  {
+    // After an admin reset: the customer signed in with the emailed one-time password and must choose a new one
+    path: 'choose-new-password',
+    canActivate: [mustChangePasswordGuard],
+    loadComponent: () =>
+      import('./features/auth/choose-new-password.component').then((m) => m.ChooseNewPasswordComponent),
+  },
   {
     // Opened from the link in a verification email, signed in or not
     path: 'verify-email',

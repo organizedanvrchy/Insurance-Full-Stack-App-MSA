@@ -76,7 +76,11 @@ public static class ServiceClients
     {
         try
         {
-            var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>(Json);
+            // A validation failure's title is generic ("One or more validation errors occurred."): pass on the
+            // actual messages instead, so they reach the person who filled in the form.
+            var problem = await response.Content.ReadFromJsonAsync<ValidationProblemDetails>(Json);
+            if (problem?.Errors is { Count: > 0 } errors)
+                return string.Join(" ", errors.Values.SelectMany(m => m).Distinct());
             if (!string.IsNullOrEmpty(problem?.Title)) return problem.Title;
         }
         catch (Exception ex) when (ex is JsonException or NotSupportedException) { }

@@ -130,6 +130,7 @@ public class TemplateTests
     [InlineData(ClaimStatus.Approved, "Good news: claim CLM-1 was approved")]
     [InlineData(ClaimStatus.Rejected, "An update on your claim CLM-1")]
     [InlineData(ClaimStatus.Paid, "Your payment for claim CLM-1 is on its way")]
+    [InlineData(ClaimStatus.NeedsMoreInfo, "We need more information about claim CLM-1")]
     public void Each_claim_status_has_its_own_subject(ClaimStatus status, string subject)
     {
         var e = new ClaimStatusChanged(1, "CLM-1", 1, 10, 500m, ClaimStatus.Submitted, status, null, DateTime.UtcNow);
@@ -145,7 +146,24 @@ public class TemplateTests
 
         var email = _templates.ClaimStatusChanged("Jane Doe", e, "Gold Health Plan");
 
+        Assert.Contains("We apologize, but after reviewing your claim, we've decided that we're unable to approve it. The reviewer's reason is below.", email.Text);
         Assert.Contains("Reason: Flood damage is excluded from this plan.", email.Text);
+        Assert.Contains("If you'd like to dispute this decision, contact us at support@rainsurance.example.", email.Text);
+    }
+
+    [Fact]
+    public void A_request_for_more_information_shows_the_questions_and_what_to_do()
+    {
+        var e = new ClaimStatusChanged(1, "CLM-1", 1, 10, 500m, ClaimStatus.UnderReview, ClaimStatus.NeedsMoreInfo,
+            "When did you first notice the leak?", DateTime.UtcNow);
+
+        var email = _templates.ClaimStatusChanged("Jane Doe", e, "Gold Home Plan");
+
+        Assert.Contains("Our claims department needs more information about your claim", email.Text);
+        Assert.Contains("Questions from the claims department: When did you first notice the leak?", email.Text);
+        Assert.Contains("We recommend adding images or documents that give more evidence, and answering the questions above.", email.Text);
+        Assert.Contains("Needs more information", email.Text);
+        Assert.Contains("http://app.test/claims", email.Text);
     }
 
     [Theory]
@@ -289,5 +307,40 @@ public class TemplateTests
         Assert.Equal(new DateOnly(2026, 11, 2), BusinessTime.TodayAt(new DateTimeOffset(2026, 11, 3, 3, 30, 0, TimeSpan.Zero)));
         Assert.Equal(new DateOnly(2026, 11, 3), BusinessTime.TodayAt(new DateTimeOffset(2026, 11, 3, 5, 30, 0, TimeSpan.Zero)));
         Assert.Equal("Eastern Standard Time", BusinessTime.SqlServerZoneName);
+    }
+
+    // ---------------- Admin actions ----------------
+
+    [Fact]
+    public void The_reset_email_gives_the_one_time_password_and_its_30_minutes()
+    {
+        var e = new PasswordResetByAdmin(1, "Jane Doe", "jane@example.com", "Ab3$xyzPQRst7k",
+            new DateTime(2026, 11, 3, 15, 30, 0, DateTimeKind.Utc), 30);
+
+        var email = _templates.PasswordResetByAdmin(e);
+
+        Assert.Equal("Your RAINsurance password has been reset", email.Subject);
+        Assert.Contains("Your one-time password: Ab3$xyzPQRst7k", email.Text);
+        Assert.Contains("Enter this one-time password the next time you sign in.", email.Text);
+        Assert.Contains("expires in 30 minutes, at 10:30 AM EST", email.Text);
+        Assert.Contains("Your previous password no longer works.", email.Text);
+        Assert.Contains("This is an automated message. Please don't reply to this email", email.Text);
+        Assert.Contains("Ab3$xyzPQRst7k", email.Html);
+    }
+
+    [Fact]
+    public void An_email_changed_by_an_admin_at_the_customers_request_asks_them_to_verify_it()
+    {
+        var old = _templates.EmailChanged(new EmailChanged(1, "Jane Doe", "old@example.com", "new@example.com", DateTime.UtcNow, ByAdmin: true));
+        var link = _templates.VerifyEmail(new EmailVerificationRequested(1, "Jane Doe", "new@example.com", "t", DateTime.UtcNow,
+            AfterEmailChange: true, ValidForMinutes: 15, ByAdmin: true));
+
+        Assert.Contains("At your request, an administrator changed the sign-in email for your RAINsurance account from old@example.com to new@example.com", old.Text);
+        Assert.Contains("You'll have to verify the new email address before you can enroll in policies or file claims.", old.Text);
+        Assert.Equal("Verify your new RAINsurance email address", link.Subject);
+        Assert.Contains("At your request, an administrator has changed the sign-in email for your RAINsurance account to new@example.com. Please verify your new email address.", link.Text);
+        Assert.DoesNotContain("Confirm this is you", link.Text);
+        Assert.Contains("Verify my email: http://app.test/verify-email?token=t", link.Text);
+        Assert.Contains("You won't be able to enroll in any policies or file claims until you verify your email.", link.Text);
     }
 }

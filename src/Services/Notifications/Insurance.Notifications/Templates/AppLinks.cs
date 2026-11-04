@@ -20,6 +20,7 @@ public class AppLinks
     public string SupportEmail { get; }
 
     public string VerifyEmail(string token) => $"{_base}/verify-email?token={Uri.EscapeDataString(token)}";
+    public string SignIn => $"{_base}/login";
     public string MyPolicies => $"{_base}/my-policies";
     public string PaymentSchedule(int enrollmentId) => $"{_base}/my-policies/{enrollmentId}/payments";
     public string Receipt(int transactionId) => $"{_base}/receipts/{transactionId}";

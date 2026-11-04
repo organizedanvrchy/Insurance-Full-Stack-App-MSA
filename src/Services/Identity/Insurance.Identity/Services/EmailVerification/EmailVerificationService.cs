@@ -86,22 +86,33 @@ public class EmailVerificationService : IEmailVerificationService
         // the SAME inbox, and someone who mistyped their address at sign-up should be able to fix it straight away.
         await EnforceLimitAsync(user.UserId, cooldown: false);
 
+        await ChangeEmailCoreAsync(user, newEmail, byAdmin: false);
+        return AuthService.MapToDto(user);
+    }
+
+    public async Task ChangeEmailByAdminAsync(int userId, string newEmail)
+    {
+        var user = await _users.GetByIdAsync(userId) ?? throw new NotFoundException("Customer not found.");
+        if (newEmail == user.Email) return;
+        await ChangeEmailCoreAsync(user, newEmail, byAdmin: true);
+    }
+
+    private async Task ChangeEmailCoreAsync(User user, string newEmail, bool byAdmin)
+    {
         var oldEmail = await _users.ChangeEmailAsync(user.UserId, newEmail);   // 409 if the address is taken
         user.Email = newEmail;
         user.EmailVerifiedAt = null;
 
         // The old address is told (it's the owner's way to notice a takeover), and the new one must be verified.
-        await TryPublishAsync(new EmailChanged(user.UserId, user.FullName, oldEmail, newEmail, _clock.GetUtcNow().UtcDateTime));
+        await TryPublishAsync(new EmailChanged(user.UserId, user.FullName, oldEmail, newEmail, _clock.GetUtcNow().UtcDateTime, byAdmin));
         try
         {
-            await IssueLinkAsync(user, afterEmailChange: true);
+            await IssueLinkAsync(user, afterEmailChange: true, byAdmin);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Could not send the verification email after user {UserId} changed their email.", user.UserId);
+            _logger.LogWarning(ex, "Could not send the verification email after user {UserId}'s email was changed.", user.UserId);
         }
-
-        return AuthService.MapToDto(user);
     }
 
     private async Task<User> GetActiveUserAsync(int userId)
@@ -142,13 +153,13 @@ public class EmailVerificationService : IEmailVerificationService
             throw new TooManyRequestsException("You've asked for too many verification emails today. Please try again tomorrow.");
     }
 
-    private async Task IssueLinkAsync(User user, bool afterEmailChange = false)
+    private async Task IssueLinkAsync(User user, bool afterEmailChange = false, bool byAdmin = false)
     {
         var token = VerificationTokens.NewToken();
         var expires = _clock.GetUtcNow().UtcDateTime.Add(_options.LinkLifetime);
 
         await _tokens.CreateAsync(user.UserId, user.Email, VerificationTokens.Hash(token), expires);
         await _events.PublishAsync(new EmailVerificationRequested(user.UserId, user.FullName, user.Email, token, expires,
-            afterEmailChange, (int)Math.Round(_options.LinkLifetime.TotalMinutes)));
+            afterEmailChange, (int)Math.Round(_options.LinkLifetime.TotalMinutes), byAdmin));
     }
 }

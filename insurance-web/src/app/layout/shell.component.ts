@@ -1,4 +1,4 @@
-import { Component, ElementRef, HostListener, computed, inject, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, HostListener, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
@@ -45,6 +45,11 @@ export class ShellComponent {
   constructor() {
     // The stored user can be stale (e.g. verified their email on another device): reload it once per visit.
     this.auth.refreshUser();
+
+    // An admin reset the password while this session was open: go straight to "choose a new password".
+    effect(() => {
+      if (this.auth.mustChangePassword()) this.router.navigate(['/choose-new-password']);
+    });
 
     // Close any open menu after navigating
     this.router.events

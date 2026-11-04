@@ -7,6 +7,7 @@ public enum NotificationKind
     EmailChangeRequested,   // no longer sent; kept so older history rows still read
     EmailChanged,           // to the old address, after a change
     PasswordChanged,
+    PasswordResetByAdmin,
     PolicyActivated,
     PolicyCancelled,
     ClaimSubmitted,
