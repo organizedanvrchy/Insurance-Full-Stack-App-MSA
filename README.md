@@ -7,6 +7,7 @@ A full-stack insurance platform. Customers get **personalized quotes**, enroll i
 ![SQL Server](https://img.shields.io/badge/SQL%20Server-ADO.NET%20%2B%20stored%20procedures-CC2927?logo=microsoftsqlserver&logoColor=white)
 ![Azure](https://img.shields.io/badge/Hosted%20on-Azure-0078D4?logo=microsoftazure&logoColor=white)
 ![Tests](https://img.shields.io/badge/tests-xUnit-5E2D79)
+![CI](https://github.com/organizedanvrchy/Insurance-Full-Stack-App-MSA/actions/workflows/ci.yml/badge.svg)
 
 > **Live demo:** [Project Website](https://projectdeploy-ewbahrbra0abcuam.westus3-01.azurewebsites.net/)
 > *(Hosted on a development-tier Azure plan, so the first request after a quiet period may take a few seconds.)*
@@ -464,8 +465,17 @@ How it stays reliable:
 - **No pagination, file attachments or push notifications** yet.
 - **Development emails go to Mailpit.** Sending to real inboxes needs an SMTP provider (see `Email:*` in the configuration reference); the live demo doesn't send email yet.
 - **Reminders are not sent late.** The reminder job runs hourly and sends a reminder on its day or the day after. If Billing is down for longer, that reminder is skipped rather than sent late (the next stage still goes out).
-- **Test scope.** Business logic is unit-tested. The end-to-end run with Docker Compose is a script, not yet part of an automated pipeline. There are no frontend tests.
+- **Test scope.** Business logic is unit-tested, and CI runs the frontend tests and the end-to-end test against the full Docker Compose stack on every pull request. Frontend test coverage is still minimal.
 - **Single admin role** with no admin-management screen. Admins are promoted by SQL.
+
+## CI/CD
+
+- **CI** (`.github/workflows/ci.yml`) runs on every pull request and push to `main`: .NET build and unit tests,
+  Angular tests and build, then the end-to-end test against the whole system in Docker Compose.
+- **CD** (`.github/workflows/cd.yml`) runs after CI passes on `main`: it publishes an image of every service to
+  `ghcr.io/organizedanvrchy/insurance-<service>` (tags `latest` and `sha-<commit>`) and the Angular build as an artifact.
+- Run the published images instead of building: `docker login ghcr.io`, then
+  `docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.release.yml up -d`.
 
 ## Roadmap
 

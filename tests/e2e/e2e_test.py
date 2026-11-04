@@ -25,7 +25,6 @@ COMPOSE = ["docker", "compose", "-f", "deploy/docker-compose.yml"]
 RUN = str(int(time.time()))          # makes this run's emails unique
 failures = []
 
-
 def sa_password():
     if "SA_PASSWORD" in os.environ:
         return os.environ["SA_PASSWORD"]
@@ -70,15 +69,39 @@ def sql(query):
                               "-U", "sa", "-P", sa_password(), "-b", "-Q", query], check=True, capture_output=True)
 
 
-def wait_until_ready():
-    for _ in range(60):
-        try:
-            if call("GET", "/api/policies")[0] == 401:   # gateway up and routing to Catalog
-                return
-        except OSError:
-            pass
-        time.sleep(2)
-    sys.exit("The gateway did not come up at " + API)
+# One route per service, called without a token. Once a service is running it answers itself (401 or 404);
+# while it is still starting, the gateway answers 502/503 because there is nothing to forward to.
+SERVICE_PROBES = {
+    "Identity": "/api/auth/me",
+    "Catalog": "/api/policies",
+    "Quotes": "/api/quotes/1",
+    "Enrollments": "/api/enrollments/mine",
+    "Billing": "/api/payments/transactions",
+    "Claims": "/api/claims/mine",
+    "Notifications": "/api/notifications/preferences",
+}
+
+def wait_until_ready(timeout_seconds=300):
+    """Waits for the gateway, every service behind it, and Mailpit. Each service only starts listening after
+    applying its database scripts, so on a fresh database (as in CI) some take much longer than others."""
+    deadline = time.time() + timeout_seconds
+    waiting = dict(SERVICE_PROBES, Mailpit=None)
+    while waiting and time.time() < deadline:
+        for name, path in list(waiting.items()):
+            try:
+                if path is None:
+                    with urllib.request.urlopen(f"{MAILPIT}/api/v1/messages", timeout=5):
+                        pass
+                elif call("GET", path)[0] in (502, 503, 504):
+                    continue
+                del waiting[name]
+            except OSError:
+                pass   # gateway or Mailpit not listening yet
+        if waiting:
+            time.sleep(2)
+    if waiting:
+        sys.exit(f"Still not up after {timeout_seconds}s: {', '.join(waiting)}")
+    print("All services are up.")
 
 
 def emails_to(address, subject_contains, timeout=30):
