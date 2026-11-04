@@ -1,0 +1,98 @@
+name: CD
+
+# Delivery: after CI passes on main, publish a Docker image of every service to GitHub Container Registry
+# (ghcr.io), and the built Angular app as a downloadable artifact. Can also be started by hand (Actions tab).
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write                                # needed to push images to ghcr.io
+
+# Never two publishes at once; a newer one waits instead of cancelling the one in progress.
+concurrency:
+  group: cd
+  cancel-in-progress: false
+
+env:
+  # The commit that was tested (workflow_run), or the latest main (started by hand).
+  COMMIT: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+jobs:
+  images:
+    name: Image (${{ matrix.service }})
+    # Only when CI succeeded for a push to main (a merge), or when started by hand.
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false                           # one image failing doesn't stop the others
+      matrix:                                    # one job per deployable, all running in parallel
+        include:
+          - { service: identity,      assembly: Insurance.Identity,      project: src/Services/Identity/Insurance.Identity/Insurance.Identity.csproj }
+          - { service: catalog,       assembly: Insurance.Catalog,       project: src/Services/Catalog/Insurance.Catalog/Insurance.Catalog.csproj }
+          - { service: quotes,        assembly: Insurance.Quotes,        project: src/Services/Quotes/Insurance.Quotes/Insurance.Quotes.csproj }
+          - { service: enrollments,   assembly: Insurance.Enrollments,   project: src/Services/Enrollments/Insurance.Enrollments/Insurance.Enrollments.csproj }
+          - { service: billing,       assembly: Insurance.Billing,       project: src/Services/Billing/Insurance.Billing/Insurance.Billing.csproj }
+          - { service: claims,        assembly: Insurance.Claims,        project: src/Services/Claims/Insurance.Claims/Insurance.Claims.csproj }
+          - { service: notifications, assembly: Insurance.Notifications, project: src/Services/Notifications/Insurance.Notifications/Insurance.Notifications.csproj }
+          - { service: gateway,       assembly: Insurance.Gateway,       project: src/Gateway/Insurance.Gateway/Insurance.Gateway.csproj }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.COMMIT }}
+      - name: Short commit id for the image tag
+        id: commit
+        run: echo "short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}  # provided automatically; no secret to create
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile
+          build-args: |
+            PROJECT=${{ matrix.project }}
+            ASSEMBLY=${{ matrix.assembly }}
+          push: true
+          # latest = newest tested main; sha-<commit> = this exact version, kept so you can go back to it.
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/insurance-${{ matrix.service }}:latest
+            ghcr.io/${{ github.repository_owner }}/insurance-${{ matrix.service }}:sha-${{ steps.commit.outputs.short }}
+          # Links the package to this repository (so it shows on the repo page and shares its access).
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ env.COMMIT }}
+          # Reuse layers from the previous run: much faster when only a little changed.
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,scope=${{ matrix.service }},mode=max
+
+  frontend:
+    name: Angular build
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: insurance-web
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.COMMIT }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: insurance-web/package-lock.json
+      - run: npm ci
+      - run: npx ng build                        # production configuration: uses environment.ts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: insurance-web
+          path: insurance-web/dist/insurance-web
+          retention-days: 30
