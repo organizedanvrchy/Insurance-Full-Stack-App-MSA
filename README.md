@@ -268,7 +268,8 @@ Every setting can also be given as an environment variable (`:` becomes `__`), w
 | `Jwt:Key` | Every service and the gateway | **User secrets, `.env` or a secret store only. Never commit it.** At least 32 characters, the same everywhere |
 | `Jwt:Issuer`, `Jwt:Audience` | Every service and the gateway | Must match between token creation (Identity) and validation |
 | `Jwt:ExpiryMinutes` | Identity | Default 60 |
-| `RabbitMq:Host`, `Username`, `Password` | Identity, Quotes, Enrollments, Billing, Claims, Notifications | The event bus |
+| `RabbitMq:Host`, `Username`, `Password` | Identity, Quotes, Enrollments, Billing, Claims, Notifications | The event bus (local and Docker) |
+| `ServiceBus:ConnectionString` | Same services | When set, the event bus is **Azure Service Bus** instead of RabbitMQ (Standard tier or higher: topics are required). **Secret: store it in the container app's secrets or Key Vault.** |
 | `Email:Host`, `Port`, `Security`, `Username`, `Password` | Notifications | The SMTP server. `Security` is `None` (Mailpit), `StartTls` (port 587) or `SslOnConnect` (port 465). **Password in user secrets or `.env` only.** An empty `Host` logs emails instead of sending them |
 | `Email:FromAddress`, `FromName` | Notifications | The sender |
 | `Email:AppBaseUrl` | Notifications | The Angular app's address; links in emails point there |
@@ -408,8 +409,8 @@ insurance-management-system/
 
 The containers built by `deploy/Dockerfile` run on **Azure Container Apps** (or AKS), one container app per service plus the gateway:
 
-1. Create one **Azure SQL database per service** (`InsuranceIdentity`, `InsuranceCatalog`, `InsuranceQuotes`, `InsuranceEnrollments`, `InsuranceBilling`, `InsuranceClaims`, `InsuranceNotifications`). The services create their tables on first start.
-2. Provide the event bus: RabbitMQ in a container app, or switch `Insurance.BuildingBlocks/Messaging/Messaging.cs` to Azure Service Bus (`UsingAzureServiceBus`, one line in MassTransit).
+1. Create one **Azure SQL database per service** (any names: each service uses the one named in its `ConnectionStrings__Database`). The services create their tables on first start.
+2. Create an **Azure Service Bus** namespace (Standard tier: Basic has no topics) and give every service except the gateway its connection string as `ServiceBus__ConnectionString`. With it set, the services use Service Bus instead of RabbitMQ and create their topics and queues on first start.
 3. Push the images to Azure Container Registry. Give only the **gateway** external ingress; the seven services get internal ingress, so they are reachable only from inside the environment.
 4. Set each container's settings as in `deploy/docker-compose.yml`: its own `ConnectionStrings__Database`, the shared `Jwt__Key` (from Key Vault), `RabbitMq__*`, `Services__*` and, for the gateway, the `ReverseProxy__Clusters__*` addresses and `Cors__AllowedOrigins__0`. The Notifications service also needs an SMTP provider in `Email__*` (password from Key Vault) and `Email__AppBaseUrl` set to the deployed frontend; without a host it only logs emails.
 5. Point `apiUrl` in `insurance-web/src/environments/environment.ts` (the production build) at the gateway, run `ng build`, and host the output (for example Azure Static Web Apps). Angular's client-side routes need a fallback to `index.html`.
@@ -474,6 +475,9 @@ How it stays reliable:
   Angular tests and build, then the end-to-end test against the whole system in Docker Compose.
 - **CD** (`.github/workflows/cd.yml`) runs after CI passes on `main`: it publishes an image of every service to
   `ghcr.io/organizedanvrchy/insurance-<service>` (tags `latest` and `sha-<commit>`) and the Angular build as an artifact.
+  When the Azure settings exist (see `deploy/azure/README.md`, "Continuous deployment"), it also pushes the images to
+  the Azure container registry, switches every container app to the new version, and deploys the Angular app to the
+  Static Web App.
 - Run the published images instead of building: `docker login ghcr.io`, then
   `docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.release.yml up -d`.
 

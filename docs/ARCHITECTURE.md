@@ -98,7 +98,7 @@ flowchart TD
 | Claims | Enrollments, Billing, Catalog, Identity | Eligibility (verified email, owner, status, dates, overdue premiums, coverage); names on claim screens |
 | Notifications | Identity, Enrollments, Catalog | The recipient's name, address and status; plan names and policy dates for the email (service token) |
 
-**Asynchronous events (RabbitMQ through MassTransit).** When something that happened in one service requires another to change its own data, the first publishes an event, and the second reacts in its own transaction. Each subscribing service has its own queue, failed deliveries are retried (100 ms to 15 s), and every consumer is idempotent because delivery is at least once.
+**Asynchronous events (RabbitMQ through MassTransit; Azure Service Bus in Azure).** The transport is chosen by configuration in `Messaging.cs`: with `ServiceBus:ConnectionString` set, the same consumers, retries and endpoints run on Azure Service Bus (Standard tier, for topics), otherwise on RabbitMQ. When something that happened in one service requires another to change its own data, the first publishes an event, and the second reacts in its own transaction. Each subscribing service has its own queue, failed deliveries are retried (100 ms to 15 s), and every consumer is idempotent because delivery is at least once.
 
 | Event | Published by | Consumed by | Effect |
 |---|---|---|---|
