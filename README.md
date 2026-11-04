@@ -475,6 +475,9 @@ How it stays reliable:
   Angular tests and build, then the end-to-end test against the whole system in Docker Compose.
 - **CD** (`.github/workflows/cd.yml`) runs after CI passes on `main`: it publishes an image of every service to
   `ghcr.io/organizedanvrchy/insurance-<service>` (tags `latest` and `sha-<commit>`) and the Angular build as an artifact.
+  When the Azure settings exist (see `deploy/azure/README.md`, "Continuous deployment"), it also pushes the images to
+  the Azure container registry, switches every container app to the new version, and deploys the Angular app to the
+  Static Web App.
 - Run the published images instead of building: `docker login ghcr.io`, then
   `docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.release.yml up -d`.
 

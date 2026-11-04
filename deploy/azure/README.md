@@ -62,3 +62,43 @@ wake up: the first start may fail and restart once.
 Set `apiUrl` in `insurance-web/src/environments/environment.ts` to `https://<gateway fqdn>/api`. The Static Web App
 gets the build (`insurance-web/dist/insurance-web/browser`); `public/staticwebapp.config.json` sends every app
 route to `index.html`.
+
+## Continuous deployment
+
+`.github/workflows/cd.yml` runs after CI passes on `main`. Once the setup below is done it also pushes every image to
+the Azure container registry (tags `latest` and `sha-<commit>`), switches each container app to the new `sha-` tag,
+then deploys the Angular build to the Static Web App. GitHub signs in to Azure with OpenID Connect: there is no
+Azure password stored in GitHub, only the ids below.
+
+### One-time setup
+
+In Cloud Shell, create an identity for GitHub that Azure trusts for runs on `main` (and on `azure-deployment`, to try
+the workflow by hand before merging), allowed to change this resource group only:
+
+```bash
+REPO=organizedanvrchy/Insurance-Full-Stack-App-MSA        # exactly as GitHub shows it
+APP_ID=$(az ad app create --display-name kvbinsurance-github-deploy --query appId -o tsv)
+az ad sp create --id "$APP_ID" -o none
+for branch in main azure-deployment; do
+  az ad app federated-credential create --id "$APP_ID" --parameters "{\"name\":\"github-${branch}\",\"issuer\":\"https://token.actions.githubusercontent.com\",\"subject\":\"repo:${REPO}:ref:refs/heads/${branch}\",\"audiences\":[\"api://AzureADTokenExchange\"]}" -o none
+done
+az role assignment create --assignee "$APP_ID" --role Contributor --scope "$(az group show --name KVBInsurance-RG --query id -o tsv)" -o none
+echo "AZURE_CLIENT_ID=$APP_ID"; echo "AZURE_TENANT_ID=$(az account show --query tenantId -o tsv)"; echo "AZURE_SUBSCRIPTION_ID=$(az account show --query id -o tsv)"
+```
+
+Then in GitHub, **Settings → Secrets and variables → Actions** (needs admin rights on the repository):
+
+| Kind | Name | Value |
+|---|---|---|
+| Secret | `AZURE_CLIENT_ID` | printed above |
+| Secret | `AZURE_TENANT_ID` | printed above |
+| Secret | `AZURE_SUBSCRIPTION_ID` | printed above |
+| Secret | `AZURE_STATIC_WEB_APPS_API_TOKEN` | Static Web App → Overview → Manage deployment token |
+| Variable | `AZURE_CONTAINER_REGISTRY` | `KVBInsuranceContainer` |
+| Variable | `AZURE_RESOURCE_GROUP` | `KVBInsurance-RG` |
+
+The Azure steps run only while `AZURE_CONTAINER_REGISTRY` is set. To try it before merging: **Actions → CD → Run
+workflow**, branch `azure-deployment`.
+
+To go back to an earlier version, point the apps at its tag:
+`az containerapp update --resource-group KVBInsurance-RG --name <app> --image <registry>.azurecr.io/<app>:sha-<commit>`.
