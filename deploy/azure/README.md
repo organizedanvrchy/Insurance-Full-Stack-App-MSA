@@ -76,7 +76,9 @@ In Cloud Shell, create an identity for GitHub that Azure trusts for runs on `mai
 the workflow by hand before merging), allowed to change this resource group only:
 
 ```bash
-REPO=organizedanvrchy/Insurance-Full-Stack-App-MSA        # exactly as GitHub shows it
+# How GitHub names this repository in its sign-in tokens. Some accounts add id numbers
+# (owner@123/repo@456): if a run fails with AADSTS700213, copy the part before ":ref:" from that error.
+REPO=organizedanvrchy@154699780/Insurance-Full-Stack-App-MSA@1437338850
 APP_ID=$(az ad app create --display-name kvbinsurance-github-deploy --query appId -o tsv)
 az ad sp create --id "$APP_ID" -o none
 for branch in main azure-deployment; do
