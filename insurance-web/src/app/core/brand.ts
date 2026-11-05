@@ -1,5 +1,5 @@
 export const BRAND = {
-  name: 'RAINsurance',
-  slogan: 'We’ve got you covered, even on rainy days.',
-  shortSlogan: 'Rain or shine, you’re covered.',
+  name: 'KVB Insurance',
+  slogan: 'Seasons change. Your coverage shouldn’t.',
+  shortSlogan: 'Covered through every season.',
 } as const;

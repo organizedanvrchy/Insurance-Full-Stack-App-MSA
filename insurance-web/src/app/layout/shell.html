@@ -1,9 +1,9 @@
 <header class="nav" #header>
-  <!-- Decorative rain behind the nav content -->
-  <div class="nav-rain" aria-hidden="true">
-    @for (d of drops; track $index) {
-    <span class="drop" [style.left.%]="d.left" [style.height.px]="d.length" [style.animation-delay.s]="d.delay"
-      [style.animation-duration.s]="d.duration"></span>
+  <!-- Decorative falling leaves behind the nav content -->
+  <div class="nav-leaves" aria-hidden="true">
+    @for (l of leaves; track $index) {
+    <span class="leaf" [class.alt]="l.alt" [style.left.%]="l.left" [style.width.px]="l.size" [style.height.px]="l.size"
+      [style.--leaf-color]="l.color" [style.animation-delay.s]="l.delay" [style.animation-duration.s]="l.duration"></span>
     }
   </div>
 
@@ -104,6 +104,7 @@
 </header>
 
 <main class="content">
+  <app-verify-email-banner />
   <router-outlet />
 </main>
 

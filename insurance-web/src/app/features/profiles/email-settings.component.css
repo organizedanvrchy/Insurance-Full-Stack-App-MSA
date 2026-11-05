@@ -1,0 +1,78 @@
+/* "Email settings" panel on the profile page. */
+
+.email-settings {
+  display: grid;
+  gap: 1rem;
+  scroll-margin-top: 5rem; /* so #email-settings links don't land under the sticky nav */
+}
+
+.email-settings h2 {
+  margin: 0;
+}
+
+.email-settings h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.address {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.change {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.change p {
+  margin: 0;
+}
+
+.label {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.value {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.15rem;
+  overflow-wrap: anywhere;
+}
+
+.ok {
+  margin: 0;
+  color: var(--success-text);
+  font-weight: 600;
+}
+
+.prefs {
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+}
+
+.toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  cursor: pointer;
+}
+
+.toggle input {
+  margin-top: 0.25rem;
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.toggle span {
+  display: grid;
+  gap: 0.15rem;
+}

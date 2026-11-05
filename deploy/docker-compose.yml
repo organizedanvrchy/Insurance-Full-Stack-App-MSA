@@ -1,8 +1,9 @@
-# The whole system on one machine: SQL Server, RabbitMQ, the six services and the gateway.
+# The whole system on one machine: SQL Server, RabbitMQ, Mailpit, the seven services and the gateway.
 #   cp deploy/.env.example deploy/.env      (then edit it)
 #   docker compose -f deploy/docker-compose.yml up --build
 # The API is then at http://localhost:5080/api. The gateway is the only service with a published port;
 # SQL Server and RabbitMQ publish theirs for local tools. Each service creates its own database on first start.
+# Every email the system sends lands in Mailpit's inbox at http://localhost:8025 (nothing reaches real inboxes).
 
 x-service: &service
   build:
@@ -16,10 +17,12 @@ x-service: &service
 x-common-env: &common-env
   Jwt__Key: ${JWT_KEY:?set JWT_KEY in deploy/.env}
   RabbitMq__Host: rabbitmq
+  # What "today" means for due dates, overdue premiums and claims, and the zone emails show times in.
+  BusinessTimeZone: ${BUSINESS_TIME_ZONE:-America/New_York}
 
 services:
   sqlserver:
-    # One SQL Server instance hosting six separate databases, one per service.
+    # One SQL Server instance hosting seven separate databases, one per service.
     # In Azure each would be its own Azure SQL database.
     image: mcr.microsoft.com/mssql/server:2022-latest
     environment:
@@ -44,6 +47,13 @@ services:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 5s
       retries: 30
+
+  mailpit:
+    # A fake SMTP server with a web inbox, for development. The Notifications service sends every email here.
+    image: axllent/mailpit:v1.31
+    ports:
+      - "8025:8025"       # web inbox: http://localhost:8025
+      - "1025:1025"       # SMTP, for running the Notifications service outside Docker
 
   identity:
     <<: *service
@@ -93,6 +103,7 @@ services:
     environment:
       <<: *common-env
       ConnectionStrings__Database: Server=sqlserver;Database=InsuranceEnrollments;User Id=sa;Password=${SA_PASSWORD};TrustServerCertificate=True;
+      Services__Identity: http://identity:8080/
       Services__Catalog: http://catalog:8080/
       Services__Quotes: http://quotes:8080/
       Services__Billing: http://billing:8080/
@@ -122,10 +133,43 @@ services:
     environment:
       <<: *common-env
       ConnectionStrings__Database: Server=sqlserver;Database=InsuranceClaims;User Id=sa;Password=${SA_PASSWORD};TrustServerCertificate=True;
+      ClaimDocuments__RootPath: /data/claim-documents
       Services__Identity: http://identity:8080/
       Services__Catalog: http://catalog:8080/
       Services__Enrollments: http://enrollments:8080/
       Services__Billing: http://billing:8080/
+    volumes:
+      - claimdocuments:/data/claim-documents   # uploaded files, kept when the container is recreated
+
+  notifications:
+    <<: *service
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        PROJECT: src/Services/Notifications/Insurance.Notifications/Insurance.Notifications.csproj
+        ASSEMBLY: Insurance.Notifications
+    depends_on:
+      sqlserver: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      mailpit: { condition: service_started }
+    environment:
+      <<: *common-env
+      ConnectionStrings__Database: Server=sqlserver;Database=InsuranceNotifications;User Id=sa;Password=${SA_PASSWORD};TrustServerCertificate=True;
+      Services__Identity: http://identity:8080/
+      Services__Catalog: http://catalog:8080/
+      Services__Enrollments: http://enrollments:8080/
+      Services__Claims: http://claims:8080/
+      # Mailpit by default. For a real mail server set EMAIL_HOST, EMAIL_PORT, EMAIL_SECURITY, EMAIL_USERNAME,
+      # EMAIL_PASSWORD and EMAIL_FROM in deploy/.env.
+      Email__Host: ${EMAIL_HOST:-mailpit}
+      Email__Port: ${EMAIL_PORT:-1025}
+      Email__Security: ${EMAIL_SECURITY:-None}
+      Email__Username: ${EMAIL_USERNAME:-}
+      Email__Password: ${EMAIL_PASSWORD:-}
+      Email__FromAddress: ${EMAIL_FROM:-no-reply@kvbinsurance.example}
+      Email__SupportEmail: ${SUPPORT_EMAIL:-support@kvbinsurance.example}
+      Email__AppBaseUrl: ${APP_BASE_URL:-http://localhost:4200}
 
   gateway:
     <<: *service
@@ -135,7 +179,7 @@ services:
       args:
         PROJECT: src/Gateway/Insurance.Gateway/Insurance.Gateway.csproj
         ASSEMBLY: Insurance.Gateway
-    depends_on: [identity, catalog, quotes, enrollments, billing, claims]
+    depends_on: [identity, catalog, quotes, enrollments, billing, claims, notifications]
     ports:
       - "5080:8080"
     environment:
@@ -150,6 +194,8 @@ services:
       ReverseProxy__Clusters__enrollments__Destinations__d1__Address: http://enrollments:8080/
       ReverseProxy__Clusters__billing__Destinations__d1__Address: http://billing:8080/
       ReverseProxy__Clusters__claims__Destinations__d1__Address: http://claims:8080/
+      ReverseProxy__Clusters__notifications__Destinations__d1__Address: http://notifications:8080/
 
 volumes:
   sqldata:
+  claimdocuments:

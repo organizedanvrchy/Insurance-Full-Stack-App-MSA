@@ -1,5 +1,5 @@
 using System.ComponentModel.DataAnnotations;
-using Insurance.Claims.Enums;
+using Insurance.Claims.Contracts;
 
 namespace Insurance.Claims.DTOs;
 

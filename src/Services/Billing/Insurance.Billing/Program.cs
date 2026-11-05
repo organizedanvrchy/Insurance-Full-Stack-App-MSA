@@ -3,6 +3,7 @@ using Insurance.Billing.Gateway;
 using Insurance.Billing.Messaging;
 using Insurance.Billing.Repositories;
 using Insurance.Billing.Services;
+using Insurance.Billing.Services.Reminders;
 using Insurance.BuildingBlocks.Hosting;
 using Insurance.BuildingBlocks.Http;
 using Insurance.BuildingBlocks.Messaging;
@@ -12,6 +13,8 @@ using Insurance.Identity.Contracts;
 // Billing service: premium schedules and payments.
 // Creates and removes schedules in reaction to enrollment events; asks Enrollments (HTTP) who owns a policy.
 // Takes payments through a payment gateway (simulated), and keeps the payment log.
+// Emails: PaymentReceived and PaymentDeclined from checkout, PaymentReminderDue from an hourly job, all through a
+// transactional outbox (the Notifications service sends them).
 var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults("Billing service");
 
@@ -44,6 +47,13 @@ builder.Services.AddMessaging(builder.Configuration, "billing", bus =>
     bus.AddConsumer<EnrollmentCancelledConsumer>();
     bus.AddConsumer<EnrollmentFailedConsumer>();
 });
+
+builder.Services.AddSqlOutbox();
+
+builder.Services.Configure<ReminderOptions>(builder.Configuration.GetSection("Reminders"));
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddScoped<IPaymentReminderService, PaymentReminderService>();
+builder.Services.AddHostedService<PaymentReminderJob>();
 
 var app = builder.Build();
 await app.UseServiceDefaultsAsync();

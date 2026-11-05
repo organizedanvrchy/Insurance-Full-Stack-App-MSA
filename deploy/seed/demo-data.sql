@@ -61,6 +61,9 @@ VALUES
  (N'Sofia Rodriguez', N'sofia.rodriguez@demo.example', N'$2a$11$fLptEy9RudVQ53M/5gUKYudojXwDuknuXdTvICUC5sEH29VgtaL6u', N'(860) 555-0126', N'14 Elm Court, Apt 3B, Hartford, CT 06103',  'Customer', 1, DATEADD(DAY, -2,   SYSUTCDATETIME())),
  (N'Tyler Brooks',    N'tyler.brooks@demo.example',    N'$2a$11$cS0CMCNU8xHtOk5YTfml2u4pOEPQIAASd7WnLGzECeh9vvgMcgPbi', N'(203) 555-0159', N'360 Ridge Road, Danbury, CT 06810',        'Customer', 0, DATEADD(DAY, -100, SYSUTCDATETIME()));
 
+-- Every demo customer has already confirmed their email address (enrolling and filing claims require it).
+UPDATE InsuranceIdentity.accounts.Users SET EmailVerifiedAt = CreatedAt WHERE Email LIKE N'%@demo.example';
+
 /* 
 2. ENROLLMENT PLAN
 One row per policy purchase. PaidCount = how many installments (from the first) are paid.

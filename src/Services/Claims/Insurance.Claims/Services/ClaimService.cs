@@ -1,8 +1,9 @@
+using Insurance.BuildingBlocks.Time;
 using Insurance.Billing.Contracts;
 using Insurance.BuildingBlocks.Exceptions;
 using Insurance.Catalog.Contracts;
 using Insurance.Claims.DTOs;
-using Insurance.Claims.Enums;
+using Insurance.Claims.Contracts;
 using Insurance.Claims.Exceptions;
 using Insurance.Claims.Models;
 using Insurance.Claims.Repositories;
@@ -32,7 +33,10 @@ public class ClaimService : IClaimService
     public async Task<ClaimDto> SubmitAsync(int userId, ClaimSubmitRequest request)
     {
         var incidentDate = request.IncidentDate!.Value;
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = BusinessTime.Today;
+
+        // 403 until the customer has clicked the link in their verification email.
+        await _users.EnsureEmailVerifiedAsync(userId, "file a claim");
 
         // Same answer for "doesn't exist" and "not yours", so ids can't be probed.
         var enrollment = await _enrollments.GetAsync(request.EnrollmentId);
@@ -54,7 +58,8 @@ public class ClaimService : IClaimService
         // The remaining-coverage check needs a lock, so it runs inside usp_Claim_Submit.
         var coverage = await CoverageOfAsync(enrollment);
         var id = await _claims.SubmitAsync(
-            userId, enrollment.EnrollmentId, incidentDate, request.Description.Trim(), request.ClaimAmount, coverage);
+            userId, enrollment.EnrollmentId, incidentDate, request.Description.Trim(), request.ClaimAmount, coverage,
+            request.DocumentCount);
 
         var created = await _claims.GetByIdAsync(id);
         return (await ComposeAsync(new[] { created! }, isAdmin: false)).Single();
@@ -97,6 +102,9 @@ public class ClaimService : IClaimService
         if (target == ClaimStatus.Rejected && string.IsNullOrWhiteSpace(notes))
             throw new BusinessRuleException("Please give a reason when rejecting a claim.");
 
+        if (target == ClaimStatus.NeedsMoreInfo && string.IsNullOrWhiteSpace(notes))
+            throw new BusinessRuleException("Please tell the customer what information you need.");
+
         // Approving is limited by the plan's coverage; the proc checks it against the other approved claims.
         decimal? coverage = null;
         if (target == ClaimStatus.Approved)
@@ -110,6 +118,22 @@ public class ClaimService : IClaimService
         // between our read and this call, the proc finds no matching row and we get a 409.
         var updated = await _claims.ReviewAsync(claimId, claim.Status, target, notes, adminId, coverage);
         return (await ComposeAsync(new[] { updated }, isAdmin: true)).Single();
+    }
+
+    // Customer: they've responded to a request for more information, so the claim goes back to the reviewer.
+    public async Task<ClaimDto> SendToReviewerAsync(int claimId, int userId)
+    {
+        var claim = await _claims.GetByIdAsync(claimId);
+
+        // Same answer for "doesn't exist" and "not yours".
+        if (claim is null || claim.UserId != userId)
+            throw new NotFoundException("Claim not found.");
+
+        if (claim.Status != ClaimStatus.NeedsMoreInfo)
+            throw new ClaimConflictException("This claim isn't waiting for more information.");
+
+        var updated = await _claims.SendToReviewerAsync(claimId, userId);
+        return (await ComposeAsync(new[] { updated }, isAdmin: false)).Single();
     }
 
     // Plans are only ever deactivated, never deleted, so an enrollment's plan is always there.
@@ -158,6 +182,8 @@ public class ClaimService : IClaimService
         SubmittedAt = c.SubmittedAt,
         ReviewedAt = c.ReviewedAt,
         ReviewedBy = reviewer?.FullName,
-        AllowedNextStatuses = isAdmin ? ClaimStatusTransitions.NextFrom(c.Status).ToList() : new List<ClaimStatus>()
+        AllowedNextStatuses = isAdmin ? ClaimStatusTransitions.NextFrom(c.Status).ToList() : new List<ClaimStatus>(),
+        CanAddDocuments = !isAdmin && ClaimStatusTransitions.AcceptsDocuments(c.Status),
+        CanSendToReviewer = !isAdmin && c.Status == ClaimStatus.NeedsMoreInfo
     };
 }

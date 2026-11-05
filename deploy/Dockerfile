@@ -21,6 +21,7 @@ COPY src/Services/Billing/Insurance.Billing/*.csproj src/Services/Billing/Insura
 COPY src/Services/Billing/Insurance.Billing.Contracts/*.csproj src/Services/Billing/Insurance.Billing.Contracts/
 COPY src/Services/Claims/Insurance.Claims/*.csproj src/Services/Claims/Insurance.Claims/
 COPY src/Services/Claims/Insurance.Claims.Contracts/*.csproj src/Services/Claims/Insurance.Claims.Contracts/
+COPY src/Services/Notifications/Insurance.Notifications/*.csproj src/Services/Notifications/Insurance.Notifications/
 RUN dotnet restore "$PROJECT"
 
 COPY src/ src/
@@ -32,6 +33,8 @@ ENV APP_DLL=${ASSEMBLY}.dll \
     ASPNETCORE_URLS=http://+:8080
 WORKDIR /app
 COPY --from=build /app .
+# Claims keeps uploaded documents here (a named volume in docker-compose.yml, which inherits this owner).
+RUN mkdir -p /data/claim-documents && chown app /data/claim-documents
 USER app
 EXPOSE 8080
 ENTRYPOINT ["sh", "-c", "exec dotnet \"$APP_DLL\""]

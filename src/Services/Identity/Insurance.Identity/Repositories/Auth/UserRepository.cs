@@ -71,7 +71,37 @@ public class UserRepository : IUserRepository
         return list;
     }
 
-    private static User Map(SqlDataReader r) => new()
+    public async Task<string> ChangeEmailAsync(int userId, string newEmail)
+    {
+        await using var conn = _db.Create();
+        await using var cmd = conn.StoredProc("accounts.usp_User_ChangeEmail");
+        cmd.AddParam("@UserId",   SqlDbType.Int, userId);
+        cmd.AddParam("@NewEmail", SqlDbType.NVarChar, newEmail, 256);
+
+        await conn.OpenAsync();
+        try
+        {
+            return (string)(await cmd.ExecuteScalarAsync())!;
+        }
+        // 50001 = the THROW in the proc. 2627/2601 = unique index violation (two accounts racing for the address).
+        catch (SqlException ex) when (ex.Number is 50001 or 2627 or 2601)
+        {
+            throw new DuplicateEmailException(newEmail);
+        }
+    }
+
+    public async Task ChangePasswordAsync(int userId, string passwordHash)
+    {
+        await using var conn = _db.Create();
+        await using var cmd = conn.StoredProc("accounts.usp_User_ChangePassword");
+        cmd.AddParam("@UserId",       SqlDbType.Int, userId);
+        cmd.AddParam("@PasswordHash", SqlDbType.NVarChar, passwordHash, 100);
+
+        await conn.OpenAsync();
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    internal static User Map(SqlDataReader r) => new()
     {
         UserId       = r.GetInt32(r.GetOrdinal("UserId")),
         FullName     = r.GetString(r.GetOrdinal("FullName")),
@@ -81,8 +111,19 @@ public class UserRepository : IUserRepository
         Address      = r.GetStringOrNull("Address"),
         Role         = r.GetEnum<UserRole>("Role"),
         IsActive     = r.GetBoolean(r.GetOrdinal("IsActive")),
-        CreatedAt    = r.GetDateTime(r.GetOrdinal("CreatedAt"))
+        CreatedAt    = r.GetDateTime(r.GetOrdinal("CreatedAt")),
+        EmailVerifiedAt = r.GetUtcDateTimeOrNull("EmailVerifiedAt"),
+        // Not every proc that returns a user has these (usp_EmailToken_Consume doesn't): default to "no reset".
+        MustChangePassword = HasColumn(r, "MustChangePassword") && r.GetBoolean(r.GetOrdinal("MustChangePassword")),
+        PasswordResetExpiresAt = HasColumn(r, "PasswordResetExpiresAt") ? r.GetUtcDateTimeOrNull("PasswordResetExpiresAt") : null
     };
+
+    private static bool HasColumn(SqlDataReader r, string name)
+    {
+        for (var i = 0; i < r.FieldCount; i++)
+            if (string.Equals(r.GetName(i), name, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
 
     // No password hash: this shape is for other services.
     private static UserAccount MapAccount(SqlDataReader r) => new(
@@ -90,5 +131,7 @@ public class UserRepository : IUserRepository
         r.GetString(r.GetOrdinal("FullName")),
         r.GetString(r.GetOrdinal("Email")),
         r.GetEnum<UserRole>("Role"),
-        r.GetBoolean(r.GetOrdinal("IsActive")));
+        r.GetBoolean(r.GetOrdinal("IsActive")),
+        r.GetBoolean(r.GetOrdinal("EmailVerified")),
+        r.GetBoolean(r.GetOrdinal("MustChangePassword")));
 }

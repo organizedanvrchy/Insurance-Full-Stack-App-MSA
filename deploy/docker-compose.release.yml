@@ -1,0 +1,34 @@
+# Run the images the CD workflow published to ghcr.io, instead of building from source.
+# Used together with the main file:
+#   docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.release.yml up -d
+# IMAGE_TAG picks the version: latest (default), or sha-<commit> to run an exact earlier version.
+# The packages are private like the repository: run "docker login ghcr.io" once first (see the README).
+
+x-release: &release
+  pull_policy: always          # always pull the image; never build it from the source in this folder
+
+services:
+  identity:
+    <<: *release
+    image: ghcr.io/${IMAGE_OWNER:-organizedanvrchy}/insurance-identity:${IMAGE_TAG:-latest}
+  catalog:
+    <<: *release
+    image: ghcr.io/${IMAGE_OWNER:-organizedanvrchy}/insurance-catalog:${IMAGE_TAG:-latest}
+  quotes:
+    <<: *release
+    image: ghcr.io/${IMAGE_OWNER:-organizedanvrchy}/insurance-quotes:${IMAGE_TAG:-latest}
+  enrollments:
+    <<: *release
+    image: ghcr.io/${IMAGE_OWNER:-organizedanvrchy}/insurance-enrollments:${IMAGE_TAG:-latest}
+  billing:
+    <<: *release
+    image: ghcr.io/${IMAGE_OWNER:-organizedanvrchy}/insurance-billing:${IMAGE_TAG:-latest}
+  claims:
+    <<: *release
+    image: ghcr.io/${IMAGE_OWNER:-organizedanvrchy}/insurance-claims:${IMAGE_TAG:-latest}
+  notifications:
+    <<: *release
+    image: ghcr.io/${IMAGE_OWNER:-organizedanvrchy}/insurance-notifications:${IMAGE_TAG:-latest}
+  gateway:
+    <<: *release
+    image: ghcr.io/${IMAGE_OWNER:-organizedanvrchy}/insurance-gateway:${IMAGE_TAG:-latest}

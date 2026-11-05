@@ -9,6 +9,13 @@
   <div class="alert" role="alert">{{ error() }}</div>
   }
 
+  @if (documentsFailed) {
+  <div class="alert" role="alert">
+    Your claim was filed, but not all of its documents were uploaded. Please add them below. You don't need to file
+    the claim again.
+  </div>
+  }
+
   @if (loading()) {
   <p class="muted">Loading…</p>
   } @else {
@@ -21,6 +28,7 @@
           <th class="num">Amount</th>
           <th>Status</th>
           <th>Submitted</th>
+          <th><span class="sr-only">Actions</span></th>
         </tr>
       </thead>
       <tbody>
@@ -39,10 +47,28 @@
             }
           </td>
           <td>{{ c.submittedAt | date: 'medium' }}</td>
+          <td class="actions">
+            <button class="btn-sm" type="button" [attr.aria-expanded]="openDocumentsFor() === c.claimId"
+              (click)="toggleDocuments(c.claimId)">
+              Documents
+            </button>
+            @if (c.canSendToReviewer) {
+            <button class="btn-sm primary" type="button" [disabled]="busy()" (click)="sendToReviewer(c)">
+              Send to reviewer
+            </button>
+            }
+          </td>
         </tr>
+        @if (openDocumentsFor() === c.claimId) {
+        <tr>
+          <td colspan="6">
+            <app-claim-documents [claimId]="c.claimId" [canAdd]="c.canAddDocuments" />
+          </td>
+        </tr>
+        }
         } @empty {
         <tr>
-          <td colspan="5" class="muted">
+          <td colspan="6" class="muted">
             You haven't filed any claims. Start from <a routerLink="/my-policies">My policies</a>.
           </td>
         </tr>

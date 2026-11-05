@@ -1,14 +1,15 @@
 import { DatePipe } from '@angular/common';
-import { Component, inject, signal } from '@angular/core';
+import { Component, effect, inject, signal } from '@angular/core';
 import { Customer } from '../../core/models/customer/customer';
 import { CustomerService } from '../../core/services/customer.service';
 import { getErrorMessage } from '../../core/utils/http-error';
+import { CustomerDialogComponent } from './customer-dialog.component';
 
 type StatusFilter = '' | 'active' | 'inactive';
 
 @Component({
   selector: 'app-admin-customers',
-  imports: [DatePipe],
+  imports: [DatePipe, CustomerDialogComponent],
   templateUrl: "admin-customers.html",
   styleUrl: "admin-customers.component.css",
 })
@@ -17,14 +18,23 @@ export class AdminCustomersComponent {
 
   customers = signal<Customer[]>([]);
   loading = signal(true);
-  busyId = signal<number | null>(null);
   error = signal<string | null>(null);
+
+  selected = signal<Customer | null>(null);
+  dialogOpen = signal(false);
+  private reloadOnClose = false;
 
   private search = '';
   private status: StatusFilter = '';
 
   constructor() {
     this.load();
+    effect(() => {
+      if (!this.dialogOpen() && this.reloadOnClose) {
+        this.reloadOnClose = false;
+        this.load();
+      }
+    });
   }
 
   applySearch(value: string): void {
@@ -37,25 +47,17 @@ export class AdminCustomersComponent {
     this.load();
   }
 
-  toggle(c: Customer): void {
-    const message = c.isActive
-      ? `Deactivate ${c.fullName}? They won't be able to log in. Their policies and claims are kept.`
-      : `Reactivate ${c.fullName}?`;
-    if (!confirm(message)) return;
+  // Clicking a customer opens their pop-up (details, edit, reset password, deactivate / reactivate).
+  openCustomer(c: Customer): void {
+    this.selected.set(c);
+    this.dialogOpen.set(true);
+  }
 
-    this.busyId.set(c.userId);
-    this.error.set(null);
-
-    this.api.setActive(c.userId, !c.isActive).subscribe({
-      next: () => {
-        this.busyId.set(null);
-        this.load();   // reload so the active/inactive filter stays accurate
-      },
-      error: (err) => {
-        this.error.set(getErrorMessage(err));
-        this.busyId.set(null);
-      },
-    });
+  // A change in the pop-up: refresh that row now, and reload when the pop-up closes so the filters stay accurate.
+  onChanged(updated: Customer): void {
+    this.customers.update((list) => list.map((c) => (c.userId === updated.userId ? updated : c)));
+    this.selected.set(updated);
+    this.reloadOnClose = true;
   }
 
   private load(): void {

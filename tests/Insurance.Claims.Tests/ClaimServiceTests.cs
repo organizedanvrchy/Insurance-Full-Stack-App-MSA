@@ -1,7 +1,7 @@
 using Insurance.BuildingBlocks.Exceptions;
 using Insurance.BuildingBlocks.Security;
 using Insurance.Claims.DTOs;
-using Insurance.Claims.Enums;
+using Insurance.Claims.Contracts;
 using Insurance.Claims.Exceptions;
 using Insurance.Claims.Models;
 using Insurance.Claims.Services;
@@ -13,7 +13,7 @@ namespace Insurance.Claims.Tests;
 
 public class ClaimServiceTests
 {
-    private static DateOnly Today => DateOnly.FromDateTime(DateTime.UtcNow);
+    private static DateOnly Today => Insurance.BuildingBlocks.Time.BusinessTime.Today;
 
     private readonly FakeClaimRepository _repo = new();
     private readonly FakeEnrollmentLookup _enrollments = new();
@@ -28,8 +28,9 @@ public class ClaimServiceTests
         // Customer 1 holds enrollment 1, customer 3 holds enrollment 5; both are active on plan 1 for a year.
         AddEnrollment(1, ownerId: 1);
         AddEnrollment(5, ownerId: 3);
-        _users.Users[1] = new UserAccount(1, "Cal Tester", "cal@test.example", UserRole.Customer, true);
-        _users.Users[7] = new UserAccount(7, "Ada Admin", "ada@test.example", UserRole.Admin, true);
+        _users.Users[1] = new UserAccount(1, "Cal Tester", "cal@test.example", UserRole.Customer, true, EmailVerified: true);
+        _users.Users[3] = new UserAccount(3, "Dee Tester", "dee@test.example", UserRole.Customer, true, EmailVerified: true);
+        _users.Users[7] = new UserAccount(7, "Ada Admin", "ada@test.example", UserRole.Admin, true, EmailVerified: true);
     }
 
     private void AddEnrollment(int id, int ownerId, EnrollmentStatus status = EnrollmentStatus.Active) =>
@@ -64,6 +65,20 @@ public class ClaimServiceTests
         new() { Status = to, AdminNotes = notes };
 
     // Submit
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(0)]
+    [InlineData(3)]
+    public async Task The_number_of_documents_to_come_is_passed_on_for_the_claim_email(int? count)
+    {
+        var request = Submit();
+        request.DocumentCount = count;
+
+        await _sut.SubmitAsync(userId: 3, request);
+
+        Assert.Equal(count, _repo.LastExpectedDocuments);
+    }
 
     [Fact]
     public async Task Submitting_trims_the_description_and_shows_no_admin_actions_to_the_customer()
@@ -255,5 +270,81 @@ public class ClaimServiceTests
         var submitted = await _sut.GetAllAsync(ClaimStatus.Submitted);
 
         Assert.Single(submitted);
+    }
+
+    // ---------------- Email verification ----------------
+
+    [Fact]
+    public async Task A_customer_must_verify_their_email_before_filing_a_claim()
+    {
+        _users.Users[3] = _users.Users[3] with { EmailVerified = false };
+
+        var ex = await Assert.ThrowsAsync<EmailNotVerifiedException>(() => _sut.SubmitAsync(3, Submit()));
+
+        Assert.IsAssignableFrom<ForbiddenException>(ex);          // a 403
+        Assert.Contains("file a claim", ex.Message);
+        Assert.Empty(_repo.Claims);
+    }
+
+    // Needs more info
+
+    [Fact]
+    public async Task Asking_for_more_information_needs_a_note_for_the_customer()
+    {
+        var claim = AddClaim(ClaimStatus.UnderReview);
+
+        await Assert.ThrowsAsync<BusinessRuleException>(() =>
+            _sut.ReviewAsync(claim.ClaimId, adminId: 7, Review(ClaimStatus.NeedsMoreInfo, "   ")));
+
+        Assert.Equal(ClaimStatus.UnderReview, claim.Status);
+    }
+
+    [Fact]
+    public async Task The_customer_sees_the_request_and_can_send_the_claim_back()
+    {
+        var claim = AddClaim(ClaimStatus.UnderReview);
+        await _sut.ReviewAsync(claim.ClaimId, adminId: 7, Review(ClaimStatus.NeedsMoreInfo, "Please upload the repair estimate"));
+
+        var waiting = await _sut.GetByIdAsync(claim.ClaimId, userId: 1, isAdmin: false);
+        Assert.Equal("Please upload the repair estimate", waiting!.AdminNotes);
+        Assert.True(waiting.CanSendToReviewer);
+        Assert.True(waiting.CanAddDocuments);
+
+        var sent = await _sut.SendToReviewerAsync(claim.ClaimId, userId: 1);
+
+        Assert.Equal(ClaimStatus.UnderReview, sent.Status);
+        Assert.False(sent.CanSendToReviewer);
+    }
+
+    [Fact]
+    public async Task Admins_are_not_offered_the_customers_actions()
+    {
+        var claim = AddClaim(ClaimStatus.NeedsMoreInfo);
+
+        var dto = await _sut.GetByIdAsync(claim.ClaimId, userId: 7, isAdmin: true);
+
+        Assert.False(dto!.CanSendToReviewer);
+        Assert.False(dto.CanAddDocuments);
+    }
+
+    [Fact]
+    public async Task Someone_elses_claim_cant_be_sent_to_the_reviewer()
+    {
+        var claim = AddClaim(ClaimStatus.NeedsMoreInfo, ownerId: 1);
+
+        await Assert.ThrowsAsync<NotFoundException>(() => _sut.SendToReviewerAsync(claim.ClaimId, userId: 3));
+
+        Assert.Equal(ClaimStatus.NeedsMoreInfo, claim.Status);
+    }
+
+    [Theory]
+    [InlineData(ClaimStatus.Submitted)]
+    [InlineData(ClaimStatus.UnderReview)]
+    [InlineData(ClaimStatus.Approved)]
+    public async Task Only_a_claim_waiting_on_the_customer_can_be_sent_back(ClaimStatus status)
+    {
+        var claim = AddClaim(status);
+
+        await Assert.ThrowsAsync<ClaimConflictException>(() => _sut.SendToReviewerAsync(claim.ClaimId, userId: 1));
     }
 }

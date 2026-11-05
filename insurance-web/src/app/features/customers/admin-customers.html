@@ -4,7 +4,7 @@
     <span class="muted">{{ customers().length }} shown</span>
   </header>
 
-  <p class="lede">Search customers and manage account access. Deactivating an account blocks sign-in immediately.</p>
+  <p class="lede">Click a customer to see their details, edit them, reset their password or manage account access.</p>
 
   <div class="toolbar">
     <label>
@@ -40,14 +40,17 @@
           <th class="num">Active policies</th>
           <th class="num">Claims (open / total)</th>
           <th>Status</th>
-          <th><span class="sr-only">Actions</span></th>
         </tr>
       </thead>
       <tbody>
         @for (c of customers(); track c.userId) {
-        <tr [class.inactive]="!c.isActive">
+        <tr class="clickable" [class.inactive]="!c.isActive" (click)="openCustomer(c)">
           <td>
-            <strong>{{ c.fullName }}</strong>
+            <!-- The name is a real button, so the pop-up opens from the keyboard too -->
+            <button type="button" class="name-btn" (click)="openCustomer(c); $event.stopPropagation()"
+              [attr.aria-label]="'Open ' + c.fullName">
+              {{ c.fullName }}
+            </button>
             <div class="muted">{{ c.email }}</div>
           </td>
           <td>{{ c.phone || '—' }}</td>
@@ -58,21 +61,27 @@
             <span class="badge" [class.off]="!c.isActive">
               {{ c.isActive ? 'Active' : 'Inactive' }}
             </span>
-          </td>
-          <td class="actions">
-            <button type="button" class="btn-sm" [class.danger]="c.isActive" [disabled]="busyId() === c.userId"
-              (click)="toggle(c)">
-              {{ c.isActive ? 'Deactivate' : 'Reactivate' }}
-            </button>
+            @if (!c.emailVerified) {
+            <span class="badge amber" title="Hasn't confirmed their email address yet: can't enroll or file claims">
+              Email not verified
+            </span>
+            }
+            @if (c.passwordResetPending) {
+            <span class="badge info" title="They've been emailed a one-time password and haven't chosen a new password yet">
+              Password reset pending
+            </span>
+            }
           </td>
         </tr>
         } @empty {
         <tr>
-          <td colspan="7" class="muted">No customers match.</td>
+          <td colspan="6" class="muted">No customers match.</td>
         </tr>
         }
       </tbody>
     </table>
   </div>
   }
+
+  <app-customer-dialog [customer]="selected()" [(open)]="dialogOpen" (changed)="onChanged($event)" />
 </section>

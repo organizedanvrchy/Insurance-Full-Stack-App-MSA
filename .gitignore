@@ -481,3 +481,6 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Claim documents uploaded while running the Claims service locally
+**/App_Data/claim-documents/

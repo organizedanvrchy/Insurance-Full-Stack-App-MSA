@@ -74,12 +74,39 @@
       }
     </label>
 
+    <div class="field">
+      <label for="claim-documents">Supporting documents (optional)</label>
+      <input id="claim-documents" #fileInput type="file" multiple [accept]="accept"
+        aria-describedby="claim-documents-hint" (change)="addFiles(fileInput)" />
+      <small id="claim-documents-hint" class="muted">
+        Up to {{ maxFiles }} PDF, JPG or PNG files, 10 MB each. For example photos, receipts or a repair estimate.
+      </small>
+      @if (fileError()) {
+      <small class="err" role="alert">{{ fileError() }}</small>
+      }
+      @if (files().length > 0) {
+      <ul class="document-list">
+        @for (file of files(); track file) {
+        <li>
+          <span>{{ file.name }} <span class="muted">({{ sizeLabel(file.size) }})</span></span>
+          <button class="btn-sm" type="button" [attr.aria-label]="'Remove ' + file.name" (click)="removeFile(file)">
+            Remove
+          </button>
+        </li>
+        }
+      </ul>
+      }
+    </div>
+
     <div class="form-actions">
       <a class="btn-sm" routerLink="/my-policies">Cancel</a>
-      <button class="btn" type="submit" [disabled]="saving()">
+      <button class="btn" type="submit" [disabled]="saving() || auth.needsEmailVerification()">
         {{ saving() ? 'Submitting…' : 'Submit claim' }}
       </button>
     </div>
+    @if (auth.needsEmailVerification()) {
+    <p class="muted" role="note">Verify your email address to file a claim (see the message at the top of the page).</p>
+    }
   </form>
   }
   } @else if (!error()) {

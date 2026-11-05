@@ -16,7 +16,12 @@ public class AuthServiceTests
 
     public AuthServiceTests()
     {
-        _sut = new AuthService(_users, new FakeTokenService());
+        var clock = new ManualClock();
+        var verification = new EmailVerificationService(_users, new FakeEmailTokenRepository(_users, clock), new FakeIdentityEvents(),
+            Microsoft.Extensions.Options.Options.Create(new EmailVerificationOptions()), clock,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<EmailVerificationService>.Instance);
+        _sut = new AuthService(_users, new FakeTokenService(), verification, new FakeIdentityEvents(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<AuthService>.Instance);
     }
 
     private static RegisterRequest NewRegistration(string email = "jane.doe@example.com") => new()
@@ -157,12 +162,24 @@ public class AuthServiceTests
     }
 
     [Fact]
-    public async Task Login_fails_for_a_deactivated_account_even_with_the_right_password()
+    public async Task A_deactivated_account_with_the_right_password_is_told_it_was_deactivated()
     {
         await _sut.RegisterAsync(NewRegistration());
         _users.Users.Single().IsActive = false;
 
-        var result = await _sut.LoginAsync(new LoginRequest { Email = "jane.doe@example.com", Password = Password });
+        var ex = await Assert.ThrowsAsync<AccountDeactivatedException>(() =>
+            _sut.LoginAsync(new LoginRequest { Email = "jane.doe@example.com", Password = Password }));
+        Assert.Equal("Your account has been deactivated. Please contact support to have it reactivated.", ex.Message);
+    }
+
+    [Fact]
+    public async Task A_deactivated_account_with_the_wrong_password_just_gets_invalid_credentials()
+    {
+        await _sut.RegisterAsync(NewRegistration());
+        _users.Users.Single().IsActive = false;
+
+        // Nothing about the account is revealed without its password.
+        var result = await _sut.LoginAsync(new LoginRequest { Email = "jane.doe@example.com", Password = "Wr0ng!Password" });
 
         Assert.Null(result);
     }

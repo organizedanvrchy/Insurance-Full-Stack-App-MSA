@@ -1,3 +1,4 @@
+using Insurance.BuildingBlocks.Time;
 using System.Text.Json;
 using Insurance.BuildingBlocks.Exceptions;
 using Insurance.Catalog.Contracts;
@@ -36,7 +37,7 @@ public class QuoteService : IQuoteService
         var strategy = StrategyFor(policy);
 
         var answers = AnswerSet.From(strategy.Questions, request.Answers);
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = BusinessTime.Today;
 
         // The plan's MonthlyPremium is the BASE rate. A BusinessRuleException here means "declined".
         var result = strategy.Rate(policy.MonthlyPremium, answers, today);

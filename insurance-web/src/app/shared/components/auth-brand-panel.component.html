@@ -1,8 +1,8 @@
 <aside class="panel">
-  <div class="rain" aria-hidden="true">
-    @for (d of drops; track d.left) {
-    <span class="drop" [style.left.%]="d.left" [style.animation-delay.s]="d.delay"
-      [style.animation-duration.s]="d.duration"></span>
+  <div class="leaves" aria-hidden="true">
+    @for (l of leaves; track l.left) {
+    <span class="leaf" [class.alt]="l.alt" [style.left.%]="l.left" [style.width.px]="l.size" [style.height.px]="l.size"
+      [style.--leaf-color]="l.color" [style.animation-delay.s]="l.delay" [style.animation-duration.s]="l.duration"></span>
     }
   </div>
 

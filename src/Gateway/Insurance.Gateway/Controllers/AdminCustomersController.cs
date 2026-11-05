@@ -35,6 +35,35 @@ public class AdminCustomersController : ControllerBase
         return Ok(await ComposeAsync(customers));
     }
 
+    // One customer, for the admin's customer pop-up.
+    [HttpGet("{id:int}")]
+    [ProducesResponseType(typeof(CustomerDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<CustomerDto>> Get(int id) =>
+        Ok((await ComposeAsync(new List<CustomerInfo> { await _customers.GetCustomerAsync(id) })).Single());
+
+    // Edit name, email, phone and address (Identity). A new email must be verified again; the customer is told.
+    [HttpPut("{id:int}")]
+    [ProducesResponseType(typeof(CustomerDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<CustomerDto>> Update(int id, CustomerDetailsUpdate update)
+    {
+        var customer = await _customers.UpdateDetailsAsync(id, update);
+        return Ok((await ComposeAsync(new List<CustomerInfo> { customer })).Single());
+    }
+
+    // Emails the customer a one-time password; their old password stops working at once.
+    [HttpPost("{id:int}/reset-password")]
+    [ProducesResponseType(typeof(CustomerDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<CustomerDto>> ResetPassword(int id)
+    {
+        var customer = await _customers.ResetPasswordAsync(id);
+        return Ok((await ComposeAsync(new List<CustomerInfo> { customer })).Single());
+    }
+
     // Deactivate or reactivate. Returns the updated customer so the UI can refresh the row.
     [HttpPut("{id:int}/active")]
     [ProducesResponseType(typeof(CustomerDto), StatusCodes.Status200OK)]
@@ -64,7 +93,10 @@ public class AdminCustomersController : ControllerBase
                 FullName = c.FullName,
                 Email = c.Email,
                 Phone = c.Phone,
+                Address = c.Address,
                 IsActive = c.IsActive,
+                PasswordResetPending = c.PasswordResetPending,
+                EmailVerified = c.EmailVerified,
                 CreatedAt = c.CreatedAt,
                 ActivePolicies = policies.Result.GetValueOrDefault(c.UserId),
                 TotalClaims = counts?.TotalClaims ?? 0,
@@ -80,7 +112,10 @@ public class CustomerDto
     public string FullName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public string? Phone { get; set; }
+    public string? Address { get; set; }
     public bool IsActive { get; set; }
+    public bool PasswordResetPending { get; set; }
+    public bool EmailVerified { get; set; }
     public DateTime CreatedAt { get; set; }
     public int ActivePolicies { get; set; }
     public int TotalClaims { get; set; }

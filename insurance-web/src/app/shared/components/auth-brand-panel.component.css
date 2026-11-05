@@ -64,31 +64,17 @@
   font-weight: 700;
 }
 
-/* Falling rain */
-.rain {
+/* Falling leaves: the shape and movement are in shared/styles/falling-leaves.css */
+.leaves {
   position: absolute;
   inset: 0;
+  overflow: hidden;
   pointer-events: none;
 }
 
-.drop {
-  position: absolute;
-  top: -12%;
-  width: 2px;
-  height: 46px;
-  border-radius: 2px;
-  background: linear-gradient(to bottom, transparent, var(--hero-drop));
-  animation: fall linear infinite;
-}
-
-@keyframes fall {
-  to {
-    transform: translateY(125vh);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .rain {
-    display: none;
-  }
+.leaf {
+  top: -5%;
+  opacity: var(--leaf-opacity-hero);
+  --fall: 120vh;
+  --sway: 28px;
 }

@@ -1,4 +1,4 @@
-import { Component, ElementRef, HostListener, computed, inject, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, HostListener, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
@@ -7,13 +7,14 @@ import { AuthService } from '../core/services/auth.service';
 import { initialsOf } from '../core/utils/initials';
 import { BrandLogoComponent } from '../shared/components/brand-logo.component';
 import { ThemeToggleComponent } from '../shared/components/theme-toggle.component';
+import { VerifyEmailBannerComponent } from '../shared/components/verify-email-banner.component';
 
 // Wraps every logged-in page: nav bar on top, the current page in <router-outlet />.
 @Component({
   selector: 'app-shell',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, ThemeToggleComponent, BrandLogoComponent],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, ThemeToggleComponent, BrandLogoComponent, VerifyEmailBannerComponent],
   templateUrl: "shell.html",
-  styleUrl: "./shell-component.css",
+  styleUrls: ["./shell-component.css", "../shared/styles/falling-leaves.css"],
 })
 export class ShellComponent {
   auth = inject(AuthService);
@@ -32,16 +33,26 @@ export class ShellComponent {
   private userMenu = viewChild<ElementRef<HTMLElement>>('userMenu');
   private userButton = viewChild<ElementRef<HTMLButtonElement>>('userButton');
 
-  // Fixed (not random) values so the rain looks the same on every visit.
-  // Negative delays mean the rain is already falling when the page loads.
-  readonly drops = Array.from({ length: 44 }, (_, i) => ({
-    left: (i * 23.7) % 100,
-    delay: -(((i * 37) % 19) / 10),
-    duration: 1.2 + ((i * 53) % 10) / 10,
-    length: 10 + ((i * 29) % 12),
+  // Fixed (not random) values so the leaves look the same on every visit.
+  // Negative delays mean the leaves are already falling when the page loads.
+  readonly leaves = Array.from({ length: 18 }, (_, i) => ({
+    left: (i * 37.3) % 100,
+    delay: -(((i * 53) % 70) / 10),
+    duration: 6 + ((i * 29) % 40) / 10,     // 6 to 10 seconds: leaves drift, rain falls
+    size: 8 + ((i * 7) % 6),                // 8 to 13 px
+    color: `var(--leaf-${(i % 4) + 1})`,
+    alt: i % 2 === 1,                       // every other leaf sways the opposite way
   }));
 
   constructor() {
+    // The stored user can be stale (e.g. verified their email on another device): reload it once per visit.
+    this.auth.refreshUser();
+
+    // An admin reset the password while this session was open: go straight to "choose a new password".
+    effect(() => {
+      if (this.auth.mustChangePassword()) this.router.navigate(['/choose-new-password']);
+    });
+
     // Close any open menu after navigating
     this.router.events
       .pipe(filter((e) => e instanceof NavigationEnd), takeUntilDestroyed())

@@ -24,6 +24,7 @@
     <ProjectReference Include="..\..\src\Services\Enrollments\Insurance.Enrollments\Insurance.Enrollments.csproj" />
     <ProjectReference Include="..\..\src\Services\Billing\Insurance.Billing\Insurance.Billing.csproj" />
     <ProjectReference Include="..\..\src\Services\Claims\Insurance.Claims\Insurance.Claims.csproj" />
+    <ProjectReference Include="..\..\src\Services\Notifications\Insurance.Notifications\Insurance.Notifications.csproj" />
   </ItemGroup>
 
 </Project>

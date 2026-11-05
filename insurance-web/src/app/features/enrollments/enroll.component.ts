@@ -11,6 +11,7 @@ import { Question } from "../../core/models/quote/Question";
 import { Quote } from "../../core/models/quote/Quote";
 import { forkJoin } from "rxjs";
 import { AnswerValue } from "../../core/models/enums";
+import { AuthService } from "../../core/services/auth.service";
 
 @Component({
   selector: 'app-enroll',
@@ -24,6 +25,7 @@ export class EnrollComponent {
   private policies = inject(PolicyService);
   private quotes = inject(QuoteService);
   private enrollments = inject(EnrollmentService);
+  auth = inject(AuthService);
 
   // Local calendar date as YYYY-MM-DD (toISOString would give the UTC date, which can be "tomorrow" in the evening).
   readonly today = new Date().toLocaleDateString('en-CA');

@@ -1,6 +1,6 @@
 # Architecture
 
-This document explains how the Online Insurance Management System is built and why. For setup and usage, see the [README](../README.md).
+This document explains how KVB Insurance is built and why. For setup and usage, see the [README](../README.md); for the first Azure deployment, see [deploy/azure/README.md](../deploy/azure/README.md).
 
 ## Contents
 
@@ -19,7 +19,8 @@ This document explains how the Online Insurance Management System is built and w
 13. [Conventions](#13-conventions)
 14. [Design decisions and trade-offs](#14-design-decisions-and-trade-offs)
 15. [Testing strategy](#15-testing-strategy)
-16. [Limitations and future work](#16-limitations-and-future-work)
+16. [Deployment and CI/CD](#16-deployment-and-cicd)
+17. [Limitations and future work](#17-limitations-and-future-work)
 
 ---
 
@@ -28,7 +29,7 @@ This document explains how the Online Insurance Management System is built and w
 | Principle | How it shows up |
 |---|---|
 | **The server owns the truth** | Prices, eligibility and workflow rules are decided in the services and their databases. The Angular app displays results (including alerts and allowed next actions) and never recomputes them. |
-| **Independent services** | Six services, each deployable on its own, each the only owner of its own database. A service never reads another's tables and never references another's code. |
+| **Independent services** | Seven services, each deployable on its own, each the only owner of its own database. A service never reads another's tables and never references another's code. |
 | **Queries over HTTP, changes over events** | A service that needs another's data asks its internal API. A service that needs another to *change* something publishes an event; it never writes to another service. |
 | **Separation of concerns** | Inside a service: controllers handle HTTP, services hold business rules, repositories hold data access, stored procedures hold data rules and transactions. |
 | **Dependency inversion** | Layers, and other services, are reached through interfaces. Each service's `Program.cs` is the only place that chooses concrete classes, so the business logic is unit-testable with fakes. |
@@ -44,13 +45,14 @@ flowchart LR
     U --> SPA["Angular SPA"]
     SPA -- "HTTPS, JSON, Bearer JWT" --> GW["API gateway + BFF"]
     subgraph Internal["Internal network: not reachable from outside"]
-        GW --> SVC["Six microservices"]
-        SVC --> DBS[("Six databases<br/>one per service")]
-        SVC <--> BUS[["RabbitMQ"]]
+        GW --> SVC["Seven microservices"]
+        SVC --> DBS[("Seven databases<br/>one per service")]
+        SVC <--> BUS[["Event bus<br/>RabbitMQ / Azure Service Bus"]]
     end
+    SVC --> SMTP[["SMTP<br/>Mailpit / Azure Communication Services"]]
 ```
 
-The frontend is a single-page application served as static files. All business operations go through the gateway, which forwards each `/api/*` request to the service that owns it. Each database is reached only by its service.
+The frontend is a single-page application served as static files (Azure Static Web Apps in production). All business operations go through the gateway, which forwards each `/api/*` request to the service that owns it. Each database is reached only by its service.
 
 ## 3. Microservices
 
@@ -64,46 +66,74 @@ flowchart TD
         EN["Enrollments<br/>policies, saga"]
         BI["Billing<br/>premium payments"]
         CL["Claims<br/>claims workflow"]
+        NO["Notifications<br/>emails, preferences"]
     end
     GW --> Services
-    Services <--> BUS[["Event bus: RabbitMQ (MassTransit)"]]
+    Services <--> BUS[["Event bus: RabbitMQ or Azure Service Bus (MassTransit)"]]
+    NO --> SMTP[["SMTP server (Mailpit locally, Azure Communication Services in Azure)"]]
 ```
 
 ### 3.1 Responsibilities and data
 
 | Service | Database | Owns | Public routes (through the gateway) |
 |---|---|---|---|
-| **Identity** | `InsuranceIdentity` | Users, password hashes, JWT issuing | `/api/auth/*` |
+| **Identity** | `InsuranceIdentity` | Users, password hashes, JWT issuing, email verification links (hashed) | `/api/auth/*` |
 | **Catalog** | `InsuranceCatalog` | Plans and base rates | `/api/policies/*` |
 | **Quotes** | `InsuranceQuotes` | Rating engine, quotes and their reservations | `/api/quotes/*` |
 | **Enrollments** | `InsuranceEnrollments` | Policies held by customers, the enrollment saga, the outbox | `/api/enrollments/*` |
-| **Billing** | `InsuranceBilling` | Premium schedules and payments | `/api/enrollments/{id}/payments`, `/api/payments/*` |
-| **Claims** | `InsuranceClaims` | Claims and the review workflow | `/api/claims/*` |
+| **Billing** | `InsuranceBilling` | Premium schedules, payments, the payment log, saved payment methods, which payment reminders were sent, the outbox | `/api/enrollments/{id}/payments`, `/api/payments/*` |
+| **Claims** | `InsuranceClaims` plus document storage (a volume locally, an Azure Files share in Azure) | Claims, their documents and the review workflow, the outbox | `/api/claims/*` |
+| **Notifications** | `InsuranceNotifications` | Every email sent (for exactly-once sending and history), customers' email preferences | `/api/notifications/*` |
 | **Gateway + BFF** | none | Routing, the active-account check, composition | `/api/admin/customers` (composed) |
 
 ### 3.2 How services talk
 
-**Synchronous queries (HTTP).** When a service needs another's data to answer a request, it calls that service's **internal API** (`/internal/*`) through a typed client shipped in the owner's `*.Contracts` project. The caller's JWT is forwarded, so the called service applies its own authorization to the same user. The gateway never routes `/internal`, so these endpoints are reachable only inside the network. A `400`/`404`/`409` from the called service comes back as the same typed exception, so the original message reaches the customer unchanged.
+**Synchronous queries (HTTP).** When a service needs another's data to answer a request, it calls that service's **internal API** (`/internal/*`) through a typed client shipped in the owner's `*.Contracts` project. The caller's JWT is forwarded, so the called service applies its own authorization to the same user. Message consumers and background jobs have no caller: they send a short-lived **service token** instead (signed with the same key, role `Service`, no user id, so it passes `[Authorize]` on internal endpoints but can't act as a customer or admin, and the gateway rejects it). An anonymous request never borrows the service token. The gateway never routes `/internal`, so these endpoints are reachable only inside the network. A `400`/`403`/`404`/`409`/`429` from the called service comes back as the same typed exception, so the original message reaches the customer unchanged.
 
 | Caller | Asks | For |
 |---|---|---|
 | Gateway | Identity | Is this account still active, with the same role? (every request) |
 | Gateway (BFF) | Identity, Enrollments, Claims | The admin customer list with policy and claim counts |
 | Quotes | Catalog | The plan's base rate and type, when pricing |
-| Enrollments | Quotes, Catalog, Billing | Reserving the quote; the plan's term and status; payment progress on policy cards |
-| Billing | Enrollments | Who owns an enrollment and whether it is active, when paying |
-| Claims | Enrollments, Billing, Catalog, Identity | Eligibility (owner, status, dates, overdue premiums, coverage); names on claim screens |
+| Enrollments | Identity, Quotes, Catalog, Billing | Is the customer's email verified; reserving the quote; the plan's term and status; payment progress on policy cards |
+| Billing | Enrollments, Identity | Who owns an enrollment and whether it is active, when paying and when sending reminders (service token); customer names in the admin payment log |
+| Claims | Enrollments, Billing, Catalog, Identity | Eligibility (verified email, owner, status, dates, overdue premiums, coverage); names on claim screens |
+| Notifications | Identity, Enrollments, Catalog, Claims | The recipient's name, address and status; plan names and policy dates for the email; a claim's documents to attach to "Claim received" (service token) |
 
-**Asynchronous events (RabbitMQ through MassTransit).** When something that happened in one service requires another to change its own data, the first publishes an event, and the second reacts in its own transaction. Each subscribing service has its own queue, failed deliveries are retried (100 ms to 15 s), and every consumer is idempotent because delivery is at least once.
+**Asynchronous events (RabbitMQ through MassTransit; Azure Service Bus in Azure).** The transport is chosen by configuration in `Messaging.cs`: with `ServiceBus:ConnectionString` set, the same consumers, retries and endpoints run on Azure Service Bus (Standard tier, for topics), otherwise on RabbitMQ. When something that happened in one service requires another to change its own data, the first publishes an event, and the second reacts in its own transaction. Each subscribing service has its own queue, failed deliveries are retried (100 ms to 15 s), and every consumer is idempotent because delivery is at least once.
 
 | Event | Published by | Consumed by | Effect |
 |---|---|---|---|
 | `EnrollmentRequested` | Enrollments (outbox) | Billing | Creates the premium schedule, then publishes `PremiumScheduleCreated` |
 | `PremiumScheduleCreated` | Billing | Enrollments | Saga: Pending to Active, then publishes `EnrollmentActivated` |
 | `Fault<EnrollmentRequested>` | MassTransit, after Billing's last retry | Enrollments | Saga: Pending to Failed, then publishes `EnrollmentFailed` |
-| `EnrollmentActivated` | Enrollments | Quotes | The reserved quote becomes used for good |
+| `EnrollmentActivated` | Enrollments | Quotes, Notifications | The reserved quote becomes used for good; the customer gets a "your policy is active" email |
 | `EnrollmentFailed` | Enrollments | Quotes, Billing | Compensation: the quote is released, any schedule removed |
-| `EnrollmentCancelled` | Enrollments (outbox) | Billing | Unpaid installments are removed; paid ones stay as history |
+| `EnrollmentCancelled` | Enrollments (outbox) | Billing, Notifications | Unpaid installments are removed; paid ones stay as history. The customer gets a confirmation email |
+| `EmailChanged`, `PasswordChanged` | Identity (direct) | Notifications | "Was this you?" emails: to the **old** address after an email change, to the account's address after a password change |
+| `CustomerRegistered` | Identity (direct, see below) | Notifications | Saves the sign-up form's "email me payment reminders" answer, unless the customer already changed it |
+| `EmailVerificationRequested` | Identity (direct) | Notifications | Emails the verification link |
+| `PaymentReceived` | Billing (outbox, in the same transaction as `usp_Payment_Settle`) | Notifications | Payment receipt email |
+| `PaymentDeclined` | Billing (outbox, with the declined/failed outcome) | Notifications | "Your payment didn't go through" email |
+| `PaymentReminderDue` | Billing (outbox, from the hourly reminder job) | Notifications | Reminder email, unless the customer turned reminders off |
+| `ClaimSubmitted`, `ClaimStatusChanged` | Claims (outbox) | Notifications | "Claim received" (the customer's copy, listing the claim's documents with copies attached), one email for the decision (approved or rejected, with the reviewer's reason or notes), and one when the payment is sent; "under review" sends nothing. The claim form uploads documents after saving the claim, so "Claim received" is queued in `notifications.PendingClaimEmails` and sent at once when the claim form said no files are coming (`ExpectedDocuments` = 0), otherwise by `ClaimReceivedEmailJob` as soon as the expected files are in, or after `Notifications:ClaimEmailDelay` at the latest, with the files fetched from Claims' service-only `/internal/claims/{id}/documents` |
+
+Identity publishes its events straight to the bus rather than through an outbox, because `EmailVerificationRequested` carries the one-time token for the link and the token must never be written to a database. If that publish fails, the account change still stands and the customer presses "Resend".
+
+### 3.2.1 Email notifications
+
+The Notifications service only listens: no service waits for it, references it (`NotificationsBoundaryTests`), or fails because of it. For each event it builds a `Notification` with a key unique to that email (`receipt:{paymentId}`, `payment-declined:{transactionId}`, `reminder:{paymentId}:{stage}`, `claim-status:{claimId}:{status}` (plus the message id for "needs more information", which can be asked more than once), `policy-activated:{enrollmentId}`, or the message id for Identity's events) and hands it to `NotificationDispatcher`, which:
+
+1. Claims the key in `notifications.Emails` (`usp_Email_Begin`). A key already `Sent` or `Skipped` means a repeated event: nothing is sent.
+2. Looks up the recipient (Identity). Unknown or deactivated accounts are `Skipped`, as are payment reminders for customers who turned them off, and addresses in `Email:SkipDomains`.
+3. Renders the email (`EmailTemplates`, HTML + plain text, every value HTML-encoded) and sends it over SMTP with MailKit.
+4. Records `Sent`. When the mail server says "later" (its sending limit, a temporary error, a failed sign-in, no connection), the rendered email is stored in `notifications.EmailRetries` and the row says `Waiting`; `EmailRetryJob` resends it on `EmailRetrySchedule` (1, 5, 15, 30 minutes, then hourly and longer, about 13 hours in all) before giving up as `Failed`. A permanent refusal (an SMTP 5xx not about limits) is `Failed` at once. Any other error is recorded as `Failed` and rethrown, so MassTransit retries the event (and finally parks it in the `_error` queue).
+
+**Payment reminders** come from `PaymentReminderJob` in Billing, which runs hourly. `ReminderSchedule` decides, per unpaid installment, which stage is due today: `DueSoon` (3 days before), `DueToday`, `Overdue` (the day after the grace period, from `billing.ufn_OverdueGraceDays`, the same rule as the overdue badge and the claim block), `OverdueSecondNotice` (+5 days) and `OverdueFinalNotice` (+10 days). A stage is sent on its day or the day after, never later, so a first deployment or an outage doesn't produce a burst of stale reminders. Each (installment, stage) is inserted into `billing.PaymentReminders` together with its event (outbox) before anything is published, so several Billing instances never send the same reminder twice.
+
+**Email verification** (Identity): registering creates an unverified account and a link token (32 random bytes; only its SHA-256 hash is stored, single-use, 15-minute expiry, replaced by any newer link). Until the link is used, `EmailVerificationRules.EnsureEmailVerifiedAsync` makes Enrollments and Claims answer `403` to enrolling and filing claims; it asks Identity on each such request, so verifying takes effect immediately without a new token. Customers can change their email from the profile page (`usp_User_ChangeEmail`; a valid address and an "Are you sure?" step, no password): the new address works at once but is unverified again, links sent to the old one stop working, a link goes to the new one, and the old one gets a "was this you?" email. (`003_remove_email_change.sql` removed an earlier design that held the new address as pending; `004` added this one.) Changing the password needs the current one, follows the sign-up rules, and is announced by email. Every email ends with an "automated message, don't reply" notice pointing at `Email:SupportEmail`. Resending is limited to one per minute while a link is outstanding and ten a day (email changes count toward the ten, not the minute). Receipts show the date and time of the payment. Accounts that existed before verification was introduced were marked verified by the migration.
+
+**Admin account changes** (Identity, through the gateway's `/api/admin/customers/{id}`): an admin can edit a customer's name, phone and address (`usp_Customer_UpdateDetails`) and email. A new email goes through the same path as a customer's own change, with no rate limit, so it is unverified until the customer clicks the link; `EmailChanged` and `EmailVerificationRequested` carry `ByAdmin`. Admins only change details at the customer's request, so the new inbox simply gets "Verify your new email address" and the old one an "at your request" notice. **Resetting a password** (`usp_Customer_ResetPassword`) publishes `PasswordResetByAdmin`. That event carries the one-time password itself, because the customer has to receive it. The email is keyed on the message id, so a redelivery doesn't send a second code, and only the hash is stored in Identity.
 
 ### 3.3 What keeps them independent
 
@@ -240,7 +270,9 @@ erDiagram
     POLICIES ||--o{ ENROLLMENTS : "is sold as"
     POLICIES ||--o{ QUOTES : "is priced by"
     ENROLLMENTS ||--o{ PREMIUM_PAYMENTS : "is billed by"
+    PREMIUM_PAYMENTS ||--o{ PAYMENT_TRANSACTIONS : "is paid by"
     ENROLLMENTS ||--o{ CLAIMS : "is the basis of"
+    CLAIMS ||--o{ CLAIM_DOCUMENTS : "is supported by"
     ENROLLMENTS |o--o| QUOTES : "created from"
 
     USERS {
@@ -297,6 +329,19 @@ erDiagram
         date PaidDate
         string Status "Pending Paid Overdue"
     }
+    PAYMENT_TRANSACTIONS {
+        int TransactionId PK
+        int PaymentId FK
+        int UserId FK
+        decimal Amount
+        string MethodType "Card PayPal ApplePay GooglePay Venmo"
+        string CardBrand
+        string CardLast4
+        string IdempotencyKey UK "per customer"
+        string Status "Processing Succeeded Declined Failed Refunded"
+        string DeclineCode
+        datetime CreatedAt
+    }
     CLAIMS {
         int ClaimId PK
         string ClaimNumber UK "CLM-YYYY-NNNNNN"
@@ -311,11 +356,21 @@ erDiagram
         datetime ReviewedAt
         int ReviewedByUserId FK
     }
+    CLAIM_DOCUMENTS {
+        int ClaimDocumentId PK
+        int ClaimId FK
+        string FileName "for display only"
+        string ContentType "detected from the contents"
+        int SizeBytes
+        string StorageKey UK "generated, locates the file"
+        int UploadedByUserId FK
+        datetime UploadedAt
+    }
 ```
 
-> In the database the payments table is named `PremiumPayments`. It is written with an underscore in the diagram only because Mermaid requires it.
+> In the database these tables are named `PremiumPayments`, `PaymentTransactions` and `ClaimDocuments`. They are written with an underscore in the diagram only because Mermaid requires it.
 
-**One database per service.** `accounts.Users` lives in `InsuranceIdentity`, `catalog.Policies` in `InsuranceCatalog`, `quotes.Quotes` in `InsuranceQuotes`, `enrollments.Enrollments` (and `dbo.OutboxMessages`) in `InsuranceEnrollments`, `billing.PremiumPayments` in `InsuranceBilling`, and `claims.Claims` (and `claims.ClaimNumberSeq`) in `InsuranceClaims`. The relationships in the diagram are logical: a column holds another service's id, but **there are no foreign keys between services**, because no database can enforce them across databases. The services keep them consistent through the rules in section 11.
+**One database per service.** `accounts.Users` lives in `InsuranceIdentity`, `catalog.Policies` in `InsuranceCatalog`, `quotes.Quotes` in `InsuranceQuotes`, `enrollments.Enrollments` (and `dbo.OutboxMessages`) in `InsuranceEnrollments`, `billing.PremiumPayments` and `billing.PaymentTransactions` in `InsuranceBilling`, and `claims.Claims` (and `claims.ClaimNumberSeq`) in `InsuranceClaims`. The relationships in the diagram are logical: a column holds another service's id, but **there are no foreign keys between services**, because no database can enforce them across databases. The services keep them consistent through the rules in section 11.
 
 **Design notes**
 
@@ -325,6 +380,7 @@ erDiagram
 - **Derived statuses.** `Expired` (an enrollment past its end date) and `Overdue` (a payment more than 5 days late) are computed in views at read time, so no background job has to keep a column in sync.
 - **Constraints as a backstop.** `CHECK` constraints mirror each C# enum (roles, plan types, statuses), and `UNIQUE` constraints protect emails and claim numbers.
 - **Quotes keep an audit trail.** The raw answers and the factor breakdown are stored as JSON (guarded by `ISJSON` checks), so any price can be explained later.
+- **Claim documents.** The table holds a file's details and `StorageKey`; the file itself is in document storage (`IDocumentStorage`), so the database stays small. `ClaimDocuments.ClaimId` is a real foreign key, because both tables belong to the Claims service.
 - **Claim numbers** come from a database `SEQUENCE` (`claims.ClaimNumberSeq`), formatted `CLM-<year>-<6 digits>`. A rolled-back insert can leave a gap, which is normal.
 
 ## 6. Domain workflows
@@ -352,12 +408,19 @@ stateDiagram-v2
     Submitted --> UnderReview : admin starts review
     UnderReview --> Approved : admin approves
     UnderReview --> Rejected : admin rejects with a reason
+    UnderReview --> NeedsMoreInfo : admin asks for more, with a note
+    NeedsMoreInfo --> UnderReview : customer sends it back, or admin resumes
+    NeedsMoreInfo --> Rejected : admin rejects with a reason
     Approved --> Paid : admin marks as paid
     Rejected --> [*]
     Paid --> [*]
 ```
 
 The allowed moves live in **one** place, the `ClaimStatusTransitions` class. The API returns `allowedNextStatuses` on each claim for admins, so the UI shows only legal buttons and holds no copy of the rules. `usp_Claim_Review` takes the status the caller *believes* the claim is in (`@FromStatus`) and only updates if it still matches. This is optimistic concurrency: two admins acting on the same claim cannot silently overwrite each other, and the loser receives a `409`.
+
+**Evidence is judged per claim, not per document.** An admin reads the documents and decides on the claim as a whole. If the evidence isn't enough, they move the claim to `NeedsMoreInfo` with a note saying what's needed. The customer sees the note on My claims, adds documents, and sends the claim back with `POST /api/claims/{id}/send-to-reviewer`, which is why that move is the one transition not made through `usp_Claim_Review`. If the customer never responds, the admin can reject the claim.
+
+**Claim documents.** Customers can add documents to their own claim until a decision is made (`ClaimStatusTransitions.AcceptsDocuments`): up to 5 per claim, 10 MB each, one file per request. Documents can't be deleted, so the evidence an admin reviewed stays on the claim. `ClaimDocumentService` saves the file first and then its row, and removes the file if the row fails, so a row always has a file. A claim is created before its documents are uploaded; if an upload fails, the customer is sent to My claims to retry, so they never submit the claim twice.
 
 **Claim eligibility.** Rules 1 to 4 need other services' data, so `ClaimService` checks them by asking those services. Rule 5 needs a lock on the Claims service's own rows, so it stays in `claims.usp_Claim_Submit`:
 
@@ -371,7 +434,7 @@ The allowed moves live in **one** place, the `ClaimStatusTransitions` class. The
 
 | Concept | Rule | Where it lives |
 |---|---|---|
-| Enrollment **Expired** | Stored `Active` and `EndDate` is before today (UTC) | `enrollments.vw_EnrollmentDetails` |
+| Enrollment **Expired** | Stored `Active` and `EndDate` is before today (business time zone) | `enrollments.vw_EnrollmentDetails` |
 | Payment **Overdue** | Stored `Pending` and due more than **5 days** ago | `billing.vw_PaymentDetails` |
 | Alert **Overdue** | Active enrollment with at least one overdue payment | Billing's `usp_Premium_GetSummaries` (count) and `EnrollmentService` |
 | Alert **DueSoon** | Active, nothing overdue, next unpaid installment due within **7 days** | `EnrollmentService` (`DueSoonDays` constant) |
@@ -493,9 +556,10 @@ classDiagram
 
 - Passwords are hashed with **BCrypt** (salted, with an adaptive work factor) in the Identity service. Only the hash is stored, and it never leaves the Identity service (its internal API returns `UserAccount`, which has no hash).
 - Sign-in issues an HS256-signed **JWT** carrying the user id, email, name and role. It expires after `Jwt:ExpiryMinutes` (60 by default), with a one-minute clock skew.
-- Login returns the same `401` for an unknown email, a wrong password and a deactivated account, so attackers cannot discover which emails exist.
+- Login returns the same `401` ("Invalid email or password.") for an unknown email and a wrong password, so attackers cannot discover which emails exist. Only the right password for a deactivated account gets `403` "Your account has been deactivated. Please contact support to have it reactivated.": someone guessing never sees it.
 - **Validated twice.** The gateway validates every token, and so does every service (defense in depth: a service never trusts a request just because it came from inside the network).
 - **Active-account check on every request, at the gateway.** After validating the signature, the gateway asks the Identity service whether the account still exists, is active and has the same role, and returns `401` otherwise. Deactivation therefore takes effect immediately, not when the token expires. Any request carrying an invalid or stale token gets `401`, except sign-in and registration.
+- **Admin password resets lock the account down.** A reset replaces the password hash with the hash of a one-time password (valid `Customers:OneTimePasswordLifetime`, 30 minutes by default) and sets `MustChangePassword`. The same gateway lookup returns that flag, and while it's set, a token from signing in with the one-time password carries the `otp_sign_in` claim (`AuthClaims`). Sessions without it, i.e. those open before the reset, get `401` and are signed out; the one-time session gets `403` on everything except `GET /api/auth/me` and `POST /api/auth/choose-new-password`, which takes only the new password (signing in with the one-time password was the proof) and must be called before the 30 minutes are up. Choosing the password clears the flag. A one-time password that has expired gets a `401` that says so, and the admin resets again.
 - **Service-to-service calls carry the user's token**, so each service applies its own role and ownership checks to the real caller. Message consumers run without a user and only touch their own service's data.
 
 ### Authorization
@@ -511,6 +575,8 @@ Roles are enforced with `[Authorize(Roles = ...)]`, and **ownership is enforced 
 | View an enrollment or payment schedule | | yes (own) | yes (any) |
 | File claims, list own claims | | yes | |
 | List all claims, review claims | | | yes |
+| Add documents to a claim | | yes (own, until decided) | |
+| View and download a claim's documents | | yes (own) | yes (any) |
 | Manage customer accounts | | | yes |
 
 ### Other protections
@@ -520,6 +586,7 @@ Roles are enforced with `[Authorize(Roles = ...)]`, and **ownership is enforced 
 - **Mass assignment:** request DTOs expose only the fields a client may set. For example, `RegisterRequest` has no `Role`, and the service forces `Customer`. The caller's id always comes from the token, never from the request.
 - **Data exposure:** responses use DTOs, so `PasswordHash` never leaves the Identity service.
 - **Enums on the wire:** values travel as names, and unknown names or numbers are rejected with a `400`. Required enum and boolean request fields are nullable plus `[Required]`, so a missing field cannot silently become a default (such as "deactivate").
+- **Uploaded files:** a file's type is decided from its first bytes (PDF, JPEG or PNG), not its name or the browser's content type. Files are stored under a generated key, never the uploaded name, and are always served as downloads with `X-Content-Type-Options: nosniff`, so they can't run in the application's origin. There is no malware scanning yet.
 - **Secrets:** the JWT key and connection strings are kept in user secrets or `deploy/.env` locally (ignored by Git), and in a secret store when hosted. They are never committed.
 - **CORS:** handled by the gateway; allowed origins come from configuration (`Cors:AllowedOrigins`), not code.
 
@@ -548,9 +615,11 @@ All error bodies follow RFC 7807 `ProblemDetails`, with `status` and `title`. Mo
 
 | Exception (base type in bold) | Status | Typical meaning |
 |---|:---:|---|
-| **`BusinessRuleException`** | 400 | A rule rejected the input (dates, amounts, answers, an underwriting decline) |
+| **`BusinessRuleException`**, and `InvalidVerificationLinkException` | 400 | A rule rejected the input (dates, amounts, answers, an underwriting decline, a used or expired verification link) |
+| **`ForbiddenException`**, and `EmailNotVerifiedException` | 403 | Signed in, but not allowed yet (the email address isn't verified) |
 | **`NotFoundException`**, and `PaymentNotFoundException` | 404 | Does not exist, or is not yours |
 | **`ConflictException`**, and `DuplicateEmailException`, `DuplicateEnrollmentException`, `PaymentConflictException`, `ClaimConflictException` | 409 | The request conflicts with the current state |
+| **`TooManyRequestsException`** | 429 | Too many verification emails asked for |
 | `HttpRequestException` | 503 | Another service this request needs is down or failed |
 | Anything else | 500 | Unexpected failure |
 
@@ -562,7 +631,7 @@ Some rules read another service's data, so they are checked in a service's C# co
 
 | No. | Raised by | Meaning | Exception | HTTP |
 |---:|---|---|---|:---:|
-| 50001 | Identity: `accounts.usp_User_Register` | Email already registered | `DuplicateEmailException` | 409 |
+| 50001 | Identity: `accounts.usp_User_Register`, `usp_User_ChangeEmail` | Email already registered | `DuplicateEmailException` | 409 |
 | 50002 | Enrollments: `enrollments.usp_Enrollment_CreatePending` | Active enrollment already exists for this plan | `DuplicateEnrollmentException` | 409 |
 | (50003) | Service: `QuoteService`, `EnrollmentService` | Plan does not exist or was retired (quote: 404, enrolling from an old quote: 400) | `NotFoundException` / `BusinessRuleException` | 404 / 400 |
 | 50004 | Billing: `billing.usp_Payment_Settle`, and `CheckoutService` for "not yours" | Payment not found, or not yours (deliberately the same message) | `PaymentNotFoundException` | 404 |
@@ -581,16 +650,20 @@ Some rules read another service's data, so they are checked in a service's C# co
 | 50017 | Quotes: `quotes.usp_Quote_Reserve` | Quote has expired | `BusinessRuleException` | 400 |
 | 50018 | Quotes: `quotes.usp_Quote_Reserve` | Quote already used, or held by an enrollment in progress | `ConflictException` | 409 |
 | 50019 | Claims: `claims.usp_Claim_Review` | Approving without `@CoverageAmount` (a bug in the caller, never a user error) | none | 500 |
+| 50020 | Claims: `claims.usp_ClaimDocument_Add` | The claim already has the maximum number of documents | `ClaimConflictException` | 409 |
+| 50021 | Claims: `claims.usp_Claim_SendToReviewer` | The claim isn't waiting on the customer (and checked first by `ClaimService`) | `ClaimConflictException` | 409 |
+| 50022 | Identity: `accounts.usp_EmailToken_Consume` | Verification link unknown, expired, already used or replaced (was 50020 before `005_renumber_errors.sql`) | `InvalidVerificationLinkException` | 400 |
+| (50023) | Service: Enrollments' `EnrollmentService`, Claims' `ClaimService` (`EnsureEmailVerifiedAsync`) | Email address not verified yet | `EmailNotVerifiedException` | 403 |
 | 50100 | `deploy/seed/demo-data.sql` | Required plans missing (script only, never raised by the API) | none | none |
 
 **SQL Server engine errors also handled:** `2601` and `2627` (unique index or constraint violation), which `UserRepository` maps to `DuplicateEmailException` so two simultaneous sign-ups with the same email still get a clean `409`.
 
 **Adding a new error number**
 
-1. Take the next unused number (**50020**).
+1. Take the next unused number (**50024**).
 2. `THROW` it in the service's stored procedure with a user-friendly message.
 3. Add a `catch (SqlException ex) when (ex.Number == 50019)` in the repository that throws a typed exception.
-4. If the exception is new, derive it from `BusinessRuleException`, `NotFoundException` or `ConflictException`.
+4. If the exception is new, derive it from `BusinessRuleException`, `ForbiddenException`, `NotFoundException`, `ConflictException` or `TooManyRequestsException`.
 5. Add a row to this table and test the path in Swagger.
 
 ## 10. Database object catalog
@@ -599,12 +672,13 @@ Each service creates its own database from the scripts in its `Database/` folder
 
 | Database (service) | Tables and views | Stored procedures |
 |---|---|---|
-| `InsuranceIdentity` | `accounts.Users` | `usp_User_Register`, `usp_User_GetByEmail`, `usp_User_GetById`, `usp_User_GetMany`, `usp_Customer_GetAll`, `usp_Customer_SetActive` |
+| `InsuranceIdentity` | `accounts.Users` (with `EmailVerifiedAt`, `MustChangePassword`, `PasswordResetExpiresAt`), `accounts.EmailVerificationTokens` (hashes only) | `usp_User_Register`, `usp_User_GetByEmail`, `usp_User_GetById`, `usp_User_GetMany`, `usp_User_ChangeEmail`, `usp_User_ChangePassword`, `usp_Customer_GetAll`, `usp_Customer_GetById`, `usp_Customer_SetActive`, `usp_Customer_UpdateDetails`, `usp_Customer_ResetPassword` (from `006_admin_customer_management.sql`), `usp_EmailToken_Create`, `usp_EmailToken_GetRecent`, `usp_EmailToken_Consume` |
 | `InsuranceCatalog` | `catalog.Policies` (20 plans seeded by `002_seed_plans.sql`) | `usp_Policy_Create`, `usp_Policy_GetAll`, `usp_Policy_GetById`, `usp_Policy_GetMany`, `usp_Policy_Update`, `usp_Policy_Deactivate` |
 | `InsuranceQuotes` | `quotes.Quotes` | `usp_Quote_Create`, `usp_Quote_GetById`, `usp_Quote_Reserve`, `usp_Quote_Release`, `usp_Quote_MarkUsed` |
 | `InsuranceEnrollments` | `enrollments.Enrollments`, `enrollments.vw_EnrollmentDetails` (derived `Expired`), `dbo.OutboxMessages` | `usp_Enrollment_CreatePending`, `usp_Enrollment_Complete`, `usp_Enrollment_GetByUser`, `usp_Enrollment_GetById`, `usp_Enrollment_GetMany`, `usp_Enrollment_CountActiveByUser`, `usp_Enrollment_Cancel` |
-| `InsuranceBilling` | `billing.PremiumPayments`, `billing.vw_PaymentDetails` (derived `Overdue`, with the grace period), `billing.PaymentTransactions` (the payment log), `billing.SavedPaymentMethods` | `usp_Premium_CreateSchedule` (idempotent), `usp_Premium_RemoveUnpaid`, `usp_Premium_GetSummaries`, `usp_Payment_GetByEnrollment`, `usp_Payment_GetById`, `usp_Payment_Settle`, `usp_Transaction_Begin` / `_Complete` / `_GetById` / `_GetByKey` / `_Search`, `usp_SavedMethod_GetByUser` / `_GetById` / `_Add` / `_Delete` |
-| `InsuranceClaims` | `claims.Claims`, `claims.ClaimNumberSeq`, `claims.vw_ClaimDetails` | `usp_Claim_Submit`, `usp_Claim_GetByUser`, `usp_Claim_GetAll`, `usp_Claim_GetById`, `usp_Claim_Review`, `usp_Claim_CountByUser` |
+| `InsuranceBilling` | `billing.PremiumPayments`, `billing.vw_PaymentDetails` (derived `Overdue`), `billing.ufn_OverdueGraceDays` (the grace period, in one place), `billing.PaymentTransactions` (the payment log), `billing.SavedPaymentMethods`, `billing.PaymentReminders`, `dbo.OutboxMessages` | `usp_Premium_CreateSchedule` (idempotent), `usp_Premium_RemoveUnpaid`, `usp_Premium_GetSummaries`, `usp_Payment_GetByEnrollment`, `usp_Payment_GetById`, `usp_Payment_Settle`, `usp_Payment_GetReceiptInfo`, `usp_Transaction_Begin` / `_Complete` / `_GetById` / `_GetByKey` / `_Search`, `usp_SavedMethod_GetByUser` / `_GetById` / `_Add` / `_Delete`, `usp_Reminder_GetCandidates`, `usp_Reminder_Record` |
+| `InsuranceClaims` | `claims.Claims`, `claims.ClaimDocuments`, `claims.ClaimNumberSeq`, `claims.vw_ClaimDetails`, `dbo.OutboxMessages` | `usp_Claim_Submit`, `usp_Claim_GetByUser`, `usp_Claim_GetAll`, `usp_Claim_GetById`, `usp_Claim_Review`, `usp_Claim_SendToReviewer`, `usp_Claim_CountByUser`, `usp_ClaimDocument_Add`, `usp_ClaimDocument_GetByClaim`, `usp_ClaimDocument_GetById` |
+| `InsuranceNotifications` | `notifications.Emails` (one row per email: key, status, recipient, subject), `notifications.Preferences`, `notifications.PendingClaimEmails` | `usp_Email_Begin`, `usp_Email_Complete`, `usp_Email_GetRecentByUser`, `usp_Preferences_Get`, `usp_Preferences_Set`, `usp_Preferences_SetInitial`, `usp_PendingClaimEmail_Add` / `_TakeDue` / `_Remove` |
 
 ## 11. Consistency: transactions, the saga and the outbox
 
@@ -618,12 +692,17 @@ A transaction never spans two services. Each service keeps its own invariants wi
 | Cancel | Enrollments: `usp_Enrollment_Cancel` | The `WHERE` clause enforces ownership and `Active` status; `EnrollmentCancelled` commits with it through the outbox. Billing removes the unpaid installments when it receives it |
 | Pay | Billing: `CheckoutService`; `usp_Transaction_Begin`, then `usp_Payment_Settle` | One attempt per idempotency key (`UPDLOCK, HOLDLOCK` on the key). Every rule is checked before charging; after an approved charge, `usp_Payment_Settle` marks the installment paid and the attempt Succeeded in one transaction with `UPDLOCK` on the installment, re-checking "already paid" and ordering. If that fails, the charge is refunded (section 6.4) |
 | File a claim | Claims: `ClaimService`; `usp_Claim_Submit` | Eligibility from other services. The proc takes `UPDLOCK, HOLDLOCK` on the enrollment's approved claims while checking remaining coverage |
+| Add a claim document | Claims: `ClaimDocumentService`; `usp_ClaimDocument_Add` | Owner, status and file checks in the service. The proc takes `UPDLOCK, HOLDLOCK` on the claim's documents while checking the limit |
 | Review a claim | Claims: `usp_Claim_Review` | **Optimistic concurrency** through `WHERE Status = @FromStatus`. On approval, locks the enrollment's claims and re-checks remaining coverage against the plan coverage the service passes in |
 | Set customer active | Identity: `usp_Customer_SetActive` | A single `UPDATE`, restricted to `Role = 'Customer'` so admins cannot be deactivated through this path |
+| Verify an email | Identity: `usp_EmailToken_Consume` | `UPDLOCK` on the token and the user; a link works exactly once |
+| Change the email | Identity: `usp_User_ChangeEmail` | `UPDLOCK, HOLDLOCK` on the "address taken" check, so two accounts can't take the same address; outstanding links are invalidated in the same transaction |
+| Send a reminder | Billing: `usp_Reminder_Record` | Primary key (installment, stage) plus `UPDLOCK, HOLDLOCK`; the row and `PaymentReminderDue` commit together through the outbox |
+| Send an email | Notifications: `usp_Email_Begin` | Unique `NotificationKey`, claimed under `UPDLOCK, HOLDLOCK`; a repeated event finds the email already sent |
 
 Every multi-statement procedure uses `SET XACT_ABORT ON`, so a runtime error rolls the whole transaction back.
 
-**Transactional outbox.** Publishing an event right after a database commit can go wrong in two ways: the process can die between the commit and the publish (the event is lost and the saga hangs), or the publish can succeed for a change that then rolls back. So the Enrollments service writes its events to `dbo.OutboxMessages` **in the same transaction** as the change, and `OutboxDispatcher` (a background service) publishes them to RabbitMQ and marks them published. It is woken right after each commit, and polls every 2 seconds in case it missed a signal. `READPAST` locking lets several instances of the service share the outbox without publishing a message twice at the same time.
+**Transactional outbox.** Publishing an event right after a database commit can go wrong in two ways: the process can die between the commit and the publish (the event is lost and the saga hangs), or the publish can succeed for a change that then rolls back. So the Enrollments, Billing and Claims services write their events to `dbo.OutboxMessages` **in the same transaction** as the change, and `OutboxDispatcher` (a background service) publishes them to RabbitMQ and marks them published. It is woken right after each commit, and polls every 2 seconds in case it missed a signal. `READPAST` locking lets several instances of the service share the outbox without publishing a message twice at the same time.
 
 **At-least-once delivery, idempotent consumers.** The outbox and MassTransit's retries mean a message can arrive twice, never zero times. Every consumer is written so that a second delivery changes nothing: creating a schedule that exists does nothing, completing a completed saga returns the same row, marking a used quote as used again is a no-op.
 
@@ -644,10 +723,15 @@ src/app/
     interceptors/        auth.interceptor: attaches the JWT, signs out on 401
     guards/              authGuard and roleGuard
     utils/               getErrorMessage, label helpers
-  features/              auth, dashboard, policies, enrollments, payments,
-                         claims, customers, not-found
-  layout/                Shell component (navigation plus router outlet)
+  features/              auth (incl. verify-email, choose-new-password), dashboard,
+                         policies, enrollments, payments (schedule, checkout, receipt,
+                         admin log), claims (incl. documents), customers, profiles,
+                         not-found
+  shared/                Brand logo, theme toggle, modal, verify-email banner and style partials
+  layout/                Shell component (navigation, falling-leaves header, footer, router outlet)
 ```
+
+**Theming.** `styles.css` defines the palettes (light: cream, sand, sage; dark: ink, pine, green, mint) and maps them to semantic tokens (`--bg`, `--text`, `--primary`, `--border`...). Components use only the semantic tokens, so both themes work everywhere; `ThemeService` switches `data-theme` on `<html>` and remembers the choice.
 
 **Patterns**
 
@@ -669,21 +753,26 @@ src/app/
 | `/policies/new`, `/policies/:id/edit` | Admin | Plan form |
 | `/policies/:id/enroll` | Customer | Questionnaire, quote, enroll |
 | `/my-policies` | Customer | Policies with payment alerts |
-| `/my-policies/:id/payments` | Customer | Premium schedule and pay |
-| `/my-policies/:id/claims/new` | Customer | File a claim |
+| `/my-policies/:id/payments` | Customer | Premium schedule and payment history |
+| `/my-policies/:id/payments/:paymentId/checkout` | Customer | Checkout (card or wallet) |
+| `/receipts/:transactionId` | signed in | Printable receipt |
+| `/my-policies/:id/claims/new` | Customer | File a claim with documents |
 | `/claims` | Customer | My claims |
+| `/profile` | signed in | Profile, email and password changes, email settings |
+| `/verify-email`, `/choose-new-password` | public / one-time session | Email verification link, new password after an admin reset |
 | `/admin/claims` | Admin | Claims review queue |
+| `/admin/payments` | Admin | Payment log |
 | `/admin/customers` | Admin | Customer management |
 | `**` | none | Page not found |
 
 ## 13. Conventions
 
-- **Time:** all timestamps are UTC (`SYSUTCDATETIME()`, `DateTime.UtcNow`). `DATE` columns map to `DateOnly`. ADO.NET returns `DATETIME2` values with an unspecified kind, so `GetUtcDateTime` tags them as UTC, which makes the JSON end in `Z` and the browser display local time correctly. Date rules include slack (enrollment window, 5-day overdue grace) to absorb time-zone differences.
+- **Time:** all timestamps are UTC (`SYSUTCDATETIME()`, `DateTime.UtcNow`). `DATE` columns map to `DateOnly`. ADO.NET returns `DATETIME2` values with an unspecified kind, so `GetUtcDateTime` tags them as UTC, which makes the JSON end in `Z` and the browser display local time correctly. **"Today" is in the business time zone** (`BusinessTimeZone`, default `America/New_York`): C# uses `BusinessTime.Today` (never `DateTime.UtcNow.Date`), and SQL uses `dbo.ufn_Today()`, which `DatabaseMigrator` recreates from the same setting at every start. Otherwise a payment made at 8 pm Eastern would be dated tomorrow, and "due today" reminders would arrive the evening before. Emails write times in that zone with EST/EDT.
 - **Money:** `DECIMAL(18,2)` in SQL and `decimal` in C#. Decimal parameters always declare precision and scale, otherwise SQL Server rounds to whole numbers. Rounding is away from zero.
 - **JSON:** camelCase properties, enums as names, `DateOnly` as `yyyy-MM-dd`.
 - **IDs:** read from the validated token for the caller, never accepted from the client for "who am I".
 - **Naming:** `<schema>.usp_<Entity>_<Action>` for procedures, `<schema>.vw_<Name>` for views, one DTO and one exception per file. Events are past-tense records (`EnrollmentActivated`). Internal endpoints live under `/internal/<resource>`.
-- **Ports (local runs):** gateway 5080, Identity 5101, Catalog 5102, Quotes 5103, Enrollments 5104, Billing 5105, Claims 5106. In containers every service listens on 8080.
+- **Ports (local runs):** gateway 5080, Identity 5101, Catalog 5102, Quotes 5103, Enrollments 5104, Billing 5105, Claims 5106, Notifications 5107. In containers every service listens on 8080.
 
 ## 14. Design decisions and trade-offs
 
@@ -716,32 +805,58 @@ Unit tests (xUnit) target the layers that contain decisions, using small in-memo
 | Claim transitions | Every allowed and blocked move, and that every status has a rule |
 | `AuthService` | Hash stored (never plain text), normalized email, forced customer role, inactive users refused |
 | `EnrollmentService` | Start-date window edges, alert thresholds, ownership, cancellation, the saga (completed, still pending, failed), releasing the quote when the plan or the duplicate check refuses, degradation when Billing is down |
-| `ClaimService` | Workflow enforcement, reason required to reject, the `@FromStatus` guard, visibility rules, claim eligibility, composing names and plans from other services |
+| `ClaimDocumentService` | File type from contents, size and count limits, ownership, a saved file removed if its row fails, a document reached only through its own claim |
+| `ClaimService` | Workflow enforcement, the request for more information, reason required to reject, the `@FromStatus` guard, visibility rules, claim eligibility, composing names and plans from other services |
 | `CheckoutService` | Approved, declined and failed payments, idempotent retries, rules checked before charging, automatic refunds, saved cards |
 | `MockPaymentGateway` | Test-card outcomes, expired cards, idempotent charges, malformed tokens |
 | `PaymentService` | Who sees schedules, the payment log and receipts |
 | `InternalQuotesController` | A quote can only be reserved for the caller |
-| Service boundaries | No service references another's implementation, and no service's SQL touches another service's schema |
+| Reminders | Which reminder goes out on which day, no repeats or stale reminders, only for policies in force |
+| Notifications | Every email's subject and content, HTML encoding, exactly-once sending, opt-outs, deactivated accounts, waiting out mail-server limits, consumers on MassTransit's in-memory test bus |
+| Accounts | Email verification links, email and password changes, admin edits, password resets and one-time passwords, deactivation and reactivation |
+| Service boundaries | No service references another's implementation, no service's SQL touches another service's schema, and nothing depends on the Notifications service |
 
-**End to end.** The whole system was run with Docker Compose (and as separate local processes) against SQL Server and RabbitMQ, and a scripted scenario of 95 requests through the gateway (every happy path and error path, demo customers, admin screens) returned the same responses as the original single API. Two failure scenarios were run by hand: Billing stopped during an enrollment (the customer gets `202`; the policy activates when Billing restarts) and Billing failing permanently (the saga compensates and the quote can be reused).
+**Frontend.** Vitest (through `ng test`) covers card validation, utilities and components.
 
-## 16. Limitations and future work
+**End to end.** `tests/e2e/e2e_test.py` drives the running system through the gateway the way the Angular app does: registration and the verification email (read from Mailpit), quotes, the enrollment saga, payments (declines, idempotent retries, receipts and their emails), claims and their review, the BFF customer list, deactivation and cancellation. It first waits until every service answers through the gateway, because on a fresh database some services take longer to apply their scripts. Two failure scenarios were also run by hand: Billing stopped during an enrollment (the customer gets `202`; the policy activates when Billing restarts) and Billing failing permanently (the saga compensates and the quote can be reused).
 
-**Limitations:** simulated payments (cancelling deletes unpaid installments rather than voiding them), hard-coded illustrative rating factors, UTC-based date rules, JWT in `localStorage` with no refresh tokens, no pagination, attachments or notifications, no frontend tests, and the end-to-end suite is not yet automated in CI.
+**In CI.** Every pull request runs the .NET tests, the Angular tests and production build, and the end-to-end suite against the whole system in Docker Compose (section 16).
 
-**Platform next steps:**
+## 16. Deployment and CI/CD
 
-1. A CI pipeline that builds the images and runs the end-to-end scenario against Docker Compose.
-2. Distributed tracing (OpenTelemetry) across the gateway, services and the bus, and structured logs with a correlation id.
-3. Asymmetric JWT signing (Identity signs, everyone else only verifies).
-4. Resilience policies on the HTTP clients (timeouts, retries, circuit breakers), and caching of the gateway's active-account check.
-5. Deployment templates for Azure Container Apps.
+```mermaid
+flowchart LR
+    PR["Pull request"] --> CI["CI: .NET tests · Angular tests and build ·<br/>end-to-end suite in Docker Compose"]
+    CI -- "merge to main" --> IMG["CD: one image per service<br/>GHCR + Azure Container Registry"]
+    IMG --> ACA["Azure Container Apps<br/>each app updated to sha-&lt;commit&gt;"]
+    IMG --> SWA["Azure Static Web Apps<br/>Angular build"]
+```
 
-**Future work, in priority order:**
+| Concern | Locally (Docker Compose) | In Azure |
+|---|---|---|
+| Services and gateway | One container each; only the gateway's port is published | One Container App each; only the gateway has external ingress, the services are internal (`http://<name>/`) |
+| Databases | One SQL Server instance with seven databases | Seven Azure SQL databases (serverless) |
+| Event bus | RabbitMQ | Azure Service Bus, Standard tier (topics), chosen by `ServiceBus:ConnectionString` |
+| Email | Mailpit (a test inbox) | Azure Communication Services over SMTP |
+| Claim documents | A Docker volume | An Azure Files share mounted into the Claims app |
+| Frontend | `ng serve` | Azure Static Web Apps, with a fallback to `index.html` for client-side routes |
+| Secrets | `deploy/.env` (ignored by Git) | Container App secrets |
 
-1. Store rating factors in tables with an admin editor.
-2. Pagination and sorting for large lists.
-3. Admin dashboard statistics and a "My quotes" screen.
-4. Claim attachments (blob storage) and email notifications.
-5. Refresh tokens or httpOnly cookie sessions.
-6. Integration tests with a disposable database, and a CI pipeline on GitHub Actions.
+- **The same images everywhere.** `deploy/Dockerfile` builds every .NET service from one recipe (build arguments choose the project). CD tags each image `latest` and `sha-<commit>`, so any earlier version can be redeployed by pointing a container app at its tag.
+- **No stored Azure password.** GitHub Actions signs in to Azure with OpenID Connect (a federated credential trusted for `main`), limited to the project's resource group.
+- **Services migrate their own databases.** On start, each service applies its pending scripts, so a deployment never needs a separate database step. The migrator finds databases through `sys.databases`, which also works on Azure SQL.
+- **One-time setup** (container apps, managed identity for the registry, the Azure Files mount, email) is scripted and documented in `deploy/azure/`.
+
+## 17. Limitations and future work
+
+**Limitations:** simulated payments (cancelling deletes unpaid installments rather than voiding them; no webhooks, 3-D Secure or disputes), hard-coded illustrative rating factors, one business time zone for every customer, JWT in `localStorage` with no refresh tokens, one symmetric JWT key shared by every service, no pagination, no malware scanning of claim documents, and a single admin role promoted by SQL.
+
+**Next steps:**
+
+1. A virtual assistant: a Python/FastAPI chatbot service behind the gateway that answers questions about plans and the customer's own policies (in development).
+2. A real payment processor (Stripe) behind `IPaymentGateway`, with webhooks.
+3. Rating factors stored in tables, with an admin editor.
+4. Pagination and sorting for large lists, an admin analytics dashboard and a "My quotes" screen.
+5. Refresh tokens or httpOnly cookie sessions, and asymmetric JWT signing (Identity signs, everyone else only verifies).
+6. Distributed tracing (OpenTelemetry) with a correlation id across the gateway, services and the bus; resilience policies (timeouts, retries, circuit breakers) on the HTTP clients.
+7. Malware scanning of uploaded documents, and SMS or push notifications.

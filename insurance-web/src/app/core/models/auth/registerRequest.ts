@@ -10,4 +10,5 @@ export interface RegisterRequest {
   city: string;
   state: string;        // two-letter code
   postalCode: string;
+  paymentReminders?: boolean;   // "Email me payment reminders" (left out = yes)
 }

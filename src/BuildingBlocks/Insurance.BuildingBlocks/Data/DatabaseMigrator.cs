@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text.RegularExpressions;
+using Insurance.BuildingBlocks.Time;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -21,15 +22,29 @@ public static partial class DatabaseMigrator
         var database = builder.InitialCatalog;
 
         // SQL Server may still be starting (docker compose starts everything at once), so retry for a while.
+        // The database is looked up in sys.databases rather than with DB_ID(): on Azure SQL, DB_ID() run in master
+        // doesn't see the server's other databases, so it would try to create one that already exists.
         builder.InitialCatalog = "master";
-        await RetryAsync(() => ExecuteAsync(builder.ConnectionString,
-            $"IF DB_ID(N'{database.Replace("'", "''")}') IS NULL CREATE DATABASE [{database.Replace("]", "]]")}];"), logger, ct);
+        await RetryAsync(() => ExecuteAsync(builder.ConnectionString, CreateDatabaseIfMissingSql(database)), logger, ct);
 
-        await ExecuteAsync(connectionString, """
+        // Retried too: an Azure SQL serverless database that was paused takes up to a minute to wake up.
+        await RetryAsync(() => ExecuteAsync(connectionString, """
             IF OBJECT_ID('dbo.SchemaVersions', 'U') IS NULL
                 CREATE TABLE dbo.SchemaVersions (
                     ScriptName NVARCHAR(200) NOT NULL CONSTRAINT PK_SchemaVersions PRIMARY KEY,
                     AppliedAt  DATETIME2     NOT NULL CONSTRAINT DF_SchemaVersions_AppliedAt DEFAULT SYSUTCDATETIME());
+            """), logger, ct);
+
+        // "Today" in the business time zone, for views and procedures (see BusinessTime). Recreated at every start
+        // from configuration, before the scripts run, so the scripts can use it and it always matches the C# side.
+        var zone = BusinessTime.SqlServerZoneName.Replace("'", "''");
+        await ExecuteAsync(connectionString, $"""
+            CREATE OR ALTER FUNCTION dbo.ufn_Today()
+            RETURNS DATE
+            AS
+            BEGIN
+                RETURN CAST(SYSUTCDATETIME() AT TIME ZONE 'UTC' AT TIME ZONE '{zone}' AS DATE);
+            END
             """);
 
         var applied = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -59,6 +74,11 @@ public static partial class DatabaseMigrator
             logger.LogInformation("Applied database script {Script} to {Database}", name, database);
         }
     }
+
+    /// <summary>Run in master: creates the database unless the server already has one by that name.</summary>
+    public static string CreateDatabaseIfMissingSql(string database) =>
+        $"IF NOT EXISTS (SELECT 1 FROM sys.databases WHERE name = N'{database.Replace("'", "''")}') " +
+        $"CREATE DATABASE [{database.Replace("]", "]]")}];";
 
     private static async Task ExecuteAsync(string connectionString, string sql)
     {
