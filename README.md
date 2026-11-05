@@ -448,6 +448,7 @@ flowchart LR
 How it stays reliable:
 
 - **Exactly once.** Each email has a key (e.g. `receipt:123`, `reminder:123:DueToday`). A repeated event finds the key already sent and does nothing; a failed send is recorded and retried.
+- **Waits out sending limits.** When the mail server says "later" (its hourly sending limit, a temporary error, no connection), the finished email is saved as **Waiting** and resent after 1, 5, 15 and 30 minutes, then hourly and longer: about 13 hours in all before it's given up. An address the server refuses for good is marked Failed at once.
 - **No lost events.** Billing and Claims publish through the same **transactional outbox** as Enrollments, so an event exists exactly when its change committed. The receipt is saved in the same database transaction that marks the installment paid, and the declined notice with the declined outcome; a replayed checkout request (same idempotency key) sends nothing new.
 - **Reminders once per stage.** Billing records each (installment, stage) under a primary key before publishing, so several Billing instances never double-send.
 - **Background calls.** Consumers and the reminder job have no signed-in user, so they call other services' internal APIs with a short-lived **service token** (role `Service`, no user id: useless on public endpoints and refused by the gateway).

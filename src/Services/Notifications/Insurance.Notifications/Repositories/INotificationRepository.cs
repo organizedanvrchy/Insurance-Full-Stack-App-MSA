@@ -20,4 +20,10 @@ public interface INotificationRepository
     Task QueueClaimEmailAsync(int claimId, string payload, DateTime sendAfterUtc);
     Task<List<PendingClaimEmail>> TakeDueClaimEmailsAsync(int take, TimeSpan lease);
     Task RemoveClaimEmailAsync(int claimId);
+
+    // Emails the mail server said to try later (EmailRetryJob). Queuing one marks it Waiting.
+    Task QueueRetryAsync(string notificationKey, string payload, DateTime sendAfterUtc, string toEmail, string subject, string detail);
+    Task<List<EmailRetry>> TakeDueRetriesAsync(int take, TimeSpan lease);
+    Task RescheduleRetryAsync(string notificationKey, DateTime sendAfterUtc, string detail);
+    Task RemoveRetryAsync(string notificationKey);
 }

@@ -19,6 +19,9 @@ public class NotificationOptions
 
     /// <summary>How often the job looks for claim emails that are due.</summary>
     public TimeSpan ClaimEmailPollInterval { get; set; } = TimeSpan.FromSeconds(15);
+
+    /// <summary>How often EmailRetryJob looks for waiting emails whose next try is due.</summary>
+    public TimeSpan EmailRetryPollInterval { get; set; } = TimeSpan.FromSeconds(30);
 }
 
 /// <summary>Builds and sends one claim's "We received your claim" email, with its documents.</summary>

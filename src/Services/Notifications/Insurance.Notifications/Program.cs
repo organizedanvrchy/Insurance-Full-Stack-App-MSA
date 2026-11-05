@@ -34,6 +34,8 @@ builder.Services.AddScoped<IPolicyDetails, PolicyDetails>();
 builder.Services.Configure<NotificationOptions>(builder.Configuration.GetSection("Notifications"));
 builder.Services.AddScoped<IClaimReceivedEmail, ClaimReceivedEmail>();
 builder.Services.AddHostedService<ClaimReceivedEmailJob>();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddHostedService<EmailRetryJob>();
 
 builder.Services.AddServiceClient<IUserDirectory, IdentityClient>(builder.Configuration, "Identity");
 builder.Services.AddServiceClient<IEnrollmentLookup, EnrollmentLookupClient>(builder.Configuration, "Enrollments");
