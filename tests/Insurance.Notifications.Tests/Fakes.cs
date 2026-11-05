@@ -88,6 +88,45 @@ public class FakeNotificationRepository : INotificationRepository
         return Task.CompletedTask;
     }
 
+    public Task DelayClaimEmailAsync(int claimId, DateTime sendAfterUtc)
+    {
+        PendingClaimEmails[claimId] = (PendingClaimEmails[claimId].Payload, sendAfterUtc);
+        return Task.CompletedTask;
+    }
+
+    // ---- Emails waiting for another try (usp_EmailRetry_*) ----
+    public record Retry(string Payload, DateTime SendAfter, int Attempts);
+    public Dictionary<string, Retry> Retries { get; } = new();
+    public Func<DateTime> Now { get; set; } = () => DateTime.UtcNow;
+
+    public Task QueueRetryAsync(string notificationKey, string payload, DateTime sendAfterUtc, string toEmail, string subject, string detail)
+    {
+        Retries.TryAdd(notificationKey, new Retry(payload, sendAfterUtc, 0));
+        var row = Emails[notificationKey];
+        (row.Status, row.ToEmail, row.Subject, row.Detail) = (EmailStatus.Waiting, toEmail, subject, detail);
+        return Task.CompletedTask;
+    }
+
+    public Task<List<EmailRetry>> TakeDueRetriesAsync(int take, TimeSpan lease)
+    {
+        var due = Retries.Where(r => r.Value.SendAfter <= Now()).Take(take).ToList();
+        foreach (var r in due) Retries[r.Key] = r.Value with { SendAfter = Now().Add(lease), Attempts = r.Value.Attempts + 1 };
+        return Task.FromResult(due.Select(r => new EmailRetry(r.Key, r.Value.Payload, r.Value.Attempts + 1)).ToList());
+    }
+
+    public Task RescheduleRetryAsync(string notificationKey, DateTime sendAfterUtc, string detail)
+    {
+        Retries[notificationKey] = Retries[notificationKey] with { SendAfter = sendAfterUtc };
+        Emails[notificationKey].Detail = detail;
+        return Task.CompletedTask;
+    }
+
+    public Task RemoveRetryAsync(string notificationKey)
+    {
+        Retries.Remove(notificationKey);
+        return Task.CompletedTask;
+    }
+
     public Task<List<SentEmail>> GetRecentAsync(int userId, int take) =>
         Task.FromResult(Emails.Values.Where(e => e.UserId == userId && e.Status == EmailStatus.Sent)
             .Take(take).Select((e, i) => new SentEmail(i + 1, e.Kind, e.ToEmail, e.Subject, DateTime.UtcNow)).ToList());
@@ -111,6 +150,8 @@ public class FakeEmailSender : IEmailSender
 {
     public List<EmailMessage> Sent { get; } = new();
     public int FailNext { get; set; }      // how many sends in a row fail (SMTP server down)
+    public int LimitNext { get; set; }     // how many sends in a row hit the server's sending limit
+    public int RefuseNext { get; set; }    // how many sends in a row the server refuses for good
 
     public Task SendAsync(EmailMessage message, CancellationToken ct = default)
     {
@@ -118,6 +159,16 @@ public class FakeEmailSender : IEmailSender
         {
             FailNext--;
             throw new IOException("SMTP server unreachable");
+        }
+        if (LimitNext > 0)
+        {
+            LimitNext--;
+            throw new EmailSendException("The mail server asked to try again later: 4.5.127 Message rate limit exceeded", tryLater: true);
+        }
+        if (RefuseNext > 0)
+        {
+            RefuseNext--;
+            throw new EmailSendException("The mail server refused the email: 5.1.1 Recipient address rejected", tryLater: false);
         }
         Sent.Add(message);
         return Task.CompletedTask;

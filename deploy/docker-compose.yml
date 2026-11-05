@@ -167,8 +167,8 @@ services:
       Email__Security: ${EMAIL_SECURITY:-None}
       Email__Username: ${EMAIL_USERNAME:-}
       Email__Password: ${EMAIL_PASSWORD:-}
-      Email__FromAddress: ${EMAIL_FROM:-no-reply@rainsurance.example}
-      Email__SupportEmail: ${SUPPORT_EMAIL:-support@rainsurance.example}
+      Email__FromAddress: ${EMAIL_FROM:-no-reply@kvbinsurance.example}
+      Email__SupportEmail: ${SUPPORT_EMAIL:-support@kvbinsurance.example}
       Email__AppBaseUrl: ${APP_BASE_URL:-http://localhost:4200}
 
   gateway:

@@ -66,6 +66,20 @@ public class ClaimServiceTests
 
     // Submit
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData(0)]
+    [InlineData(3)]
+    public async Task The_number_of_documents_to_come_is_passed_on_for_the_claim_email(int? count)
+    {
+        var request = Submit();
+        request.DocumentCount = count;
+
+        await _sut.SubmitAsync(userId: 3, request);
+
+        Assert.Equal(count, _repo.LastExpectedDocuments);
+    }
+
     [Fact]
     public async Task Submitting_trims_the_description_and_shows_no_admin_actions_to_the_customer()
     {

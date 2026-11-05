@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Insurance.Identity.Contracts;
 using Insurance.Notifications.Email;
 using Insurance.Notifications.Models;
@@ -25,8 +26,10 @@ public interface INotificationDispatcher
 
 /// <summary>
 /// Everything every email has in common: send each one once, only to active accounts, only if the customer wants
-/// that kind, and keep a record. A failure is recorded and rethrown, so MassTransit retries the event; once the
-/// retries run out, the event lands in the service's _error queue for a person to look at.
+/// that kind, and keep a record. When the mail server says "later" (its sending limit, a temporary error), the email
+/// is queued for EmailRetryJob and marked Waiting; when it refuses the email for good, it's recorded as Failed. Any
+/// other failure is recorded and rethrown, so MassTransit retries the event; once the retries run out, the event
+/// lands in the service's _error queue for a person to look at.
 /// </summary>
 public class NotificationDispatcher : INotificationDispatcher
 {
@@ -35,10 +38,12 @@ public class NotificationDispatcher : INotificationDispatcher
     private readonly IEmailSender _sender;
     private readonly EmailOptions _options;
     private readonly ILogger<NotificationDispatcher> _logger;
+    private readonly TimeProvider _clock;
 
     public NotificationDispatcher(INotificationRepository repo, IUserDirectory users, IEmailSender sender,
-        IOptions<EmailOptions> options, ILogger<NotificationDispatcher> logger)
+        IOptions<EmailOptions> options, ILogger<NotificationDispatcher> logger, TimeProvider? clock = null)
     {
+        _clock = clock ?? TimeProvider.System;
         _repo = repo;
         _users = users;
         _sender = sender;
@@ -62,7 +67,7 @@ public class NotificationDispatcher : INotificationDispatcher
                 await SkipAsync(n, "The account no longer exists.");
                 return;
             }
-            if (!user.IsActive)
+            if (!user.IsActive && n.Kind != NotificationKind.AccountDeactivated)   // that one is about being inactive
             {
                 await SkipAsync(n, "The account is deactivated.");
                 return;
@@ -79,9 +84,35 @@ public class NotificationDispatcher : INotificationDispatcher
                 await SkipAsync(n, $"Recipient domain is in Email:SkipDomains ({to}).");
                 return;
             }
+            if (_options.SkipReservedDomains && IsReservedDomain(to))
+            {
+                await SkipAsync(n, $"Recipient domain is reserved for testing and can't receive email ({to}).");
+                return;
+            }
 
             var email = await n.Render(user);
-            await _sender.SendAsync(new EmailMessage(to, user.FullName, email.Subject, email.Html, email.Text, email.Attachments), ct);
+            var message = new EmailMessage(to, user.FullName, email.Subject, email.Html, email.Text, email.Attachments);
+            try
+            {
+                await _sender.SendAsync(message, ct);
+            }
+            catch (EmailSendException ex) when (ex.TryLater)
+            {
+                // The server's sending limit, a temporary error or no connection: EmailRetryJob tries again later.
+                var delay = EmailRetrySchedule.DelayAfter(failedAttempts: 1)!.Value;
+                await _repo.QueueRetryAsync(n.Key, JsonSerializer.Serialize(message), _clock.GetUtcNow().UtcDateTime + delay,
+                    to, email.Subject, ex.Message);
+                _logger.LogWarning("Couldn't send {Kind} email {Key} yet ({Reason}); trying again in {Delay}.",
+                    n.Kind, n.Key, ex.Message, delay);
+                return;
+            }
+            catch (EmailSendException ex)
+            {
+                // Refused for good (e.g. an address the server won't deliver to): retrying can't help.
+                await _repo.CompleteAsync(n.Key, EmailStatus.Failed, to, email.Subject, ex.Message);
+                _logger.LogWarning("The mail server refused {Kind} email {Key}: {Reason}", n.Kind, n.Key, ex.Message);
+                return;
+            }
             await _repo.CompleteAsync(n.Key, EmailStatus.Sent, to, email.Subject);
             _logger.LogInformation("Sent {Kind} email {Key} to user {UserId}.", n.Kind, n.Key, n.UserId);
         }
@@ -104,5 +135,17 @@ public class NotificationDispatcher : INotificationDispatcher
         if (at < 0) return false;
         var domain = address[(at + 1)..];
         return _options.SkipDomains.Any(d => domain.Equals(d.Trim().TrimStart('@'), StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static readonly string[] ReservedDomains = { "example.com", "example.net", "example.org" };
+    private static readonly string[] ReservedTopLevelDomains = { "example", "test", "invalid", "localhost" };
+
+    /// <summary>A domain reserved for documentation and testing (RFC 2606, RFC 6761), or one under it.</summary>
+    public static bool IsReservedDomain(string address)
+    {
+        var at = address.LastIndexOf('@');
+        var domain = (at < 0 ? address : address[(at + 1)..]).Trim().TrimEnd('.').ToLowerInvariant();
+        static bool IsOrUnder(string domain, string reserved) => domain == reserved || domain.EndsWith("." + reserved);
+        return ReservedDomains.Any(d => IsOrUnder(domain, d)) || ReservedTopLevelDomains.Any(t => IsOrUnder(domain, t));
     }
 }

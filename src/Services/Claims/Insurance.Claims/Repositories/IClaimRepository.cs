@@ -6,7 +6,8 @@ namespace Insurance.Claims.Repositories;
 public interface IClaimRepository
 {
     // Saves the claim and its ClaimSubmitted event (outbox) in one transaction.
-    Task<int> SubmitAsync(int userId, int enrollmentId, DateOnly incidentDate, string description, decimal amount, decimal coverageAmount);
+    Task<int> SubmitAsync(int userId, int enrollmentId, DateOnly incidentDate, string description, decimal amount, decimal coverageAmount,
+        int? expectedDocuments = null);
     Task<List<InsuranceClaim>> GetByUserAsync(int userId);
     Task<List<InsuranceClaim>> GetAllAsync(ClaimStatus? status);
     Task<InsuranceClaim?> GetByIdAsync(int claimId);

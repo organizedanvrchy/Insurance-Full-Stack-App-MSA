@@ -14,19 +14,29 @@ namespace Insurance.Notifications.Messaging;
 public class ClaimSubmittedConsumer : IConsumer<ClaimSubmitted>
 {
     private readonly INotificationRepository _repo;
+    private readonly IClaimReceivedEmail _email;
     private readonly NotificationOptions _options;
 
-    public ClaimSubmittedConsumer(INotificationRepository repo, IOptions<NotificationOptions> options)
+    public ClaimSubmittedConsumer(INotificationRepository repo, IClaimReceivedEmail email, IOptions<NotificationOptions> options)
     {
         _repo = repo;
+        _email = email;
         _options = options.Value;
     }
 
-    // Not sent yet: the claim's documents are still being uploaded. ClaimReceivedEmailJob sends it after
-    // Notifications:ClaimEmailDelay, with copies of the documents.
-    public Task Consume(ConsumeContext<ClaimSubmitted> context) =>
-        _repo.QueueClaimEmailAsync(context.Message.ClaimId, JsonSerializer.Serialize(context.Message),
-            DateTime.UtcNow.Add(_options.ClaimEmailDelay));
+    // The email is the customer's copy of the claim WITH its documents, which the claim form uploads one by one after
+    // saving the claim. No documents coming: it goes out now. Some coming: ClaimReceivedEmailJob looks on every tick
+    // (ClaimEmailPollInterval) and sends once they're all in, or after ClaimEmailDelay at the latest. Unknown (an
+    // older caller): it waits the whole ClaimEmailDelay, as before.
+    public Task Consume(ConsumeContext<ClaimSubmitted> context)
+    {
+        var claim = context.Message;
+        if (claim.ExpectedDocuments == 0)
+            return _email.SendAsync(claim, context.CancellationToken);
+
+        var sendAfter = claim.ExpectedDocuments > 0 ? DateTime.UtcNow : DateTime.UtcNow.Add(_options.ClaimEmailDelay);
+        return _repo.QueueClaimEmailAsync(claim.ClaimId, JsonSerializer.Serialize(claim), sendAfter);
+    }
 }
 
 /// <summary>

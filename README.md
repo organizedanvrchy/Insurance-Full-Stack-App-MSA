@@ -169,7 +169,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the enrollment saga, the ou
 | Claims | Active policy only. The incident must fall inside the coverage period and not be in the future. No overdue premiums. The amount cannot exceed the remaining coverage (policy coverage minus approved and paid claims). |
 | Claim workflow | Submitted, Under review, then Approved or Rejected, then (approved only) Paid. A reviewer can also ask for more information, and the customer sends the claim back after responding. A rejection or a request for more information needs a note. Concurrent edits are detected. |
 | Claim documents | PDF, JPG or PNG, up to 10 MB each and 5 per claim. Customers can add them until a decision is made. They can't be deleted. |
-| Accounts | Deactivated accounts cannot sign in and existing tokens stop working. Admin accounts cannot be deactivated from the UI. |
+| Accounts | Deactivated accounts cannot sign in and existing tokens stop working, and the customer is emailed that support can reactivate them. Admin accounts cannot be deactivated from the UI. |
 | Admin password reset | The customer's password stops working right away, and a 14-character **one-time password** valid for **30 minutes** is emailed to them (only its hash is stored). Signing in with it takes them straight to "Choose a new password" (the new password twice; the one-time password isn't asked for again), and the gateway answers `403` to every other request until they do. Sessions that were open before the reset are signed out. They must sign in and choose the password within the 30 minutes; after that, signing in gets a `401` saying it expired, and the admin presses "Reset password" again. |
 
 ## Getting started
@@ -274,10 +274,11 @@ Every setting can also be given as an environment variable (`:` becomes `__`), w
 | `Email:FromAddress`, `FromName` | Notifications | The sender |
 | `Email:AppBaseUrl` | Notifications | The Angular app's address; links in emails point there |
 | `Email:MaxAttachmentBytes` | Notifications | Most a claim email's document copies may add up to (default 15 MB); larger files are listed but not attached |
-| `Notifications:ClaimEmailDelay` | Notifications | How long "We received your claim" waits for the claim's documents to upload (default 2 minutes) |
+| `Notifications:ClaimEmailDelay` | Notifications | The longest "We received your claim" waits for the claim's documents to upload (default 2 minutes). Without documents it goes out at once; with them, as soon as they're all in |
 | `Email:SupportEmail` | Notifications | Where customers get help. Every email says it's automated ("don't reply") and points here |
 | `BusinessTimeZone` | Every service | The insurer's time zone (IANA id, default `America/New_York`, i.e. EST/EDT): what "today" means for due dates, overdue premiums, coverage and claims, and the zone emails show times in |
 | `Email:SkipDomains` | Notifications | Recipient domains never emailed (e.g. `demo.example` against a real mail server) |
+| `Email:SkipReservedDomains` | Notifications | `true` on a real mail server: never email domains reserved for testing (`example.com`, `*.example`, `*.test`, ...), which it would refuse. Off locally, where Mailpit catches everything |
 | `Reminders:Enabled`, `Interval` | Billing | The payment reminder job (default on, every hour) |
 | `EmailVerification:LinkLifetime`, `ResendCooldown`, `MaxEmailsPerDay` | Identity | Defaults 15 minutes, 1 minute, 10 |
 | `Customers:OneTimePasswordLifetime` | Identity | How long an admin-reset one-time password works (default 30 minutes) |
@@ -423,7 +424,7 @@ The **Notifications service** sends every email. It listens to events the other 
 
 ```mermaid
 flowchart LR
-    ID["Identity"] -- "CustomerRegistered<br/>EmailVerificationRequested<br/>PasswordResetByAdmin" --> BUS[["RabbitMQ"]]
+    ID["Identity"] -- "CustomerRegistered<br/>EmailVerificationRequested<br/>PasswordResetByAdmin<br/>AccountDeactivated" --> BUS[["RabbitMQ"]]
     EN["Enrollments"] -- "EnrollmentActivated<br/>EnrollmentCancelled" --> BUS
     BI["Billing<br/>(checkout + hourly reminder job)"] -- "PaymentReceived, PaymentDeclined<br/>PaymentReminderDue" --> BUS
     CL["Claims"] -- "ClaimSubmitted<br/>ClaimStatusChanged" --> BUS
@@ -437,19 +438,22 @@ flowchart LR
 | Verify your email / Confirm your new email address / Verify your new email address | Sign-up, resend, email change. When an administrator changed it at the customer's request, the email simply asks them to verify the new address | No |
 | Your email address was changed | To the **old** address after a change (when an administrator made it at the customer's request, it says so): "if this was you, ignore it; if not, contact support immediately" | No |
 | Your password was changed | After a password change, with the same warning | No |
+| Your account has been deactivated | An admin deactivated the account: no more sign-ins, and "contact support to have it reactivated". Sent once per deactivation, to the deactivated account | No |
 | Your password has been reset | An admin reset the password: the one-time password, "enter it the next time you sign in", and when its 30 minutes run out | No |
 | Policy active / Policy cancelled | The enrollment saga completes, the customer cancels | No |
 | Payment receipt | Every installment paid at checkout (receipt number, payment method, installment *n* of *N*, next payment, link to the in-app receipt) | No |
 | Payment didn't go through | A declined or failed checkout attempt (the reason, nothing charged, a "try again" link) | No |
 | Payment reminder | 3 days before, on the due date, when Overdue, +5 days, +10 days | **Yes**: at sign-up, and in the profile's "Email settings" |
-| Claim received / needs more information / approved / rejected (with the reason) / payment sent | Filed: the customer's copy of the claim, listing its documents with **copies attached** (sent about 2 minutes after filing, once the documents have uploaded; up to 15 MB of attachments, larger files are listed with a link to My claims), "allow 5-7 business days for a decision"; approved ("payment goes out in about 2-3 business days"); rejected ("We apologize, but…", the reviewer's reason, and the support address to dispute the decision); needs more information (the reviewer's questions, and a suggestion to add images or documents and answer them; sent every time it's asked); paid ("your check arrives in about 5-10 business days"). Moving to "under review" sends nothing | No |
+| Claim received / needs more information / approved / rejected (with the reason) / payment sent | Filed: the customer's copy of the claim, listing its documents with **copies attached** (sent at once when no files were added; with files, as soon as they've all uploaded, or 2 minutes after filing at the latest; up to 15 MB of attachments, larger files are listed with a link to My claims), "allow 5-7 business days for a decision"; approved ("payment goes out in about 2-3 business days"); rejected ("We apologize, but…", the reviewer's reason, and the support address to dispute the decision); needs more information (the reviewer's questions, and a suggestion to add images or documents and answer them; sent every time it's asked); paid ("your check arrives in about 5-10 business days"). Moving to "under review" sends nothing | No |
 
 How it stays reliable:
 
 - **Exactly once.** Each email has a key (e.g. `receipt:123`, `reminder:123:DueToday`). A repeated event finds the key already sent and does nothing; a failed send is recorded and retried.
+- **Waits out sending limits.** When the mail server says "later" (its hourly sending limit, a temporary error, no connection), the finished email is saved as **Waiting** and resent after 1, 5, 15 and 30 minutes, then hourly and longer: about 13 hours in all before it's given up. An address the server refuses for good is marked Failed at once.
 - **No lost events.** Billing and Claims publish through the same **transactional outbox** as Enrollments, so an event exists exactly when its change committed. The receipt is saved in the same database transaction that marks the installment paid, and the declined notice with the declined outcome; a replayed checkout request (same idempotency key) sends nothing new.
 - **Reminders once per stage.** Billing records each (installment, stage) under a primary key before publishing, so several Billing instances never double-send.
 - **Background calls.** Consumers and the reminder job have no signed-in user, so they call other services' internal APIs with a short-lived **service token** (role `Service`, no user id: useless on public endpoints and refused by the gateway).
+- **One name.** Every email (subjects, text, footer and sender name) uses `EmailBuilder.Brand`, currently **KVBInsurance**: change it there to rebrand them all.
 - **Safe content.** All customer-entered text (names, reviewer notes) is HTML-encoded in the templates, and every email also has a plain-text version.
 
 ## Known limitations

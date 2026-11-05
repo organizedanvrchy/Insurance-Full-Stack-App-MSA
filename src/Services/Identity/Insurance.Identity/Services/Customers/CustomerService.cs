@@ -39,8 +39,27 @@ public class CustomerService : ICustomerService
 
     public async Task<CustomerInfo> GetAsync(int userId) => await _customers.GetAsync(userId) ?? throw NotACustomer();
 
-    public async Task<CustomerInfo> SetActiveAsync(int userId, bool isActive) =>
-        await _customers.SetActiveAsync(userId, isActive) ?? throw NotACustomer();
+    public async Task<CustomerInfo> SetActiveAsync(int userId, bool isActive)
+    {
+        var before = await GetAsync(userId);   // 404 for admins and unknown ids
+        var customer = await _customers.SetActiveAsync(userId, isActive) ?? throw NotACustomer();
+
+        // Tell the customer, once: only when an active account is switched off. The deactivation stands even if the
+        // event can't be published.
+        if (before.IsActive && !customer.IsActive)
+        {
+            try
+            {
+                await _events.PublishAsync(new AccountDeactivated(customer.UserId, customer.FullName, customer.Email,
+                    _clock.GetUtcNow().UtcDateTime));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not publish AccountDeactivated for customer {UserId}.", userId);
+            }
+        }
+        return customer;
+    }
 
     public async Task<CustomerInfo> UpdateDetailsAsync(int userId, AdminUpdateCustomerRequest r)
     {

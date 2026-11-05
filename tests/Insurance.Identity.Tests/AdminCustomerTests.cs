@@ -138,6 +138,30 @@ public class AdminCustomerTests
     private string LastOneTimePassword => _events.OfType<PasswordResetByAdmin>().Last().OneTimePassword;
 
     [Fact]
+    public async Task Deactivating_an_account_tells_the_customer_once()
+    {
+        var user = await CustomerAsync();
+
+        var info = await _sut.SetActiveAsync(user.UserId, false);
+        await _sut.SetActiveAsync(user.UserId, false);                 // already inactive: no second email
+
+        Assert.False(info.IsActive);
+        var e = Assert.Single(_events.OfType<AccountDeactivated>());
+        Assert.Equal((user.UserId, user.Email), (e.UserId, e.Email));
+    }
+
+    [Fact]
+    public async Task Reactivating_sends_no_deactivation_notice()
+    {
+        var user = await CustomerAsync();
+        await _sut.SetActiveAsync(user.UserId, false);
+
+        await _sut.SetActiveAsync(user.UserId, true);
+
+        Assert.Single(_events.OfType<AccountDeactivated>());
+    }
+
+    [Fact]
     public async Task A_reset_emails_a_one_time_password_and_the_old_password_stops_working()
     {
         var user = await CustomerAsync();

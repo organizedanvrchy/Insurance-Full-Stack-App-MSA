@@ -114,6 +114,7 @@ export class ClaimFormComponent {
         incidentDate: v.incidentDate!,
         claimAmount: v.claimAmount!,
         description: v.description!,
+        documentCount: this.files().length,
       })
       .subscribe({
         next: (claim) => this.uploadFiles(claim.claimId),

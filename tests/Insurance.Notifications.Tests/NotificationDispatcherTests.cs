@@ -89,6 +89,16 @@ public class NotificationDispatcherTests
     }
 
     [Fact]
+    public async Task The_deactivation_notice_still_reaches_the_deactivated_account()
+    {
+        _users.Users[1] = _users.Users[1] with { IsActive = false };
+
+        await _sut.SendAsync(Email("account-deactivated:1", NotificationKind.AccountDeactivated));
+
+        Assert.Equal("jane@example.com", Assert.Single(_smtp.Sent).ToAddress);
+    }
+
+    [Fact]
     public async Task Unknown_accounts_are_skipped()
     {
         await _sut.SendAsync(Email(userId: 99));
@@ -106,6 +116,42 @@ public class NotificationDispatcherTests
 
         Assert.Empty(_smtp.Sent);
         Assert.Equal(EmailStatus.Skipped, _repo.Emails["receipt:1"].Status);
+    }
+
+    [Fact]
+    public async Task Reserved_test_domains_are_skipped_when_switched_on()
+    {
+        _options.SkipReservedDomains = true;            // as on a real mail server (Azure)
+
+        await _sut.SendAsync(Email());                  // jane@example.com
+
+        Assert.Empty(_smtp.Sent);
+        Assert.Equal(EmailStatus.Skipped, _repo.Emails["receipt:1"].Status);
+    }
+
+    [Fact]
+    public async Task Reserved_test_domains_are_emailed_by_default_for_the_local_catch_all()
+    {
+        await _sut.SendAsync(Email());                  // jane@example.com, to Mailpit
+
+        Assert.Single(_smtp.Sent);
+    }
+
+    [Theory]
+    [InlineData("jane@example.com", true)]
+    [InlineData("jane@EXAMPLE.org", true)]
+    [InlineData("jane@mail.example.net", true)]
+    [InlineData("cal.1@e2e.example", true)]
+    [InlineData("a@b.test", true)]
+    [InlineData("a@nowhere.invalid", true)]
+    [InlineData("a@localhost", true)]
+    [InlineData("jane@gmail.com", false)]
+    [InlineData("jane@myexample.com", false)]
+    [InlineData("jane@example.co", false)]
+    [InlineData("jane@contest.com", false)]
+    public void Recognizes_reserved_domains(string address, bool reserved)
+    {
+        Assert.Equal(reserved, NotificationDispatcher.IsReservedDomain(address));
     }
 
     [Fact]

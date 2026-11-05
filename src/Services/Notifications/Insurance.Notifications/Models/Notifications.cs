@@ -8,6 +8,7 @@ public enum NotificationKind
     EmailChanged,           // to the old address, after a change
     PasswordChanged,
     PasswordResetByAdmin,
+    AccountDeactivated,
     PolicyActivated,
     PolicyCancelled,
     ClaimSubmitted,
@@ -22,12 +23,16 @@ public enum EmailStatus
     Sending,
     Sent,
     Skipped,
-    Failed
+    Failed,
+    Waiting      // the mail server said to try later: queued in notifications.EmailRetries
 }
 
 public record NotificationPreferences(int UserId, bool PaymentReminders, DateTime? UpdatedAtUtc);
 
 /// <summary>A queued "We received your claim" email. Payload is the ClaimSubmitted event as JSON.</summary>
 public record PendingClaimEmail(int ClaimId, string Payload, int Attempts);
+
+/// <summary>An email waiting for another try; Attempts = retries made, this one included.</summary>
+public record EmailRetry(string NotificationKey, string Payload, int Attempts);
 
 public record SentEmail(long EmailId, NotificationKind Kind, string? ToEmail, string? Subject, DateTime? SentAtUtc);

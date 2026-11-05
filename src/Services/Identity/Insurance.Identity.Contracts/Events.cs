@@ -35,5 +35,11 @@ public record EmailChanged(int UserId, string FullName, string OldEmail, string 
 public record PasswordResetByAdmin(int UserId, string FullName, string Email, string OneTimePassword, DateTime ExpiresAtUtc,
     int ValidForMinutes);
 
+/// <summary>
+/// An administrator deactivated an active account: the customer can no longer sign in. The email tells them, and
+/// that support can reactivate it. Not published when the account was already inactive.
+/// </summary>
+public record AccountDeactivated(int UserId, string FullName, string Email, DateTime DeactivatedAtUtc);
+
 /// <summary>The password was changed. Email is told, in case it wasn't the account's owner.</summary>
 public record PasswordChanged(int UserId, string FullName, string Email, DateTime ChangedAtUtc);

@@ -15,4 +15,11 @@ public class ClaimSubmitRequest
 
     [Range(0.01, 100_000_000)]
     public decimal ClaimAmount { get; set; }
+
+    /// <summary>
+    /// How many documents the caller will upload right after this (the claim form sends its files next). Optional;
+    /// it only decides how long the "We received your claim" email waits for them.
+    /// </summary>
+    [Range(0, Services.ClaimDocumentService.MaxDocumentsPerClaim)]
+    public int? DocumentCount { get; set; }
 }

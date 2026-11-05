@@ -139,6 +139,70 @@ public class NotificationRepository : INotificationRepository
         await cmd.ExecuteNonQueryAsync();
     }
 
+    public async Task DelayClaimEmailAsync(int claimId, DateTime sendAfterUtc)
+    {
+        await using var conn = _db.Create();
+        await using var cmd = conn.StoredProc("notifications.usp_PendingClaimEmail_Delay");
+        cmd.AddParam("@ClaimId",   SqlDbType.Int, claimId);
+        cmd.AddParam("@SendAfter", SqlDbType.DateTime2, sendAfterUtc);
+
+        await conn.OpenAsync();
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    public async Task QueueRetryAsync(string notificationKey, string payload, DateTime sendAfterUtc, string toEmail,
+        string subject, string detail)
+    {
+        await using var conn = _db.Create();
+        await using var cmd = conn.StoredProc("notifications.usp_EmailRetry_Add");
+        cmd.AddParam("@NotificationKey", SqlDbType.NVarChar, notificationKey, 200);
+        cmd.AddParam("@Payload",         SqlDbType.NVarChar, payload);
+        cmd.AddParam("@SendAfter",       SqlDbType.DateTime2, sendAfterUtc);
+        cmd.AddParam("@ToEmail",         SqlDbType.NVarChar, toEmail, 256);
+        cmd.AddParam("@Subject",         SqlDbType.NVarChar, Truncate(subject, 300), 300);
+        cmd.AddParam("@Detail",          SqlDbType.NVarChar, Truncate(detail, 1000), 1000);
+
+        await conn.OpenAsync();
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    public async Task<List<EmailRetry>> TakeDueRetriesAsync(int take, TimeSpan lease)
+    {
+        await using var conn = _db.Create();
+        await using var cmd = conn.StoredProc("notifications.usp_EmailRetry_TakeDue");
+        cmd.AddParam("@Take",         SqlDbType.Int, take);
+        cmd.AddParam("@LeaseSeconds", SqlDbType.Int, (int)lease.TotalSeconds);
+
+        await conn.OpenAsync();
+        await using var reader = await cmd.ExecuteReaderAsync();
+        var list = new List<EmailRetry>();
+        while (await reader.ReadAsync())
+            list.Add(new EmailRetry(reader.GetString(0), reader.GetString(1), reader.GetInt32(2)));
+        return list;
+    }
+
+    public async Task RescheduleRetryAsync(string notificationKey, DateTime sendAfterUtc, string detail)
+    {
+        await using var conn = _db.Create();
+        await using var cmd = conn.StoredProc("notifications.usp_EmailRetry_Reschedule");
+        cmd.AddParam("@NotificationKey", SqlDbType.NVarChar, notificationKey, 200);
+        cmd.AddParam("@SendAfter",       SqlDbType.DateTime2, sendAfterUtc);
+        cmd.AddParam("@Detail",          SqlDbType.NVarChar, Truncate(detail, 1000), 1000);
+
+        await conn.OpenAsync();
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    public async Task RemoveRetryAsync(string notificationKey)
+    {
+        await using var conn = _db.Create();
+        await using var cmd = conn.StoredProc("notifications.usp_EmailRetry_Remove");
+        cmd.AddParam("@NotificationKey", SqlDbType.NVarChar, notificationKey, 200);
+
+        await conn.OpenAsync();
+        await cmd.ExecuteNonQueryAsync();
+    }
+
     private static async Task<NotificationPreferences> ReadPreferencesAsync(SqlConnection conn, SqlCommand cmd)
     {
         await conn.OpenAsync();

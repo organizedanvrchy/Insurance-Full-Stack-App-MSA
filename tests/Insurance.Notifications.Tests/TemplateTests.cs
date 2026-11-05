@@ -148,7 +148,7 @@ public class TemplateTests
 
         Assert.Contains("We apologize, but after reviewing your claim, we've decided that we're unable to approve it. The reviewer's reason is below.", email.Text);
         Assert.Contains("Reason: Flood damage is excluded from this plan.", email.Text);
-        Assert.Contains("If you'd like to dispute this decision, contact us at support@rainsurance.example.", email.Text);
+        Assert.Contains("If you'd like to dispute this decision, contact us at support@kvbinsurance.example.", email.Text);
     }
 
     [Fact]
@@ -210,9 +210,9 @@ public class TemplateTests
         var email = Render(name);
 
         Assert.Contains("This is an automated message. Please don't reply to this email", email.Text);
-        Assert.Contains("support@rainsurance.example", email.Text);
+        Assert.Contains("support@kvbinsurance.example", email.Text);
         Assert.Contains("This is an automated message.", email.Html);
-        Assert.Contains("mailto:support@rainsurance.example", email.Html);
+        Assert.Contains("mailto:support@kvbinsurance.example", email.Html);
     }
 
     [Fact]
@@ -244,10 +244,10 @@ public class TemplateTests
     {
         var email = Render("email-changed");
 
-        Assert.Equal("Your RAINsurance email address was changed", email.Subject);
+        Assert.Equal("Your KVBInsurance email address was changed", email.Subject);
         Assert.Contains("from old@example.com to new@example.com", email.Text);
         Assert.Contains("If you made this change, you can ignore this email.", email.Text);
-        Assert.Contains("Didn't make this change? Contact support immediately at support@rainsurance.example", email.Text);
+        Assert.Contains("Didn't make this change? Contact support immediately at support@kvbinsurance.example", email.Text);
     }
 
     [Fact]
@@ -255,7 +255,7 @@ public class TemplateTests
     {
         var email = Render("verify-after-change");
 
-        Assert.Equal("Your RAINsurance email address has been changed", email.Subject);
+        Assert.Equal("Your KVBInsurance email address has been changed", email.Subject);
         Assert.Contains("has been changed to j@example.com. Confirm this is you.", email.Text);
         Assert.Contains("You won't be able to enroll in any policies or file claims until you verify your email.", email.Text);
         Assert.DoesNotContain("You changed", email.Text);
@@ -286,7 +286,7 @@ public class TemplateTests
     {
         var email = Render("password-changed");
 
-        Assert.Equal("Your RAINsurance password was changed", email.Subject);
+        Assert.Equal("Your KVBInsurance password was changed", email.Subject);
         Assert.Contains("Contact support immediately", email.Text);
     }
 
@@ -319,7 +319,7 @@ public class TemplateTests
 
         var email = _templates.PasswordResetByAdmin(e);
 
-        Assert.Equal("Your RAINsurance password has been reset", email.Subject);
+        Assert.Equal("Your KVBInsurance password has been reset", email.Subject);
         Assert.Contains("Your one-time password: Ab3$xyzPQRst7k", email.Text);
         Assert.Contains("Enter this one-time password the next time you sign in.", email.Text);
         Assert.Contains("expires in 30 minutes, at 10:30 AM EST", email.Text);
@@ -335,12 +335,36 @@ public class TemplateTests
         var link = _templates.VerifyEmail(new EmailVerificationRequested(1, "Jane Doe", "new@example.com", "t", DateTime.UtcNow,
             AfterEmailChange: true, ValidForMinutes: 15, ByAdmin: true));
 
-        Assert.Contains("At your request, an administrator changed the sign-in email for your RAINsurance account from old@example.com to new@example.com", old.Text);
+        Assert.Contains("At your request, an administrator changed the sign-in email for your KVBInsurance account from old@example.com to new@example.com", old.Text);
         Assert.Contains("You'll have to verify the new email address before you can enroll in policies or file claims.", old.Text);
-        Assert.Equal("Verify your new RAINsurance email address", link.Subject);
-        Assert.Contains("At your request, an administrator has changed the sign-in email for your RAINsurance account to new@example.com. Please verify your new email address.", link.Text);
+        Assert.Equal("Verify your new KVBInsurance email address", link.Subject);
+        Assert.Contains("At your request, an administrator has changed the sign-in email for your KVBInsurance account to new@example.com. Please verify your new email address.", link.Text);
         Assert.DoesNotContain("Confirm this is you", link.Text);
         Assert.Contains("Verify my email: http://app.test/verify-email?token=t", link.Text);
         Assert.Contains("You won't be able to enroll in any policies or file claims until you verify your email.", link.Text);
+    }
+
+    [Fact]
+    public void The_deactivation_email_says_to_contact_support_to_reactivate()
+    {
+        var email = _templates.AccountDeactivated(new AccountDeactivated(1, "Jane Doe", "jane@example.com",
+            new DateTime(2026, 11, 5, 15, 30, 0, DateTimeKind.Utc)));
+
+        Assert.Equal("Your KVBInsurance account has been deactivated", email.Subject);
+        Assert.Contains("Your KVBInsurance account was deactivated on November 5, 2026 at 10:30 AM EST. You can no longer sign in.", email.Text);
+        Assert.Contains("If you'd like your account reactivated, contact support at support@kvbinsurance.example.", email.Text);
+        Assert.Contains("This is an automated message. Please don't reply", email.Text);
+        Assert.DoesNotContain("RAINsurance", email.Text + email.Html);
+    }
+
+    [Fact]
+    public void Every_email_uses_the_current_brand()
+    {
+        var reset = _templates.PasswordResetByAdmin(new PasswordResetByAdmin(1, "Jane Doe", "jane@example.com", "Ab3$xyzPQRst7k",
+            DateTime.UtcNow.AddMinutes(30), 30));
+
+        Assert.Equal("KVBInsurance", EmailBuilder.Brand);
+        Assert.Contains("KVBInsurance", reset.Html);
+        Assert.DoesNotContain("RAINsurance", reset.Text + reset.Html);
     }
 }

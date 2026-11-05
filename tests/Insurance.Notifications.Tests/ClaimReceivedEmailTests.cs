@@ -84,6 +84,7 @@ public class ClaimReceivedEmailTests
         var services = new ServiceCollection()
             .AddSingleton<Insurance.Notifications.Repositories.INotificationRepository>(_repo)
             .AddSingleton<IClaimReceivedEmail>(Sut())
+            .AddSingleton<Insurance.Claims.Contracts.IClaimDocuments>(_documents)
             .BuildServiceProvider();
         var job = new ClaimReceivedEmailJob(services.GetRequiredService<IServiceScopeFactory>(),
             Options.Create(new NotificationOptions()), NullLogger<ClaimReceivedEmailJob>.Instance);
@@ -100,5 +101,53 @@ public class ClaimReceivedEmailTests
 
         Assert.Single(_smtp.Sent);
         Assert.Contains(7, _repo.PendingClaimEmails.Keys);
+    }
+
+    private ClaimReceivedEmailJob Job() => new(
+        new ServiceCollection()
+            .AddSingleton<Insurance.Notifications.Repositories.INotificationRepository>(_repo)
+            .AddSingleton<IClaimReceivedEmail>(Sut())
+            .AddSingleton<Insurance.Claims.Contracts.IClaimDocuments>(_documents)
+            .BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),
+        Options.Create(new NotificationOptions()), NullLogger<ClaimReceivedEmailJob>.Instance);
+
+    private void QueueDue(ClaimSubmitted claim) =>
+        _repo.PendingClaimEmails[claim.ClaimId] = (JsonSerializer.Serialize(claim), DateTime.UtcNow.AddSeconds(-1));
+
+    [Fact]
+    public async Task It_waits_while_the_promised_documents_are_still_uploading()
+    {
+        QueueDue(Claim() with { ExpectedDocuments = 2 });
+        _documents.Add(5, "receipt.pdf", "application/pdf", Pdf);          // one of two so far
+
+        await Job().SendDueAsync(CancellationToken.None);
+
+        Assert.Empty(_smtp.Sent);
+        Assert.True(_repo.PendingClaimEmails[5].SendAfter <= DateTime.UtcNow);   // looked at again on the next tick
+    }
+
+    [Fact]
+    public async Task It_goes_out_as_soon_as_every_promised_document_is_in()
+    {
+        QueueDue(Claim() with { ExpectedDocuments = 2 });
+        _documents.Add(5, "receipt.pdf", "application/pdf", Pdf);
+        _documents.Add(5, "damage.png", "image/png", Png);
+
+        await Job().SendDueAsync(CancellationToken.None);
+
+        Assert.Equal(2, Assert.Single(_smtp.Sent).Attachments!.Count);
+        Assert.Empty(_repo.PendingClaimEmails);
+    }
+
+    [Fact]
+    public async Task After_the_longest_wait_it_goes_out_with_whatever_arrived()
+    {
+        QueueDue(Claim() with { ExpectedDocuments = 2, SubmittedAtUtc = DateTime.UtcNow.AddMinutes(-3) });
+        _documents.Add(5, "receipt.pdf", "application/pdf", Pdf);          // the second upload failed
+
+        await Job().SendDueAsync(CancellationToken.None);
+
+        Assert.Single(Assert.Single(_smtp.Sent).Attachments!);
+        Assert.Empty(_repo.PendingClaimEmails);
     }
 }

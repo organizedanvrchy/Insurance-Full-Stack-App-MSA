@@ -13,14 +13,14 @@ public class EmailOptions
     public string? Username { get; set; }
     public string? Password { get; set; }
 
-    public string FromAddress { get; set; } = "no-reply@rainsurance.example";
-    public string FromName { get; set; } = "RAINsurance";
+    public string FromAddress { get; set; } = "no-reply@kvbinsurance.example";
+    public string FromName { get; set; } = Templates.EmailBuilder.Brand;
 
     /// <summary>
     /// Where customers can get help. Shown in every email's "automated message, don't reply" notice, because the
     /// From address is not monitored.
     /// </summary>
-    public string SupportEmail { get; set; } = "support@rainsurance.example";
+    public string SupportEmail { get; set; } = "support@kvbinsurance.example";
 
     /// <summary>Where the Angular app lives; links in emails point here.</summary>
     public string AppBaseUrl { get; set; } = "http://localhost:4200";
@@ -36,4 +36,12 @@ public class EmailOptions
     /// The email is recorded as Skipped instead.
     /// </summary>
     public string[] SkipDomains { get; set; } = Array.Empty<string>();
+
+    /// <summary>
+    /// Also skip the domains reserved for documentation and testing (RFC 2606 / 6761: example.com, example.net,
+    /// example.org and anything under .example, .test, .invalid or .localhost). A real mail server refuses them
+    /// ("Recipient address reserved by RFC 2606"), so test and demo accounts would only produce failures. Off by
+    /// default, because the local catch-all (Mailpit) and the end-to-end tests deliberately use such addresses.
+    /// </summary>
+    public bool SkipReservedDomains { get; set; }
 }
