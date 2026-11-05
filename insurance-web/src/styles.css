@@ -21,40 +21,34 @@ Global theme and shared UI kit
 /*
 --------------------------------------------------------------------------
 1. Palettes
-Both palettes reuse some names (deep-space-blue, yale-blue)
-with different values, so light swatches are prefixed lt-
-and dark swatches dk-. Currently, Not every swatch is used.
+Light swatches are prefixed lt- and dark swatches dk-. The four given
+colors of each theme come first; the rest are derived from them, where a
+theme needs a color its four don't provide (readable text, raised cards).
+Both themes share the autumn leaf colors.
 --------------------------------------------------------------------------
 */
 :root {
   /* Light palette */
-  --lt-deep-space-blue: #012a4a;
-  --lt-yale-blue: #013a63;
-  --lt-yale-blue-2: #01497c;
-  --lt-yale-blue-3: #014f86;
-  --lt-rich-cerulean: #2a6f97;
-  --lt-cerulean: #2c7da0;
-  --lt-air-force-blue: #468faf;
-  --lt-steel-blue: #61a5c2;
-  --lt-sky-blue-light: #89c2d9;
-  --lt-light-blue: #a9d6e5;
+  --lt-sage: #8b9a6e;
+  --lt-cream: #f7f2eb;
+  --lt-sand: #eae2d6;
+  --lt-mist: #eeeeee;
+  --lt-paper: #fcfaf6;          /* derived: cards, a touch lighter than the cream page */
+  --lt-olive: #5e6b45;          /* derived: sage darkened enough to read as text on cream */
 
   /* Dark palette */
-  --dk-ink-black: #000e14;
-  --dk-ink-black-2: #00111a;
-  --dk-ink-black-3: #00141f;
-  --dk-ink-black-4: #001824;
-  --dk-ink-black-5: #001b29;
-  --dk-deep-space-blue: #002233;
-  --dk-deep-space-blue-2: #00293d;
-  --dk-deep-space-blue-3: #003047;
-  --dk-deep-space-blue-4: #003652;
-  --dk-yale-blue: #003d5c;
-  /*
-  The dark palette has no light text color,
-  so this is derived (a pale blue-white).
-  */
-  --dk-text: #e8f3f8;
+  --dk-ink: #092328;
+  --dk-pine: #12544f;
+  --dk-green: #2a835f;
+  --dk-mint: #8bbb92;
+  --dk-ink-raised: #0f3337;     /* derived: cards, between ink and pine */
+  --dk-ink-deep: #061a1e;       /* derived: form fields, a step darker than the page */
+
+  /* Autumn leaves (both themes): the falling leaves and the logo */
+  --leaf-1: #c0672a;            /* burnt orange */
+  --leaf-2: #d98c3a;            /* amber */
+  --leaf-3: #8b5a2b;            /* brown */
+  --leaf-4: #a4471f;            /* rust */
 }
 
 /*
@@ -72,9 +66,9 @@ and dark swatches dk-. Currently, Not every swatch is used.
 
 /*
 --------------------------------------------------------------------------
-3. Light theme (default): white background,
-   dark blue text and borders,
-   light blues for highlights and accents
+3. Light theme (default): cream page, sand and sage for surfaces,
+   borders and highlights. The four light colors are all light, so
+   text and buttons use the dark palette's deep greens.
 --------------------------------------------------------------------------
 */
 :root {
@@ -82,43 +76,43 @@ and dark swatches dk-. Currently, Not every swatch is used.
   accent-color: var(--primary); /* checkboxes and progress bars */
 
   /* surfaces */
-  --bg: #ffffff;
-  --surface: #ffffff;
-  --surface-alt: color-mix(in srgb, var(--lt-light-blue) 20%, transparent);   /* table headers */
-  --input-bg: #ffffff;
-  --hover-bg: color-mix(in srgb, var(--lt-light-blue) 15%, transparent);
+  --bg: var(--lt-cream);
+  --surface: var(--lt-paper);
+  --surface-alt: var(--lt-sand);                                               /* table headers */
+  --input-bg: var(--lt-paper);
+  --hover-bg: color-mix(in srgb, var(--lt-sand) 70%, transparent);
 
   /* text */
-  --text: var(--lt-deep-space-blue);
-  --text-soft: var(--lt-yale-blue);
-  --text-muted: var(--lt-rich-cerulean);
-  --text-disabled: var(--lt-air-force-blue);
-  --link: var(--lt-yale-blue-3);
+  --text: var(--dk-ink);
+  --text-soft: var(--dk-pine);
+  --text-muted: var(--lt-olive);
+  --text-disabled: var(--lt-sage);
+  --link: var(--dk-pine);
 
   /*
   borders: light for outlines,
   darker for interactive controls
   */
-  --border: var(--lt-light-blue);
-  --border-subtle: color-mix(in srgb, var(--lt-light-blue) 40%, transparent);
-  --border-strong: var(--lt-air-force-blue);
+  --border: color-mix(in srgb, var(--lt-sage) 35%, var(--lt-sand));
+  --border-subtle: var(--lt-mist);
+  --border-strong: var(--lt-sage);
 
   /* brand */
-  --primary: var(--lt-yale-blue-2);
-  --primary-hover: var(--lt-yale-blue);
-  --primary-contrast: #ffffff;
-  --primary-tint: color-mix(in srgb, var(--lt-light-blue) 25%, transparent);   /* selected row */
-  --accent: var(--lt-cerulean);                                                /* focus ring, active nav */
+  --primary: var(--dk-pine);
+  --primary-hover: var(--dk-ink);
+  --primary-contrast: var(--lt-cream);
+  --primary-tint: color-mix(in srgb, var(--lt-sage) 22%, transparent);        /* selected row */
+  --accent: var(--dk-green);                                                   /* focus ring, active nav */
 
   /*
   status colors (background and text pairs)
   */
   --success-bg: #e1f3e8;
   --success-text: #1b6b3a;
-  --neutral-bg: color-mix(in srgb, var(--lt-light-blue) 25%, transparent);
-  --neutral-text: var(--lt-rich-cerulean);
-  --info-bg: var(--lt-light-blue);
-  --info-text: var(--lt-deep-space-blue);
+  --neutral-bg: color-mix(in srgb, var(--lt-sage) 18%, transparent);
+  --neutral-text: var(--lt-olive);
+  --info-bg: var(--lt-sand);
+  --info-text: var(--dk-ink);
   --warning-bg: #fff3d6;
   --warning-text: #8a5a00;
   --warning-text-strong: #6b4600;
@@ -132,21 +126,24 @@ and dark swatches dk-. Currently, Not every swatch is used.
   hero and brand surfaces
   (dashboard banner, sign-in panel)
   */
-  --hero-from: var(--lt-deep-space-blue);
-  --hero-to: var(--lt-yale-blue-3);
-  --hero-text: #ffffff;
-  --hero-text-soft: var(--lt-light-blue);
-  --hero-drop: color-mix(in srgb, var(--lt-light-blue) 45%, transparent);
+  --hero-from: var(--dk-pine);
+  --hero-to: color-mix(in srgb, var(--dk-pine) 55%, var(--lt-sage));
+  --hero-text: var(--lt-cream);
+  --hero-text-soft: var(--lt-sand);
+  --hero-drop: color-mix(in srgb, var(--dk-mint) 45%, transparent);           /* the soft glow on the dashboard banner */
+
+  /* the falling leaves: softer on the nav bar than on the sign-in panel */
+  --leaf-opacity-nav: 0.6;
+  --leaf-opacity-hero: 0.9;
 
   /* elevation */
-  --shadow-card: 0 4px 24px color-mix(in srgb, var(--lt-deep-space-blue) 12%, transparent);
+  --shadow-card: 0 4px 24px color-mix(in srgb, var(--dk-ink) 12%, transparent);
 }
 
 /*
 --------------------------------------------------------------------------
-4. Dark theme: darkest swatch as the page,
-   lighter swatches for surfaces,
-   light blues for text and accents
+4. Dark theme: ink as the page, pine and green for surfaces and
+   borders, mint for accents. Text uses the light palette's cream.
 --------------------------------------------------------------------------
 */
 :root[data-theme='dark'] {
@@ -156,38 +153,38 @@ and dark swatches dk-. Currently, Not every swatch is used.
   surfaces: stepped from darkest (page)
   to lighter (cards, headers, highlights)
   */
-  --bg: var(--dk-ink-black);
-  --surface: var(--dk-ink-black-4);
-  --surface-alt: var(--dk-deep-space-blue);
-  --input-bg: var(--dk-ink-black-2);
-  --hover-bg: var(--dk-deep-space-blue-3);
+  --bg: var(--dk-ink);
+  --surface: var(--dk-ink-raised);
+  --surface-alt: color-mix(in srgb, var(--dk-pine) 55%, var(--dk-ink));
+  --input-bg: var(--dk-ink-deep);
+  --hover-bg: color-mix(in srgb, var(--dk-pine) 70%, var(--dk-ink));
 
   /* text */
-  --text: var(--dk-text);
-  --text-soft: var(--lt-light-blue);
-  --text-muted: var(--lt-steel-blue);
-  --text-disabled: var(--lt-air-force-blue);
-  --link: var(--lt-sky-blue-light);
+  --text: var(--lt-cream);
+  --text-soft: var(--lt-sand);
+  --text-muted: var(--dk-mint);
+  --text-disabled: color-mix(in srgb, var(--dk-mint) 55%, var(--dk-ink));
+  --link: var(--dk-mint);
 
   /* borders */
-  --border: var(--dk-deep-space-blue-4);
-  --border-subtle: var(--dk-deep-space-blue-2);
-  --border-strong: var(--lt-rich-cerulean);
+  --border: var(--dk-pine);
+  --border-subtle: color-mix(in srgb, var(--dk-pine) 50%, var(--dk-ink));
+  --border-strong: var(--dk-green);
 
   /* brand */
-  --primary: var(--lt-steel-blue);
-  --primary-hover: var(--lt-sky-blue-light);
-  --primary-contrast: var(--dk-ink-black);
-  --primary-tint: var(--dk-deep-space-blue-3);
-  --accent: var(--lt-steel-blue);
+  --primary: var(--dk-mint);
+  --primary-hover: color-mix(in srgb, var(--dk-mint) 70%, var(--lt-cream));
+  --primary-contrast: var(--dk-ink);
+  --primary-tint: color-mix(in srgb, var(--dk-pine) 70%, var(--dk-ink));
+  --accent: var(--dk-mint);
 
   /* status colors */
   --success-bg: #0e3a2b;
   --success-text: #8fd9ae;
-  --neutral-bg: var(--dk-deep-space-blue-2);
-  --neutral-text: var(--lt-sky-blue-light);
-  --info-bg: var(--dk-deep-space-blue-4);
-  --info-text: var(--lt-light-blue);
+  --neutral-bg: color-mix(in srgb, var(--dk-pine) 60%, var(--dk-ink));
+  --neutral-text: var(--dk-mint);
+  --info-bg: var(--dk-pine);
+  --info-text: var(--lt-sand);
   --warning-bg: #3a2c06;
   --warning-text: #f2c66b;
   --warning-text-strong: #f2c66b;
@@ -200,11 +197,14 @@ and dark swatches dk-. Currently, Not every swatch is used.
   /*
   hero and brand surfaces
   */
-  --hero-from: var(--dk-ink-black-4);
-  --hero-to: var(--dk-deep-space-blue-4);
-  --hero-text: var(--dk-text);
-  --hero-text-soft: var(--lt-sky-blue-light);
-  --hero-drop: color-mix(in srgb, var(--lt-steel-blue) 40%, transparent);
+  --hero-from: var(--dk-ink-raised);
+  --hero-to: var(--dk-pine);
+  --hero-text: var(--lt-cream);
+  --hero-text-soft: color-mix(in srgb, var(--dk-mint) 50%, var(--lt-cream));
+  --hero-drop: color-mix(in srgb, var(--dk-mint) 35%, transparent);
+
+  --leaf-opacity-nav: 0.7;
+  --leaf-opacity-hero: 0.9;
 
   /* elevation */
   --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.55);

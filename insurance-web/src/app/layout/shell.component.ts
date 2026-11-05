@@ -14,7 +14,7 @@ import { VerifyEmailBannerComponent } from '../shared/components/verify-email-ba
   selector: 'app-shell',
   imports: [RouterOutlet, RouterLink, RouterLinkActive, ThemeToggleComponent, BrandLogoComponent, VerifyEmailBannerComponent],
   templateUrl: "shell.html",
-  styleUrl: "./shell-component.css",
+  styleUrls: ["./shell-component.css", "../shared/styles/falling-leaves.css"],
 })
 export class ShellComponent {
   auth = inject(AuthService);
@@ -33,13 +33,15 @@ export class ShellComponent {
   private userMenu = viewChild<ElementRef<HTMLElement>>('userMenu');
   private userButton = viewChild<ElementRef<HTMLButtonElement>>('userButton');
 
-  // Fixed (not random) values so the rain looks the same on every visit.
-  // Negative delays mean the rain is already falling when the page loads.
-  readonly drops = Array.from({ length: 44 }, (_, i) => ({
-    left: (i * 23.7) % 100,
-    delay: -(((i * 37) % 19) / 10),
-    duration: 1.2 + ((i * 53) % 10) / 10,
-    length: 10 + ((i * 29) % 12),
+  // Fixed (not random) values so the leaves look the same on every visit.
+  // Negative delays mean the leaves are already falling when the page loads.
+  readonly leaves = Array.from({ length: 18 }, (_, i) => ({
+    left: (i * 37.3) % 100,
+    delay: -(((i * 53) % 70) / 10),
+    duration: 6 + ((i * 29) % 40) / 10,     // 6 to 10 seconds: leaves drift, rain falls
+    size: 8 + ((i * 7) % 6),                // 8 to 13 px
+    color: `var(--leaf-${(i % 4) + 1})`,
+    alt: i % 2 === 1,                       // every other leaf sways the opposite way
   }));
 
   constructor() {

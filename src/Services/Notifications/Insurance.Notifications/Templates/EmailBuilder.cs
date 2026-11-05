@@ -19,10 +19,10 @@ public sealed class EmailBuilder
 {
     /// <summary>The company name in every email (subjects, text and footer). Change it here to rebrand them all.</summary>
     public const string Brand = "KVBInsurance";
-    private const string Primary = "#01497c";
-    private const string Ink = "#0b2233";
-    private const string Muted = "#52677a";
-    private const string Border = "#d6e4ee";
+    private const string Primary = "#12544f";   // the website's pine green
+    private const string Ink = "#092328";
+    private const string Muted = "#5e6b45";
+    private const string Border = "#eae2d6";
 
     private readonly string _subject;
     private readonly string _preheader;
@@ -60,7 +60,7 @@ public sealed class EmailBuilder
     /// <summary>A highlighted box, for the one thing the customer must not miss (e.g. a rejection reason).</summary>
     public EmailBuilder Callout(string title, string text, bool warning = false)
     {
-        var (bg, edge) = warning ? ("#fff4e5", "#b45309") : ("#eaf3f9", Primary);
+        var (bg, edge) = warning ? ("#fff4e5", "#b45309") : ("#eef1e8", Primary);
         _html.Append($"""
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;border-collapse:collapse;">
               <tr><td style="background:{bg};border-left:4px solid {edge};padding:12px 16px;border-radius:4px;">
@@ -79,7 +79,7 @@ public sealed class EmailBuilder
     {
         _html.Append($"""
             <p style="margin:0 0 6px;font-size:13px;color:{Muted};">{E(label)}</p>
-            <p style="margin:0 0 20px;padding:14px 16px;background:#eaf3f9;border-radius:6px;text-align:center;font-family:Consolas,Menlo,monospace;font-size:22px;letter-spacing:2px;color:{Ink};">{E(code)}</p>
+            <p style="margin:0 0 20px;padding:14px 16px;background:#eef1e8;border-radius:6px;text-align:center;font-family:Consolas,Menlo,monospace;font-size:22px;letter-spacing:2px;color:{Ink};">{E(code)}</p>
             """);
         _text.AppendLine($"{label}: {code}").AppendLine();
         return this;
@@ -109,7 +109,7 @@ public sealed class EmailBuilder
         _html.Append($"""
             <table role="presentation" cellpadding="0" cellspacing="0" style="margin:4px 0 24px;">
               <tr><td style="background:{Primary};border-radius:6px;">
-                <a href="{E(url)}" style="display:inline-block;padding:12px 22px;font-size:15px;font-weight:bold;color:#ffffff;text-decoration:none;">{E(label)}</a>
+                <a href="{E(url)}" style="display:inline-block;padding:12px 22px;font-size:15px;font-weight:bold;color:#f7f2eb;text-decoration:none;">{E(label)}</a>
               </td></tr>
             </table>
             <p style="margin:0 0 16px;font-size:12px;line-height:1.5;color:{Muted};">If the button doesn't work, copy this link into your browser:<br><a href="{E(url)}" style="color:{Primary};word-break:break-all;">{E(url)}</a></p>
@@ -143,13 +143,13 @@ public sealed class EmailBuilder
             <!doctype html>
             <html lang="en">
             <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{E(_subject)}</title></head>
-            <body style="margin:0;padding:0;background:#f2f6f9;font-family:Segoe UI,Helvetica,Arial,sans-serif;">
+            <body style="margin:0;padding:0;background:#f7f2eb;font-family:Segoe UI,Helvetica,Arial,sans-serif;">
               <span style="display:none;max-height:0;overflow:hidden;opacity:0;">{E(_preheader)}</span>
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f2f6f9;padding:24px 12px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f7f2eb;padding:24px 12px;">
                 <tr><td align="center">
                   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border:1px solid {Border};border-radius:10px;overflow:hidden;">
                     <tr><td style="background:{Primary};padding:18px 28px;">
-                      <span style="font-size:20px;font-weight:bold;color:#ffffff;letter-spacing:0.3px;">&#9730; {Brand}</span>
+                      <span style="font-size:20px;font-weight:bold;color:#f7f2eb;letter-spacing:0.3px;">&#127810; {Brand}</span>
                     </td></tr>
                     <tr><td style="padding:28px;">{_html}</td></tr>
                     <tr><td style="padding:18px 28px;border-top:1px solid {Border};font-size:12px;line-height:1.5;color:{Muted};">
