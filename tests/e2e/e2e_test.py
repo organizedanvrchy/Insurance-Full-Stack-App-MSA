@@ -18,6 +18,8 @@ import re
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 API = os.environ.get("API_URL", "http://localhost:5080")
 MAILPIT = os.environ.get("MAILPIT_URL", "http://localhost:8025")
@@ -146,7 +148,9 @@ def answers_for(policy_id, token):
 
 def main():
     wait_until_ready()
-    today = time.strftime("%Y-%m-%d", time.gmtime())
+    # "Today" for the app is the business day in US Eastern time (BusinessTimeZone), not UTC: from 7 PM to
+    # midnight Eastern, the UTC date is already tomorrow, and a claim dated tomorrow is refused.
+    today = datetime.now(ZoneInfo("America/New_York")).date().isoformat()
 
     # --- Identity: accounts and the admin
     customer_email, admin_email = f"cal.{RUN}@e2e.example", f"ada.{RUN}@e2e.example"
