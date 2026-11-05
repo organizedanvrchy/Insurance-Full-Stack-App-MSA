@@ -76,6 +76,26 @@ public class PasswordChangedConsumer : IConsumer<PasswordChanged>
 }
 
 /// <summary>The one-time password from an admin reset. Always sent: it's the only way to sign in again.</summary>
+/// <summary>The account was deactivated: the one email that goes to an account that is no longer active.</summary>
+public class AccountDeactivatedConsumer : IConsumer<AccountDeactivated>
+{
+    private readonly INotificationDispatcher _dispatcher;
+    private readonly EmailTemplates _templates;
+
+    public AccountDeactivatedConsumer(INotificationDispatcher dispatcher, EmailTemplates templates)
+    {
+        _dispatcher = dispatcher;
+        _templates = templates;
+    }
+
+    // Keyed on the message: deactivated, reactivated and deactivated again is two emails.
+    public Task Consume(ConsumeContext<AccountDeactivated> context) =>
+        _dispatcher.SendAsync(new Notification(
+            $"account-deactivated:{context.MessageId}", context.Message.UserId, NotificationKind.AccountDeactivated,
+            _ => Task.FromResult(_templates.AccountDeactivated(context.Message)),
+            ToEmail: context.Message.Email), context.CancellationToken);
+}
+
 public class PasswordResetByAdminConsumer : IConsumer<PasswordResetByAdmin>
 {
     private readonly INotificationDispatcher _dispatcher;

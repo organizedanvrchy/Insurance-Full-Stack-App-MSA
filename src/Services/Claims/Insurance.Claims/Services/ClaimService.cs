@@ -58,7 +58,8 @@ public class ClaimService : IClaimService
         // The remaining-coverage check needs a lock, so it runs inside usp_Claim_Submit.
         var coverage = await CoverageOfAsync(enrollment);
         var id = await _claims.SubmitAsync(
-            userId, enrollment.EnrollmentId, incidentDate, request.Description.Trim(), request.ClaimAmount, coverage);
+            userId, enrollment.EnrollmentId, incidentDate, request.Description.Trim(), request.ClaimAmount, coverage,
+            request.DocumentCount);
 
         var created = await _claims.GetByIdAsync(id);
         return (await ComposeAsync(new[] { created! }, isAdmin: false)).Single();

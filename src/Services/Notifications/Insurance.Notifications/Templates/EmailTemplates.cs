@@ -12,6 +12,7 @@ namespace Insurance.Notifications.Templates;
 /// </summary>
 public class EmailTemplates
 {
+    private const string Brand = EmailBuilder.Brand;
     private static readonly CultureInfo Us = CultureInfo.GetCultureInfo("en-US");
     private readonly AppLinks _links;
 
@@ -63,10 +64,10 @@ public class EmailTemplates
 
         // An administrator only changes the email when the customer asks, so this simply asks them to verify it.
         if (e.AfterEmailChange && e.ByAdmin)
-            return Email("Verify your new RAINsurance email address", "Verify your new email address.")
+            return Email($"Verify your new {Brand} email address", "Verify your new email address.")
                 .Heading("Verify your new email address")
                 .Paragraph($"Hi {FirstName(e.FullName)},")
-                .Paragraph($"At your request, an administrator has changed the sign-in email for your RAINsurance account to {e.Email}. Please verify your new email address.")
+                .Paragraph($"At your request, an administrator has changed the sign-in email for your {Brand} account to {e.Email}. Please verify your new email address.")
                 .Paragraph(Paused)
                 .Button("Verify my email", link)
                 .Small($"{expires} {expired}")
@@ -76,8 +77,8 @@ public class EmailTemplates
         if (e.AfterEmailChange)
         {
             // Worded as something that happened to the account, not something the reader did: it may not have been them.
-            var changed = $"The sign-in email for your RAINsurance account has been changed to {e.Email}. Confirm this is you.";
-            return Email("Your RAINsurance email address has been changed", "Confirm this is you.")
+            var changed = $"The sign-in email for your {Brand} account has been changed to {e.Email}. Confirm this is you.";
+            return Email($"Your {Brand} email address has been changed", "Confirm this is you.")
                 .Heading("Your email address has been changed")
                 .Paragraph($"Hi {FirstName(e.FullName)},")
                 .Paragraph(changed)
@@ -89,7 +90,7 @@ public class EmailTemplates
         }
 
         return Email("Verify your email address", "Confirm your email to start enrolling in policies.")
-            .Heading("Welcome to RAINsurance")
+            .Heading($"Welcome to {Brand}")
             .Paragraph($"Hi {FirstName(e.FullName)},")
             .Paragraph("Thanks for creating an account. Please confirm that this is your email address.")
             .Paragraph(Paused)
@@ -102,19 +103,19 @@ public class EmailTemplates
     /// <summary>To the OLD address: the only way the owner hears about it if someone else made the change.</summary>
     public RenderedEmail EmailChanged(EmailChanged e)
     {
-        var email = Email("Your RAINsurance email address was changed", $"Your account now uses {e.NewEmail}.")
+        var email = Email($"Your {Brand} email address was changed", $"Your account now uses {e.NewEmail}.")
             .Heading("Your email address was changed")
             .Paragraph($"Hi {FirstName(e.FullName)},");
 
         if (e.ByAdmin)
             return email
-                .Paragraph($"At your request, an administrator changed the sign-in email for your RAINsurance account from {e.OldEmail} to {e.NewEmail} on {DateTimeText(e.ChangedAtUtc)}. We'll send everything to the new address from now on.")
+                .Paragraph($"At your request, an administrator changed the sign-in email for your {Brand} account from {e.OldEmail} to {e.NewEmail} on {DateTimeText(e.ChangedAtUtc)}. We'll send everything to the new address from now on.")
                 .Paragraph("You'll have to verify the new email address before you can enroll in policies or file claims. We've sent a link to it.")
                 .Callout("Didn't ask for this change?", $"Contact support immediately at {_links.SupportEmail}.", warning: true)
                 .Build();
 
         return email
-            .Paragraph($"The sign-in email for your RAINsurance account was changed from {e.OldEmail} to {e.NewEmail} on {DateTimeText(e.ChangedAtUtc)}. We'll send everything to the new address from now on.")
+            .Paragraph($"The sign-in email for your {Brand} account was changed from {e.OldEmail} to {e.NewEmail} on {DateTimeText(e.ChangedAtUtc)}. We'll send everything to the new address from now on.")
             .Paragraph("If you made this change, you can ignore this email.")
             .Callout("Didn't make this change?", $"Contact support immediately at {_links.SupportEmail}. Someone else may have access to your account.", warning: true)
             .Build();
@@ -122,10 +123,10 @@ public class EmailTemplates
 
     /// <summary>An administrator reset the password: the one-time password to sign in with, and how long it works.</summary>
     public RenderedEmail PasswordResetByAdmin(PasswordResetByAdmin e) =>
-        Email("Your RAINsurance password has been reset", "Your one-time password is inside.")
+        Email($"Your {Brand} password has been reset", "Your one-time password is inside.")
             .Heading("Your password has been reset")
             .Paragraph($"Hi {FirstName(e.FullName)},")
-            .Paragraph("An administrator has reset the password for your RAINsurance account. Your previous password no longer works.")
+            .Paragraph($"An administrator has reset the password for your {Brand} account. Your previous password no longer works.")
             .Code("Your one-time password", e.OneTimePassword)
             .Paragraph("Enter this one-time password the next time you sign in. You'll then be asked to choose a new password.")
             .Callout("Use it soon",
@@ -134,11 +135,20 @@ public class EmailTemplates
             .Small($"Didn't expect this email? Contact us right away at {_links.SupportEmail}.")
             .Build();
 
+    /// <summary>An administrator deactivated the account: no more sign-ins, and support can reactivate it.</summary>
+    public RenderedEmail AccountDeactivated(AccountDeactivated e) =>
+        Email($"Your {Brand} account has been deactivated", "You can no longer sign in to your account.")
+            .Heading("Your account has been deactivated")
+            .Paragraph($"Hi {FirstName(e.FullName)},")
+            .Paragraph($"Your {Brand} account was deactivated on {DateTimeText(e.DeactivatedAtUtc)}. You can no longer sign in. Your policies and claims are kept on file.")
+            .Callout("Want your account back?", $"If you'd like your account reactivated, contact support at {_links.SupportEmail}.")
+            .Build();
+
     public RenderedEmail PasswordChanged(PasswordChanged e) =>
-        Email("Your RAINsurance password was changed", "Your password was just changed.")
+        Email($"Your {Brand} password was changed", "Your password was just changed.")
             .Heading("Your password was changed")
             .Paragraph($"Hi {FirstName(e.FullName)},")
-            .Paragraph($"The password for your RAINsurance account was changed on {DateTimeText(e.ChangedAtUtc)}.")
+            .Paragraph($"The password for your {Brand} account was changed on {DateTimeText(e.ChangedAtUtc)}.")
             .Paragraph("If you made this change, you can ignore this email.")
             .Callout("Didn't make this change?", $"Contact support immediately at {_links.SupportEmail}. Someone else may have access to your account.", warning: true)
             .Build();

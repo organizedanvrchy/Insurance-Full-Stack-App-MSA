@@ -23,10 +23,13 @@ public class FakeClaimRepository : IClaimRepository
     // Remembers how the service called ReviewAsync, so tests can check the arguments.
     public (int ClaimId, ClaimStatus From, ClaimStatus To, string? Notes, int ReviewerId, decimal? Coverage)? LastReview { get; private set; }
     public decimal? LastSubmitCoverage { get; private set; }
+    public int? LastExpectedDocuments { get; private set; }
 
-    public Task<int> SubmitAsync(int userId, int enrollmentId, DateOnly incidentDate, string description, decimal amount, decimal coverageAmount)
+    public Task<int> SubmitAsync(int userId, int enrollmentId, DateOnly incidentDate, string description, decimal amount, decimal coverageAmount,
+        int? expectedDocuments = null)
     {
         LastSubmitCoverage = coverageAmount;
+        LastExpectedDocuments = expectedDocuments;
         var claim = new InsuranceClaim
         {
             ClaimId = Claims.Count + 1,

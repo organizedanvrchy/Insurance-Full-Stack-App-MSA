@@ -10,7 +10,7 @@ public class AppLinks
 
     public AppLinks(IOptions<EmailOptions> options) : this(options.Value.AppBaseUrl, options.Value.SupportEmail) { }
 
-    public AppLinks(string appBaseUrl, string supportEmail = "support@rainsurance.example")
+    public AppLinks(string appBaseUrl, string supportEmail = "support@bvrinsurance.example")
     {
         _base = appBaseUrl.TrimEnd('/');
         SupportEmail = supportEmail;

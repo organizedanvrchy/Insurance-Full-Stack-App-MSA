@@ -139,6 +139,17 @@ public class NotificationRepository : INotificationRepository
         await cmd.ExecuteNonQueryAsync();
     }
 
+    public async Task DelayClaimEmailAsync(int claimId, DateTime sendAfterUtc)
+    {
+        await using var conn = _db.Create();
+        await using var cmd = conn.StoredProc("notifications.usp_PendingClaimEmail_Delay");
+        cmd.AddParam("@ClaimId",   SqlDbType.Int, claimId);
+        cmd.AddParam("@SendAfter", SqlDbType.DateTime2, sendAfterUtc);
+
+        await conn.OpenAsync();
+        await cmd.ExecuteNonQueryAsync();
+    }
+
     public async Task QueueRetryAsync(string notificationKey, string payload, DateTime sendAfterUtc, string toEmail,
         string subject, string detail)
     {

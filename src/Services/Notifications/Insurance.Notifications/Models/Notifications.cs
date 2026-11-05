@@ -8,6 +8,7 @@ public enum NotificationKind
     EmailChanged,           // to the old address, after a change
     PasswordChanged,
     PasswordResetByAdmin,
+    AccountDeactivated,
     PolicyActivated,
     PolicyCancelled,
     ClaimSubmitted,

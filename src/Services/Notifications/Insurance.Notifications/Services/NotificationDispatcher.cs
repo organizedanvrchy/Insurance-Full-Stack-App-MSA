@@ -67,7 +67,7 @@ public class NotificationDispatcher : INotificationDispatcher
                 await SkipAsync(n, "The account no longer exists.");
                 return;
             }
-            if (!user.IsActive)
+            if (!user.IsActive && n.Kind != NotificationKind.AccountDeactivated)   // that one is about being inactive
             {
                 await SkipAsync(n, "The account is deactivated.");
                 return;

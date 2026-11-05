@@ -89,6 +89,16 @@ public class NotificationDispatcherTests
     }
 
     [Fact]
+    public async Task The_deactivation_notice_still_reaches_the_deactivated_account()
+    {
+        _users.Users[1] = _users.Users[1] with { IsActive = false };
+
+        await _sut.SendAsync(Email("account-deactivated:1", NotificationKind.AccountDeactivated));
+
+        Assert.Equal("jane@example.com", Assert.Single(_smtp.Sent).ToAddress);
+    }
+
+    [Fact]
     public async Task Unknown_accounts_are_skipped()
     {
         await _sut.SendAsync(Email(userId: 99));

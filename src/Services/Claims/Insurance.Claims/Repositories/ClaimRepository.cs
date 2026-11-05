@@ -22,7 +22,8 @@ public class ClaimRepository : IClaimRepository
 
     // The claim and its ClaimSubmitted event commit together (transactional outbox).
     // The proc's own BEGIN/COMMIT nest inside this transaction, so nothing is kept if the event can't be saved.
-    public async Task<int> SubmitAsync(int userId, int enrollmentId, DateOnly incidentDate, string description, decimal amount, decimal coverageAmount)
+    public async Task<int> SubmitAsync(int userId, int enrollmentId, DateOnly incidentDate, string description, decimal amount, decimal coverageAmount,
+        int? expectedDocuments = null)
     {
         await using var conn = _db.Create();
         await conn.OpenAsync();
@@ -51,7 +52,7 @@ public class ClaimRepository : IClaimRepository
         var claim = (await GetByIdAsync(conn, tx, id))!;
         await _outbox.EnqueueAsync(conn, tx, new ClaimSubmitted(
             claim.ClaimId, claim.ClaimNumber, claim.UserId, claim.EnrollmentId,
-            claim.IncidentDate, claim.ClaimAmount, claim.SubmittedAt));
+            claim.IncidentDate, claim.ClaimAmount, claim.SubmittedAt, expectedDocuments));
 
         await tx.CommitAsync();
         _outbox.Notify();

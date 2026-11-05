@@ -49,6 +49,7 @@ builder.Services.AddMessaging(builder.Configuration, "notifications", bus =>
     bus.AddConsumer<EmailChangedConsumer>();
     bus.AddConsumer<PasswordChangedConsumer>();
     bus.AddConsumer<PasswordResetByAdminConsumer>();
+    bus.AddConsumer<AccountDeactivatedConsumer>();
     bus.AddConsumer<EnrollmentActivatedConsumer>();
     bus.AddConsumer<EnrollmentCancelledConsumer>();
     bus.AddConsumer<ClaimSubmittedConsumer>();

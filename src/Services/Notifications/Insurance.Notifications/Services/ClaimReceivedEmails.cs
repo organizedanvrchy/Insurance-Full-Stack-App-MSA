@@ -123,12 +123,19 @@ public class ClaimReceivedEmailJob : BackgroundService
         await using var scope = _scopes.CreateAsyncScope();
         var repo = scope.ServiceProvider.GetRequiredService<INotificationRepository>();
         var email = scope.ServiceProvider.GetRequiredService<IClaimReceivedEmail>();
+        var documents = scope.ServiceProvider.GetRequiredService<IClaimDocuments>();
 
         foreach (var pending in await repo.TakeDueClaimEmailsAsync(20, Lease))
         {
             try
             {
                 var claim = JsonSerializer.Deserialize<ClaimSubmitted>(pending.Payload)!;
+                if (await StillUploadingAsync(claim, documents))
+                {
+                    // Due again at once (instead of after the lease), so the next tick looks again.
+                    await repo.DelayClaimEmailAsync(claim.ClaimId, DateTime.UtcNow);
+                    continue;
+                }
                 await email.SendAsync(claim, ct);
                 await repo.RemoveClaimEmailAsync(pending.ClaimId);
             }
@@ -139,6 +146,15 @@ public class ClaimReceivedEmailJob : BackgroundService
                     pending.ClaimId, pending.Attempts);
             }
         }
+    }
+
+    // Waits for the documents the claim form said it would upload, but never past ClaimEmailDelay (an upload that
+    // failed): then the email lists whatever arrived.
+    private async Task<bool> StillUploadingAsync(ClaimSubmitted claim, IClaimDocuments documents)
+    {
+        if (claim.ExpectedDocuments is not > 0 || DateTime.UtcNow >= claim.SubmittedAtUtc.Add(_options.ClaimEmailDelay))
+            return false;
+        return (await documents.GetForClaimAsync(claim.ClaimId)).Count < claim.ExpectedDocuments;
     }
 
     private static async Task<bool> WaitAsync(PeriodicTimer timer, CancellationToken ct)

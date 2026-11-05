@@ -88,6 +88,12 @@ public class FakeNotificationRepository : INotificationRepository
         return Task.CompletedTask;
     }
 
+    public Task DelayClaimEmailAsync(int claimId, DateTime sendAfterUtc)
+    {
+        PendingClaimEmails[claimId] = (PendingClaimEmails[claimId].Payload, sendAfterUtc);
+        return Task.CompletedTask;
+    }
+
     // ---- Emails waiting for another try (usp_EmailRetry_*) ----
     public record Retry(string Payload, DateTime SendAfter, int Attempts);
     public Dictionary<string, Retry> Retries { get; } = new();

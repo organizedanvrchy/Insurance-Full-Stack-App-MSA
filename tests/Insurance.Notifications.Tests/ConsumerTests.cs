@@ -34,6 +34,8 @@ public class ConsumerTests : IAsyncLifetime
             .AddSingleton(new AppLinks("http://app.test"))
             .AddSingleton<EmailTemplates>()
             .AddScoped<INotificationDispatcher, NotificationDispatcher>()
+            .AddSingleton<Insurance.Claims.Contracts.IClaimDocuments, FakeClaimDocuments>()
+            .AddScoped<IClaimReceivedEmail, ClaimReceivedEmail>()
             .Configure<NotificationOptions>(o => o.ClaimEmailDelay = TimeSpan.FromMinutes(2))
             .AddMassTransitTestHarness(x =>
             {
@@ -119,6 +121,26 @@ public class ConsumerTests : IAsyncLifetime
 
         Assert.Equal(2, _smtp.Sent.Count);
         Assert.All(_smtp.Sent, m => Assert.Equal("We need more information about claim CLM-2026-000008", m.Subject));
+    }
+
+    [Fact]
+    public async Task A_claim_without_documents_is_emailed_straight_away()
+    {
+        await PublishAndWaitAsync(new ClaimSubmitted(6, "CLM-2026-000006", 1, 10, new DateOnly(2026, 11, 1), 250m,
+            DateTime.UtcNow, ExpectedDocuments: 0));
+
+        Assert.Equal("We received your claim CLM-2026-000006", Assert.Single(_smtp.Sent).Subject);
+        Assert.Empty(_repo.PendingClaimEmails);
+    }
+
+    [Fact]
+    public async Task A_claim_with_documents_coming_is_checked_on_the_next_tick()
+    {
+        await PublishAndWaitAsync(new ClaimSubmitted(7, "CLM-2026-000007", 1, 10, new DateOnly(2026, 11, 1), 250m,
+            DateTime.UtcNow, ExpectedDocuments: 2));
+
+        Assert.Empty(_smtp.Sent);
+        Assert.True(_repo.PendingClaimEmails[7].SendAfter <= DateTime.UtcNow);
     }
 
     [Fact]
