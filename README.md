@@ -453,7 +453,7 @@ How it stays reliable:
 - **No lost events.** Billing and Claims publish through the same **transactional outbox** as Enrollments, so an event exists exactly when its change committed. The receipt is saved in the same database transaction that marks the installment paid, and the declined notice with the declined outcome; a replayed checkout request (same idempotency key) sends nothing new.
 - **Reminders once per stage.** Billing records each (installment, stage) under a primary key before publishing, so several Billing instances never double-send.
 - **Background calls.** Consumers and the reminder job have no signed-in user, so they call other services' internal APIs with a short-lived **service token** (role `Service`, no user id: useless on public endpoints and refused by the gateway).
-- **One name.** Every email (subjects, text, footer and sender name) uses `EmailBuilder.Brand`, currently **BVRInsurance**: change it there to rebrand them all.
+- **One name.** Every email (subjects, text, footer and sender name) uses `EmailBuilder.Brand`, currently **KVBInsurance**: change it there to rebrand them all.
 - **Safe content.** All customer-entered text (names, reviewer notes) is HTML-encoded in the templates, and every email also has a plain-text version.
 
 ## Known limitations

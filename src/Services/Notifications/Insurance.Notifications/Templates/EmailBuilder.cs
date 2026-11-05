@@ -18,7 +18,7 @@ public record RenderedEmail(string Subject, string Html, string Text)
 public sealed class EmailBuilder
 {
     /// <summary>The company name in every email (subjects, text and footer). Change it here to rebrand them all.</summary>
-    public const string Brand = "BVRInsurance";
+    public const string Brand = "KVBInsurance";
     private const string Primary = "#01497c";
     private const string Ink = "#0b2233";
     private const string Muted = "#52677a";
@@ -34,7 +34,7 @@ public sealed class EmailBuilder
 
     /// <param name="preheader">The preview line most inboxes show next to the subject.</param>
     /// <param name="supportEmail">Where to write instead of replying (every email is automated).</param>
-    public EmailBuilder(string subject, string preheader, string supportEmail = "support@bvrinsurance.example")
+    public EmailBuilder(string subject, string preheader, string supportEmail = "support@kvbinsurance.example")
     {
         _subject = subject;
         _preheader = preheader;
