@@ -1,29 +1,28 @@
-# Online Insurance Management System
+# KVB Insurance
 
-A full-stack insurance platform. Customers get **personalized quotes**, enroll in policies, pay monthly premiums and file claims, and are kept informed by **email** (receipts, payment reminders, claim updates). Administrators manage the plan catalog, review claims and manage customer accounts.
+An online insurance platform built as microservices. Customers get **personalized quotes**, enroll in policies, pay monthly premiums through a simulated checkout, file claims with supporting documents, and are kept informed by **email**. Administrators manage the plan catalog, review claims, follow every payment and manage customer accounts.
 
-![.NET](https://img.shields.io/badge/.NET-ASP.NET%20Core%20Web%20API-512BD4?logo=dotnet&logoColor=white)
-![Angular](https://img.shields.io/badge/Angular-TypeScript-DD0031?logo=angular&logoColor=white)
+![.NET](https://img.shields.io/badge/.NET%2010-ASP.NET%20Core-512BD4?logo=dotnet&logoColor=white)
+![Angular](https://img.shields.io/badge/Angular%2022-TypeScript-DD0031?logo=angular&logoColor=white)
 ![SQL Server](https://img.shields.io/badge/SQL%20Server-ADO.NET%20%2B%20stored%20procedures-CC2927?logo=microsoftsqlserver&logoColor=white)
-![Azure](https://img.shields.io/badge/Hosted%20on-Azure-0078D4?logo=microsoftazure&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-xUnit-5E2D79)
+![Azure](https://img.shields.io/badge/Hosted%20on-Azure%20Container%20Apps-0078D4?logo=microsoftazure&logoColor=white)
 ![CI](https://github.com/organizedanvrchy/Insurance-Full-Stack-App-MSA/actions/workflows/ci.yml/badge.svg)
 
-> **Live demo:** [Project Website](https://projectdeploy-ewbahrbra0abcuam.westus3-01.azurewebsites.net/)
-> *(Hosted on a development-tier Azure plan, so the first request after a quiet period may take a few seconds.)*
-> Demo logins are listed under [Demo accounts](#demo-accounts).
+> **Live site:** <https://salmon-grass-0f7ae9d1e.6.azurestaticapps.net>
+> API: <https://gateway.wonderfulpebble-bbe77089.westus3.azurecontainerapps.io/api>
+> *(Hosted on low-cost Azure tiers: the first request after a quiet period can take up to a minute while the databases wake up.)*
 
 ## Screenshots
 
-| Personalized quote | Customer policies | Claims review (admin) |
+| Customer dashboard | Personalized quote | My policies |
 |---|---|---|
-| ![Quote breakdown](docs/images/quote.png) | ![My policies](docs/images/my-policies.png) | ![Admin claims](docs/images/admin-claims.png) |
+| ![Dashboard](docs/images/dashboard.png) | ![Quote breakdown](docs/images/quote.png) | ![My policies](docs/images/my-policies.png) |
 
-| Premium schedule | Overdue alert | Customer management (admin) |
+| Checkout | Claims review (admin) | Customer management (admin) |
 |---|---|---|
-| ![Payments](docs/images/payments.png) | ![Overdue alert](docs/images/overdue-alert.png) | ![Customers](docs/images/customers.png) |
+| ![Checkout](docs/images/checkout.png) | ![Admin claims](docs/images/admin-claims.png) | ![Customers](docs/images/customers.png) |
 
-## Table of contents
+## Contents
 
 - [Overview](#overview)
 - [Features](#features)
@@ -32,91 +31,78 @@ A full-stack insurance platform. Customers get **personalized quotes**, enroll i
 - [Key business rules](#key-business-rules)
 - [Getting started](#getting-started)
 - [Demo accounts](#demo-accounts)
+- [Testing](#testing)
+- [CI/CD and deployment](#cicd-and-deployment)
+- [Email notifications](#email-notifications)
 - [Configuration reference](#configuration-reference)
 - [API overview](#api-overview)
-- [Testing](#testing)
 - [Project structure](#project-structure)
-- [Deploying to Azure](#deploying-to-azure)
-- [Email notifications](#email-notifications)
 - [Known limitations](#known-limitations)
 - [Roadmap](#roadmap)
-- [Documentation](#documentation)
+- [Team](#team)
 
 ## Overview
 
-The application simulates the core operations of an insurer:
+KVB Insurance simulates the core operations of an insurer:
 
 1. An admin publishes **plans** (Health, Auto, Life, Home, Travel).
 2. A customer answers a short, plan-specific questionnaire. The server **rates** the applicant and issues a **quote**: a price with a full breakdown of how it was calculated, or an underwriting decline.
 3. The customer **enrolls** from the quote. A **saga** across three services reserves the quote, creates the policy and its monthly **premium schedule**, and confirms the quote.
-4. The customer pays installments, and can **file claims** against active, paid-up policies.
-5. Admins move claims through a **review workflow**, and manage customer access.
-6. Along the way, customers get **emails**: a verification link at sign-up, a confirmation for each policy, a receipt for each payment (or a notice if it's declined), reminders before and after premiums are due, and the decision and payment on each claim.
+4. The customer **pays** installments by card or digital wallet, and can **file claims** with documents against active, paid-up policies.
+5. Admins move claims through a **review workflow**, follow the **payment log**, and manage customer accounts.
+6. Along the way, customers get **emails**: verification, policy confirmations, receipts and declines, payment reminders, and every step of their claims.
 
-The backend is a set of **microservices**: seven ASP.NET Core services, each with its own database, behind an **API gateway + BFF**. Services call each other over HTTP for queries and exchange **events over RabbitMQ** for everything that changes state in another service. The Angular frontend talks only to the gateway. Inside each service, data access uses **ADO.NET with parameterized stored procedures**.
+The backend is **seven ASP.NET Core microservices**, each with its own database, behind an **API gateway + BFF**. Services call each other over HTTP for queries and exchange **events** (RabbitMQ locally, Azure Service Bus in the cloud) for everything that changes another service's data. The Angular frontend talks only to the gateway. Inside each service, data access uses **ADO.NET with parameterized stored procedures**. Every pull request is built and tested by GitHub Actions, and every merge to `main` is deployed to Azure automatically.
 
 ## Features
 
 ### Customers
-- Register, sign in and sign out. Passwords are hashed with BCrypt and sessions use JWTs.
-- **Change their email or password** from pop-ups on the profile page (both can be cancelled). A new email only needs to be a valid address and an "Are you sure?" confirmation; it works at once but has to be verified, and the old address gets a "was this you?" email. Changing the password needs the current one and the new one twice; it's announced by email too.
-- **Verify their email address** from a link sent at sign-up. Until then they can browse and get quotes, but not enroll or file claims.
-- **Choose their emails:** a "Email me payment reminders" box on the sign-up form, changeable any time on the profile page.
-- Browse the plan catalog and filter by type.
-- **Get a personalized quote:** the API supplies the questions for each plan type, and the form is built dynamically from them. The result shows the base rate, every rating factor, the monthly price, the total over the term and the quote's expiry date.
-- Enroll from a quote with a chosen start date, and cancel a policy.
-- **Pay premiums** in order from a payment schedule, with paid, pending and overdue states.
-- **Simulated checkout:** pay by credit/debit card, PayPal, Apple Pay, Google Pay or Venmo. Card numbers are validated (brand, checksum, expiry, security code) and turned into a token in the browser; the server never sees them. Name and billing address are filled in from sign-up, cards can be saved for later, and every attempt gets a printable receipt.
-- **Payment history:** every attempt on a policy, including declined ones, with the reason the customer was given.
-- **Payment alerts:** a "payment due soon" or "payment overdue" badge on each policy.
-- **File claims** with incident date, amount, description and supporting documents. Eligibility is validated against the policy.
-- Track claims through the review workflow, read the reviewer's notes, and send more documents when asked.
-- **Email notifications:** a receipt for every payment and a notice when one is declined; reminders 3 days before a premium is due, on the due date, when it becomes overdue, and 5 and 10 days after that; claim received, the decision (approved, or rejected with the reason), and when an approved claim's payment is sent; policy activated or cancelled. Payment reminders are opt-in/out at sign-up and on the profile page.
+- **Accounts:** register, verify the email address from a link, sign in and out. Passwords are hashed with BCrypt; sessions use JWTs. Email and password can be changed from the profile page, and both changes are announced by email.
+- **Plans and quotes:** browse the catalog and filter by type. The questionnaire for each plan type comes from the API and the form is built from it. The quote shows the base rate, every rating factor, the monthly price, the total over the term and its expiry date.
+- **Policies:** enroll from a quote with a chosen start date, see payment progress and alerts ("due soon", "overdue") on each policy, and cancel.
+- **Simulated checkout:** pay by card (Visa, Mastercard, Amex, Discover), PayPal, Apple Pay, Google Pay or Venmo. Card details are validated and turned into a token in the browser, so the server never sees a card number. The billing name and address are filled in from sign-up, cards can be saved, every attempt gets a printable receipt, and a full payment history shows declines with their reason.
+- **Claims:** file a claim with the incident date, amount, description and up to 5 documents (PDF, JPG, PNG). Follow it through review, read the reviewer's notes, and send more documents when asked.
+- **Emails:** receipts and declined-payment notices, payment reminders (opt in or out at sign-up and on the profile), policy and claim updates, and security notices.
 
 ### Administrators
-- Create, edit and deactivate plans. Deactivated plans disappear for customers but remain on existing policies.
-- **Claims review queue** with a status filter. Admins can read a claim's documents and ask for more. Buttons show only the legal next step, and a rejection requires a reason.
-- **Customer management:** search, filter by status, and see active-policy and claim counts and whether the email is verified. Clicking a customer opens a pop-up where the admin can edit their name, email, phone and address, **reset their password** and deactivate or reactivate the account. Each action asks "Are you sure?" first. A new email has to be verified by the customer, as if they had changed it themselves, and both inboxes are told an administrator made the change.
+- **Plan catalog:** create, edit and deactivate plans. Deactivated plans disappear for customers but stay on existing policies.
+- **Claims review queue:** filter by status, read a claim's documents, ask for more information, approve, reject (a reason is required) and mark as paid. Only the legal next steps are offered.
 - **Payment log:** every payment attempt from every customer, filterable by status, with amounts collected, declines and refunds.
+- **Customer management:** search and filter customers, see their active policies, claims and verification status, edit their details, reset their password (a one-time password is emailed), and deactivate or reactivate accounts. Deactivation takes effect on the customer's very next request.
 
 ### Platform
-- Role-based authorization (`Customer`, `Admin`), with ownership checks on every record.
-- Centralized error handling that returns consistent RFC 7807 `ProblemDetails` responses.
-- Swagger/OpenAPI with JWT support for testing the API.
-- Seed data for a 20-plan catalog and a set of demo customers with realistic histories.
-- **Microservices:** seven independently deployable services with a database each, an API gateway (YARP) with BFF composition, an event bus (MassTransit on RabbitMQ), an orchestrated saga with compensation, a transactional outbox, idempotent consumers, and graceful degradation when a service is down.
-- **Notifications service:** listens to the other services' events and sends HTML + plain-text emails over SMTP (MailKit), exactly once per event, with a record of each email.
-- `docker compose up` starts the whole system: SQL Server, RabbitMQ, Mailpit (a local test inbox), seven services and the gateway.
+- Role-based authorization (`Customer`, `Admin`) with ownership checks on every record, and consistent RFC 7807 `ProblemDetails` errors.
+- **Microservices:** database per service, API gateway (YARP) with BFF composition, event bus (MassTransit), orchestrated saga with compensation, transactional outbox, idempotent consumers, and graceful degradation when a service is down.
+- **Light and dark themes**, a responsive layout, and accessible forms and dialogs.
+- One `docker compose up` starts the whole system locally: SQL Server, RabbitMQ, Mailpit (a test inbox), seven services and the gateway.
 
 ## Tech stack
 
 | Layer | Technology |
 |---|---|
-| Frontend | Angular (standalone components, signals, lazy-loaded routes), TypeScript, HTML5, CSS3, RxJS |
-| Services | C#, ASP.NET Core Web API (one per service), RESTful design, Swagger/OpenAPI (Swashbuckle) |
-| API gateway | YARP reverse proxy, JWT validation, BFF composition endpoints |
-| Messaging | RabbitMQ through MassTransit (retries, faults), transactional outbox |
-| Email | SMTP through MailKit; Mailpit as the development inbox |
-| Data access | ADO.NET (`Microsoft.Data.SqlClient`), parameterized stored procedures, views, LINQ in the service layer |
-| Database | SQL Server / Azure SQL Database: **one database per service**, created and migrated by the service at startup |
-| Security | JWT bearer authentication (validated by the gateway and every service), BCrypt, role-based authorization |
-| Patterns | Microservices, database per service, API gateway + BFF, saga (orchestration), transactional outbox, idempotent consumer, dependency injection, repository, strategy (rating engine), DTOs |
-| Testing | xUnit with hand-written fakes, architecture tests for service boundaries |
-| Containers | Docker, Docker Compose |
-| Tooling | Visual Studio Code, Git and GitHub |
+| Frontend | Angular 22 (standalone components, signals, lazy-loaded routes, reactive forms), TypeScript, RxJS, CSS with light/dark design tokens |
+| Services | C#, .NET 10, ASP.NET Core Web API (one per service), Swagger/OpenAPI |
+| API gateway | YARP reverse proxy, JWT validation, active-account check, BFF composition endpoints |
+| Messaging | MassTransit on RabbitMQ (local) or Azure Service Bus (cloud), retries, faults, transactional outbox |
+| Data | SQL Server / Azure SQL, **one database per service**, ADO.NET (`Microsoft.Data.SqlClient`), parameterized stored procedures and views, migrated by each service at startup |
+| Email | SMTP through MailKit: Mailpit locally, Azure Communication Services in the cloud |
+| Security | JWT bearer authentication (checked by the gateway and every service), BCrypt, role-based authorization, browser-side payment tokenization |
+| Testing | xUnit with hand-written fakes, architecture tests for service boundaries, Vitest for Angular, a Python end-to-end suite against the running system |
+| DevOps | Docker, Docker Compose, GitHub Actions (CI and CD), GitHub Container Registry, Azure Container Registry |
+| Hosting | Azure Container Apps (services and gateway), Azure SQL, Azure Service Bus, Azure Files (claim documents), Azure Static Web Apps (frontend) |
 
 ## Architecture at a glance
 
 ```mermaid
 flowchart TD
-    SPA["Angular SPA"] --> GW["API gateway + BFF<br/>YARP routing, JWT, composition"]
-    subgraph Microservices["Microservices, one database each"]
+    SPA["Angular SPA<br/>(Azure Static Web Apps)"] --> GW["API gateway + BFF<br/>YARP routing, JWT, composition"]
+    subgraph Microservices["Microservices, one database each (Azure Container Apps)"]
         ID["Identity<br/>users, auth, JWT"]
         CA["Catalog<br/>plans"]
         QU["Quotes<br/>rating, quotes"]
         EN["Enrollments<br/>policies, saga"]
-        BI["Billing<br/>premium payments"]
-        CL["Claims<br/>claims workflow"]
+        BI["Billing<br/>premiums, checkout"]
+        CL["Claims<br/>claims, documents"]
         NO["Notifications<br/>emails, preferences"]
     end
     GW --> ID & CA & QU & EN & BI & CL & NO
@@ -127,65 +113,55 @@ flowchart TD
     BI --- BDB[("InsuranceBilling")]
     CL --- KDB[("InsuranceClaims")]
     NO --- NDB[("InsuranceNotifications")]
-    Microservices <--> BUS[["Event bus<br/>RabbitMQ (MassTransit)"]]
-    NO --> SMTP[["SMTP server<br/>(Mailpit in development)"]]
+    Microservices <--> BUS[["Event bus<br/>RabbitMQ / Azure Service Bus"]]
+    NO --> SMTP[["SMTP<br/>Mailpit / Azure Communication Services"]]
 ```
 
 | Service | Owns | Talks to |
 |---|---|---|
-| **Identity** | Users, sign-in, JWT issuing, email verification | Nobody (others call it). Publishes `CustomerRegistered`, `EmailVerificationRequested` |
+| **Identity** | Users, sign-in, JWTs, email verification, admin account changes | Nobody (others call it). Publishes account events (registered, verification requested, email or password changed, password reset, deactivated, reactivated) |
 | **Catalog** | Plans | Nobody (others call it) |
-| **Quotes** (Quotes) | Rating engine, quotes | Catalog (HTTP). Consumes `EnrollmentActivated`, `EnrollmentFailed` |
-| **Enrollments** (Enrollments) | Policies, **the enrollment saga** | Identity, Quotes, Catalog, Billing (HTTP). Publishes `EnrollmentRequested`, `EnrollmentActivated`, `EnrollmentFailed`, `EnrollmentCancelled` through an outbox |
-| **Billing** | Premium schedules, payments, payment reminders | Enrollments (HTTP). Consumes `EnrollmentRequested`, `EnrollmentCancelled`, `EnrollmentFailed`; publishes `PremiumScheduleCreated`, and `PaymentReceived`, `PaymentDeclined` and `PaymentReminderDue` through an outbox |
-| **Claims** (Claims) | Claims, claim documents, review workflow | Enrollments, Billing, Catalog, Identity (HTTP). Publishes `ClaimSubmitted`, `ClaimStatusChanged` through an outbox |
-| **Notifications** | Emails sent, customers' email preferences | Identity, Enrollments, Catalog (HTTP). Consumes the account, enrollment, claim and payment events above and emails the customer. Nothing depends on it |
-| **Gateway + BFF** | Nothing | Routes `/api/*`; checks that the caller's account is active (Identity); composes the admin customer list (Identity + Enrollments + Claims) |
+| **Quotes** | Rating engine, quotes | Catalog (HTTP). Consumes `EnrollmentActivated`, `EnrollmentFailed` |
+| **Enrollments** | Policies, **the enrollment saga** | Identity, Quotes, Catalog, Billing (HTTP). Publishes `EnrollmentRequested`, `EnrollmentActivated`, `EnrollmentFailed`, `EnrollmentCancelled` (outbox) |
+| **Billing** | Premium schedules, checkout, payment log, saved cards, reminders | Enrollments, Identity (HTTP). Consumes enrollment events; publishes `PremiumScheduleCreated`, `PaymentReceived`, `PaymentDeclined`, `PaymentReminderDue` (outbox) |
+| **Claims** | Claims, claim documents, review workflow | Enrollments, Billing, Catalog, Identity (HTTP). Publishes `ClaimSubmitted`, `ClaimStatusChanged` (outbox) |
+| **Notifications** | Emails sent, email preferences | Identity, Enrollments, Catalog, Claims (HTTP). Consumes the events above and emails the customer. Nothing depends on it |
+| **Gateway + BFF** | Nothing | Routes `/api/*`, checks that the caller's account is still active, composes the admin customer list |
 
-**Rules that keep them independent:** a service never reads another service's database, and never references another service's code, only its `*.Contracts` package (events, internal API shapes and a typed HTTP client). `Insurance.Architecture.Tests` fails the build if either rule is broken. Queries go over HTTP; anything that changes another service's data goes through an event.
+**Rules that keep the services independent:** a service never reads another service's database and never references another service's code, only its `*.Contracts` package (events, internal API shapes and a typed HTTP client). `Insurance.Architecture.Tests` fails the build if either rule is broken.
 
-Inside each service, a request flows one way:
-
-```mermaid
-flowchart TD
-    C["Controllers<br/>HTTP, routing, authorization"] --> S["Services<br/>business rules, calls to other services"]
-    S --> R["Repositories<br/>ADO.NET, error translation, outbox"]
-    R --> P["Stored procedures<br/>data rules, transactions"]
-    P --> T[("The service's own tables and views")]
-```
-
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the enrollment saga, the outbox, sequence diagrams, the data model of each service, the claim workflow, the rating engine, the security model and the complete error-number registry.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the domain model, the enrollment saga, the outbox, sequence diagrams, the claim workflow, the rating engine, simulated payments, the security model and the error-number registry.
 
 ## Key business rules
 
 | Area | Rule |
 |---|---|
-| Quotes | Priced on the server from the customer's answers. The client never sends a price. Valid for 30 days and usable once. |
+| Quotes | Priced on the server from the customer's answers; the client never sends a price. Valid for 30 days and usable once. |
 | Rating | `premium = base rate x every factor`, rounded to cents, minimum $1.00. Some answers trigger an underwriting decline. |
-| Enrollment | Start date from yesterday (time-zone slack) to 90 days ahead. One active enrollment per plan per customer. The premium is copied from the quote, so later plan price changes never alter existing policies. |
-| Payments | Installments must be paid **in order**. An unpaid installment becomes **Overdue** more than **5 days** past its due date. A payment alert shows when the next due date is within **7 days**. Every successful payment is emailed as a receipt, and every declined or failed one as a notice. |
-| Reminders | Emailed 3 days before the due date, on the due date, the day the installment turns Overdue, then 5 and 10 days after that. Each one at most once per installment. Customers choose at sign-up (on by default) and can change it on their profile; receipts, declines, claim and account emails always go out. |
-| Email verification | New accounts must confirm their email before **enrolling** or **filing a claim** (`403` until then). Links are single-use, expire after **15 minutes**, and only their hash is stored. Resending is limited to one per minute and ten a day. |
-| Claims | Active policy only. The incident must fall inside the coverage period and not be in the future. No overdue premiums. The amount cannot exceed the remaining coverage (policy coverage minus approved and paid claims). |
-| Claim workflow | Submitted, Under review, then Approved or Rejected, then (approved only) Paid. A reviewer can also ask for more information, and the customer sends the claim back after responding. A rejection or a request for more information needs a note. Concurrent edits are detected. |
-| Claim documents | PDF, JPG or PNG, up to 10 MB each and 5 per claim. Customers can add them until a decision is made. They can't be deleted. |
-| Accounts | Deactivated accounts cannot sign in and existing tokens stop working, and the customer is emailed that support can reactivate them (and emailed again when it is). Signing in with the right password to a deactivated account says it's deactivated; a wrong password only ever says "Invalid email or password." Admin accounts cannot be deactivated from the UI. |
-| Admin password reset | The customer's password stops working right away, and a 14-character **one-time password** valid for **30 minutes** is emailed to them (only its hash is stored). Signing in with it takes them straight to "Choose a new password" (the new password twice; the one-time password isn't asked for again), and the gateway answers `403` to every other request until they do. Sessions that were open before the reset are signed out. They must sign in and choose the password within the 30 minutes; after that, signing in gets a `401` saying it expired, and the admin presses "Reset password" again. |
+| Enrollment | Start date from yesterday to 90 days ahead. One active enrollment per plan per customer. The premium is copied from the quote, so later plan price changes never alter existing policies. |
+| Payments | Installments are paid **in order**. An unpaid installment is **Overdue** more than **5 days** past its due date; a "due soon" alert shows within **7 days**. A retried payment request is never charged twice. |
+| Reminders | Emailed 3 days before the due date, on the due date, when it turns Overdue, then 5 and 10 days later. Customers can turn them off. |
+| Email verification | Required before **enrolling** or **filing a claim**. Links are single-use, expire after **15 minutes**, and only their hash is stored. |
+| Claims | Active policy only; incident inside the coverage period and not in the future; no overdue premiums; amount within the remaining coverage. |
+| Claim workflow | Submitted, Under review, then Approved or Rejected, then (approved only) Paid. A reviewer can ask for more information; the customer adds documents and sends it back. Concurrent reviews are detected. |
+| Claim documents | PDF, JPG or PNG (checked from the file's contents), up to 10 MB each and 5 per claim, until a decision is made. They can't be deleted. |
+| Accounts | Deactivated accounts can't sign in and their open sessions stop working at once. An admin password reset emails a one-time password valid for 30 minutes, and the customer must choose a new password before doing anything else. |
+| Time | "Today" (due dates, overdue, coverage, claim dates) is in the insurer's time zone, US Eastern by default. |
 
 ## Getting started
 
 ### Prerequisites
 
-- [Docker](https://docs.docker.com/get-docker/) with Docker Compose (for the services, SQL Server and RabbitMQ)
-- [.NET SDK](https://dotnet.microsoft.com/download) (current LTS), to build, test or run a service outside Docker
-- [Node.js](https://nodejs.org/) 20 or later, and the Angular CLI (`npm install -g @angular/cli`)
+- [Docker Desktop](https://docs.docker.com/get-docker/) (with Docker Compose)
+- [.NET 10 SDK](https://dotnet.microsoft.com/download), to build, test or run a service outside Docker
+- [Node.js](https://nodejs.org/) 24.15 or later (required by Angular 22)
 - Recommended VS Code extensions: C# Dev Kit, SQL Server (mssql), Angular Language Service
 
 ### 1. Clone
 
 ```bash
-git clone https://github.com/<your-username>/insurance-management-system.git
-cd insurance-management-system
+git clone https://github.com/organizedanvrchy/Insurance-Full-Stack-App-MSA.git
+cd Insurance-Full-Stack-App-MSA
 ```
 
 ### 2. Start the backend
@@ -194,33 +170,39 @@ cd insurance-management-system
 cp deploy/.env.example deploy/.env
 ```
 
-Edit `deploy/.env` to set your own `SA_PASSWORD` and `JWT_KEY`, then:
+Edit `deploy/.env` to set your own `SA_PASSWORD` and `JWT_KEY` (32+ characters), then:
 
 ```bash
 docker compose -f deploy/docker-compose.yml up --build
 ```
 
-This starts SQL Server, RabbitMQ, Mailpit, the seven services and the gateway. Each service creates its own database on first start (its scripts are in `src/Services/<Service>/Insurance.<Service>/Database/`), and the Catalog service seeds the 20 plans. The API is at <http://localhost:5080/api>, the RabbitMQ dashboard at <http://localhost:15672> (guest / guest) shows the queues and the events flowing, and **every email the system sends lands in Mailpit at <http://localhost:8025>**, so you can open the verification link from there after registering.
+This starts SQL Server, RabbitMQ, Mailpit, the seven services and the gateway. Each service creates its own database on first start, and Catalog seeds 20 plans.
+
+| Address | What |
+|---|---|
+| <http://localhost:5080/api> | The API (through the gateway) |
+| <http://localhost:8025> | Mailpit: **every email the system sends**, including verification links |
+| <http://localhost:15672> | RabbitMQ dashboard (guest / guest): queues and events |
 
 ### 3. Run the frontend
 
 ```bash
 cd insurance-web
 npm install
-ng serve
+npx ng serve
 ```
 
-Open <http://localhost:4200>. The API address is set in `src/environments/environment.development.ts` (`http://localhost:5080/api`, the gateway).
+Open <http://localhost:4200>. The development build calls the local gateway (`src/environments/environment.development.ts`).
 
-### 4. Create the admin account
+### 4. Create an admin account
 
-There is intentionally no public admin sign-up. Register a normal account in the app, then promote it in the Identity service's database:
+There is intentionally no public admin sign-up. Register a normal account, then promote it:
 
 ```bash
 docker compose -f deploy/docker-compose.yml exec sqlserver /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "<your SA_PASSWORD>" -Q "UPDATE InsuranceIdentity.accounts.Users SET Role = 'Admin' WHERE Email = 'you@example.com'"
 ```
 
-Sign in again so the new role is placed in your token.
+Sign in again so the new role is in your token.
 
 ### 5. Optional: load the demo data
 
@@ -228,11 +210,11 @@ Sign in again so the new role is placed in your token.
 docker compose -f deploy/docker-compose.yml exec sqlserver /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "<your SA_PASSWORD>" -i /seed/demo-data.sql
 ```
 
-`deploy/seed/remove-demo-data.sql` removes it again. Demo customers are already verified. These dev-only scripts write to all the databases at once, which works only because Docker Compose puts them on one SQL Server instance.
+`deploy/seed/remove-demo-data.sql` removes it again.
 
 ### Running a service outside Docker
 
-Each service is a normal ASP.NET Core project with its own port (Identity 5101, Catalog 5102, Quotes 5103, Enrollments 5104, Billing 5105, Claims 5106, Notifications 5107, gateway 5080, set in each `Properties/launchSettings.json`). With SQL Server, RabbitMQ and Mailpit running (for example `docker compose -f deploy/docker-compose.yml up sqlserver rabbitmq mailpit`), set the service's connection string and the JWT key, then run it:
+Each service is a normal ASP.NET Core project with its own port: gateway 5080, Identity 5101, Catalog 5102, Quotes 5103, Enrollments 5104, Billing 5105, Claims 5106, Notifications 5107. With SQL Server, RabbitMQ and Mailpit running (`docker compose -f deploy/docker-compose.yml up sqlserver rabbitmq mailpit`), set the connection string and JWT key, then run it:
 
 ```bash
 cd src/Services/Catalog/Insurance.Catalog
@@ -245,264 +227,171 @@ Each service has Swagger at `/swagger` in the Development environment.
 
 ## Demo accounts
 
-After loading `deploy/seed/demo-data.sql`, every demo customer signs in with the password **`Demo#2026pass`**.
+After loading the demo data, every demo customer signs in with the password **`Demo#2026pass`**:
 
 | Customer | Email | What to look at |
 |---|---|---|
-| Emma Carter | `emma.carter@demo.example` | Fully paid up. Claims in **Approved** and **Under review**. |
-| Marcus Johnson | `marcus.johnson@demo.example` | Home and Life policies. Claims in **Paid** and **Submitted**. |
-| Priya Patel | `priya.patel@demo.example` | **Overdue premiums** (red alert, claims blocked on that policy). |
-| Daniel Kim | `daniel.kim@demo.example` | Travel policies, a **Rejected** claim with the reviewer's reason, and an **Expired** policy. |
-| Sofia Rodriguez | `sofia.rodriguez@demo.example` | New customer with a **payment due today** alert and no claims. |
-| Tyler Brooks | `tyler.brooks@demo.example` | **Inactive** account (sign-in is refused) with a cancelled policy. |
+| Emma Carter | `emma.carter@demo.example` | Fully paid up. Claims in **Approved** and **Under review** |
+| Marcus Johnson | `marcus.johnson@demo.example` | Home and Life policies. Claims in **Paid** and **Submitted** |
+| Priya Patel | `priya.patel@demo.example` | **Overdue premiums** (claims blocked on that policy) |
+| Daniel Kim | `daniel.kim@demo.example` | A **Rejected** claim with the reviewer's reason, and an **Expired** policy |
+| Sofia Rodriguez | `sofia.rodriguez@demo.example` | A **payment due today**, no claims |
+| Tyler Brooks | `tyler.brooks@demo.example` | **Deactivated** account (sign-in is refused) |
 
-The admin account is the one you promoted in step 4. These credentials exist for the development environment only.
+**Test cards** for the simulated checkout (any future expiry, any security code):
 
-## Configuration reference
-
-Every setting can also be given as an environment variable (`:` becomes `__`), which is how `deploy/docker-compose.yml` configures the containers.
-
-| Setting | Used by | Notes |
-|---|---|---|
-| `ConnectionStrings:Database` | Each service | That service's own database. **Never shared between services** |
-| `Jwt:Key` | Every service and the gateway | **User secrets, `.env` or a secret store only. Never commit it.** At least 32 characters, the same everywhere |
-| `Jwt:Issuer`, `Jwt:Audience` | Every service and the gateway | Must match between token creation (Identity) and validation |
-| `Jwt:ExpiryMinutes` | Identity | Default 60 |
-| `RabbitMq:Host`, `Username`, `Password` | Identity, Quotes, Enrollments, Billing, Claims, Notifications | The event bus (local and Docker) |
-| `ServiceBus:ConnectionString` | Same services | When set, the event bus is **Azure Service Bus** instead of RabbitMQ (Standard tier or higher: topics are required). **Secret: store it in the container app's secrets or Key Vault.** |
-| `Email:Host`, `Port`, `Security`, `Username`, `Password` | Notifications | The SMTP server. `Security` is `None` (Mailpit), `StartTls` (port 587) or `SslOnConnect` (port 465). **Password in user secrets or `.env` only.** An empty `Host` logs emails instead of sending them |
-| `Email:FromAddress`, `FromName` | Notifications | The sender |
-| `Email:AppBaseUrl` | Notifications | The Angular app's address; links in emails point there |
-| `Email:MaxAttachmentBytes` | Notifications | Most a claim email's document copies may add up to (default 15 MB); larger files are listed but not attached |
-| `Notifications:ClaimEmailDelay` | Notifications | The longest "We received your claim" waits for the claim's documents to upload (default 2 minutes). Without documents it goes out at once; with them, as soon as they're all in |
-| `Email:SupportEmail` | Notifications | Where customers get help. Every email says it's automated ("don't reply") and points here |
-| `BusinessTimeZone` | Every service | The insurer's time zone (IANA id, default `America/New_York`, i.e. EST/EDT): what "today" means for due dates, overdue premiums, coverage and claims, and the zone emails show times in |
-| `Email:SkipDomains` | Notifications | Recipient domains never emailed (e.g. `demo.example` against a real mail server) |
-| `Email:SkipReservedDomains` | Notifications | `true` on a real mail server: never email domains reserved for testing (`example.com`, `*.example`, `*.test`, ...), which it would refuse. Off locally, where Mailpit catches everything |
-| `Reminders:Enabled`, `Interval` | Billing | The payment reminder job (default on, every hour) |
-| `EmailVerification:LinkLifetime`, `ResendCooldown`, `MaxEmailsPerDay` | Identity | Defaults 15 minutes, 1 minute, 10 |
-| `Customers:OneTimePasswordLifetime` | Identity | How long an admin-reset one-time password works (default 30 minutes) |
-| `Services:<Name>` | Callers of another service | Base address of that service's internal API, for example `Services:Catalog` |
-| `ReverseProxy:Clusters:<name>:Destinations:d1:Address` | Gateway | Where each service runs |
-| `Cors:AllowedOrigins` | Gateway | Frontend origins allowed to call the API |
-| `Enrollment:SagaTimeout` | Enrollments | How long `POST /api/enrollments` waits for the saga before answering `202` (default 10 seconds) |
-| `Payments:Provider` | Billing | Which payment processor to use. Only `Mock` (the simulation) exists; a real one is a new `IPaymentGateway` class |
-| `Payments:Mock:LatencyMs` | Billing | How long the simulated processor takes to answer (default 700 ms) |
-| `apiUrl` | `insurance-web/src/environments/environment.development.ts` (dev) and `environment.ts` (production build) | The gateway's address |
-
-## API overview
-
-Every endpoint is reached through the gateway at `/api`. Each service documents its own endpoints in its Swagger UI. Statuses follow REST conventions: `201` on create, `202` when an enrollment is accepted but still being set up, `204` on updates with no body, `400` validation or business rule, `401` not signed in, `403` wrong role or email not verified yet, `404` not found **or not yours**, `409` state conflict, `429` too many verification emails requested, `503` a service the request needs is unavailable.
-
-| Area (service) | Endpoint | Access |
-|---|---|---|
-| **Auth** (Identity) | `POST /api/auth/register` | Public |
-| | `POST /api/auth/login` | Public |
-| | `GET /api/auth/me` | Signed in |
-| | `POST /api/auth/verify-email` | Public (the token from the emailed link) |
-| | `POST /api/auth/resend-verification` | Signed in |
-| | `POST /api/auth/change-email` | Signed in (`newEmail`; the new address must then be verified) |
-| | `POST /api/auth/change-password` | Signed in (`currentPassword`, `newPassword`, `confirmNewPassword`) |
-| **Policies** (Catalog) | `GET /api/policies` | Signed in (`?includeInactive=true` for admins) |
-| | `GET /api/policies/{id}` | Signed in |
-| | `POST /api/policies`, `PUT /api/policies/{id}`, `DELETE /api/policies/{id}` | Admin (delete is a soft delete) |
-| **Quotes** (Quotes) | `GET /api/quotes/questions/{policyId}` | Customer |
-| | `POST /api/quotes` | Customer |
-| | `GET /api/quotes/{id}` | Customer (owner) |
-| **Enrollments** (Enrollments) | `GET /api/enrollments/mine` | Signed in (own records) |
-| | `GET /api/enrollments/{id}` | Owner or admin |
-| | `POST /api/enrollments` | Customer (`201`, or `202` while the saga is still running) |
-| | `PUT /api/enrollments/{id}/cancel` | Owner |
-| **Payments** (Billing) | `GET /api/enrollments/{id}/payments` | Owner or admin |
-| | `POST /api/payments/{id}/pay` | Customer (owner). Body: a payment-method token or a saved method, and an idempotency key. Answers `200` with `outcome: Succeeded` (a receipt) or `Declined` (the reason) |
-| | `GET /api/payments/transactions?enrollmentId=&status=` | The payment log: one policy (owner or admin), your own attempts, or everyone's (admin) |
-| | `GET /api/payments/transactions/{id}` | A receipt (the customer who paid, or an admin) |
-| | `GET /api/payment-methods`, `DELETE /api/payment-methods/{id}` | Customer: saved payment methods (brand, last 4 digits, expiry) |
-| **Claims** (Claims) | `POST /api/claims` | Customer |
-| | `GET /api/claims/mine` | Customer |
-| | `GET /api/claims?status=` | Admin |
-| | `GET /api/claims/{id}` | Owner or admin |
-| | `PUT /api/claims/{id}/review` | Admin |
-| | `POST /api/claims/{id}/send-to-reviewer` | Customer |
-| | `POST /api/claims/{id}/documents` | Customer |
-| | `GET /api/claims/{id}/documents` | Owner or admin |
-| | `GET /api/claims/{id}/documents/{documentId}` | Owner or admin |
-| **Notifications** (Notifications) | `GET /api/notifications/preferences`, `PUT /api/notifications/preferences` | Customer |
-| | `GET /api/notifications/history?take=` | Customer (own emails; not shown in the app, kept for future admin screens) |
-| **Customers** (gateway BFF) | `GET /api/admin/customers?search=&isActive=` | Admin |
-| | `GET /api/admin/customers/{id}` | Admin |
-| | `PUT /api/admin/customers/{id}` (name, email, phone, address) | Admin |
-| | `POST /api/admin/customers/{id}/reset-password` | Admin |
-| | `PUT /api/admin/customers/{id}/active` | Admin |
-
-Services also expose `/internal/*` endpoints for each other (for example `GET /internal/plans?ids=`). The gateway never routes them, so they are not reachable from outside.
+| Card | Outcome |
+|---|---|
+| `4242 4242 4242 4242` | Approved |
+| `4000 0000 0000 0002` | Declined |
+| `4000 0000 0000 9995` | Insufficient funds |
+| `4000 0000 0000 0119` | Processing error (can be retried) |
 
 ## Testing
 
-Unit tests cover the business logic with in-memory fakes of the repositories and of the other services' clients, so no database, broker or other service is needed. There is one test project per service, plus architecture tests that guard the service boundaries:
+| Suite | Command | What it covers |
+|---|---|---|
+| Backend unit tests | `dotnet test Insurance.sln` | Business logic in every service (rating, saga, checkout, claims, emails, reminders, accounts) with in-memory fakes, plus architecture tests that guard the service boundaries |
+| Frontend unit tests | `cd insurance-web && npx ng test --watch=false` | Card validation, utilities and components |
+| End to end | `python tests/e2e/e2e_test.py` (with the stack running) | The whole running system through the gateway: accounts and verification emails, quotes, the enrollment saga, payments (declines, retries, receipts), claims, admin screens, deactivation and cancellation |
 
-```bash
-dotnet test Insurance.sln
+The architecture tests (`ServiceBoundaryTests`) fail the build if a service references another service's implementation, if a service's SQL touches another service's schema, or if anything depends on the Notifications service.
+
+## CI/CD and deployment
+
+```mermaid
+flowchart LR
+    PR["Pull request"] --> CI["CI<br/>.NET tests · Angular tests and build ·<br/>end-to-end test in Docker Compose"]
+    CI -- "merge to main" --> CD["CD<br/>8 images → GHCR and Azure Container Registry"]
+    CD --> ACA["Azure Container Apps<br/>each app switched to the new version"]
+    CD --> SWA["Azure Static Web Apps<br/>Angular build"]
 ```
 
-| Test class | Covers |
-|---|---|
-| `RatingStrategyTests` | Prices for every policy type, underwriting declines, answer validation |
-| `ClaimStatusTransitionsTests` | Every allowed and blocked workflow move |
-| `AuthServiceTests` | Password hashing, email normalizing, role forcing, inactive users |
-| `EmailVerificationServiceTests` | Verification links (hashing, single use, expiry, replacement), resend limits, the sign-up email choice, changing the email (password, conflicts, re-verification, notice to the old address) and the password |
-| `EnrollmentServiceTests` | Start-date window, payment alerts, ownership, cancellation, the enrollment saga (completed, still running, failed, quote released), degradation when Billing is down |
-| `ClaimDocumentServiceTests` | File checks, document limits, ownership, cleaning up after a failed save |
-| `ClaimServiceTests` | Review rules, the concurrency guard, claim visibility, claim eligibility, names and plans from other services |
-| `CheckoutServiceTests` | Approved, declined and failed payments; retries never charge twice; every rule checked before charging; automatic refund when an approved charge can't be applied; saved cards; the receipt and declined emails saved with each outcome |
-| `MockPaymentGatewayTests` | Test cards and their decline reasons, expired cards, idempotent charges, malformed tokens |
-| `PaymentServiceTests` | Who sees schedules, the payment log and receipts; cancelled policies |
-| `ReminderScheduleTests`, `PaymentReminderServiceTests` | Which reminder goes out on which day, no repeats or stale reminders, only for policies in force |
-| `TemplateTests` | Every email's subject and content, the "automated message" notice on all of them, HTML encoding of customer text, links into the app, times in Eastern time |
-| `NotificationDispatcherTests`, `ConsumerTests` | Exactly-once sending, reminder opt-in/out (sign-up and profile), deactivated accounts, failures and retries, events on MassTransit's in-memory test bus |
-| `InternalQuotesControllerTests` | A quote can only be reserved for the caller |
-| `ServiceBoundaryTests` | No service references another's implementation, no service's SQL touches another service's schema, and nothing depends on the Notifications service |
+- **CI** (`.github/workflows/ci.yml`) runs on every pull request and every push to `main`.
+- **CD** (`.github/workflows/cd.yml`) runs after CI passes on `main`. It publishes an image per service (tags `latest` and `sha-<commit>`), updates every container app in Azure, and deploys the Angular app. GitHub signs in to Azure with OpenID Connect, so no Azure password is stored in GitHub.
+- **Azure resources:** Container Apps (only the gateway is public), Azure SQL (one database per service), Service Bus (Standard tier), Azure Files for claim documents, Communication Services for email, Static Web Apps for the frontend. The first-time setup is in [deploy/azure/README.md](deploy/azure/README.md).
+- **Rolling back:** point a container app at an earlier `sha-<commit>` tag.
 
-An end-to-end test drives the whole running system through the gateway, the way the Angular app does: accounts, quotes, the enrollment saga, payments (declines, retries, receipts), claims, the admin screens and cancellation. With the stack running (`docker compose -f deploy/docker-compose.yml up --build -d`):
+## Email notifications
 
-```bash
-python tests/e2e/e2e_test.py
-```
+The **Notifications service** sends every email. It only listens to events the other services already publish, so no service waits for an email or knows the Notifications service exists.
 
-The stored procedures, the saga over RabbitMQ and the gateway were also verified end to end with Docker Compose: a scripted run of 95 requests returns the same responses as the original single API, and the saga recovers when Billing is stopped and restarted, and compensates when Billing keeps failing.
+| Email | Sent when | Can be turned off |
+|---|---|---|
+| Verify your email / your new email | Sign-up, resend, email change | No |
+| Email or password changed ("was this you?") | After either change, to the address that was in use | No |
+| Account deactivated / reactivated | An admin deactivates or reactivates the account | No |
+| Password reset | An admin resets the password: the one-time password and when it expires | No |
+| Policy active / cancelled | The enrollment saga completes, the customer cancels | No |
+| Payment receipt / payment didn't go through | Every checkout attempt | No |
+| Payment reminder | 3 days before, on the due date, when Overdue, +5 and +10 days | **Yes** |
+| Claim received / needs more information / approved / rejected / payment sent | Each step of a claim. "Claim received" lists the claim's documents with copies attached | No |
 
-Email notifications were verified end to end the same way (SQL Server, RabbitMQ and an SMTP inbox): a scripted run of 40 checks covers registration, the `403` before verifying, verifying, enrolling, paying, filing and reviewing a claim, due-soon and overdue reminders with the opt-out, receipts and declined-payment notices from checkout, and checks that every email arrives exactly once.
+How it stays reliable:
+
+- **Exactly once.** Each email has a key (for example `receipt:123`). A repeated event finds the key already sent and does nothing.
+- **Waits out sending limits.** When the mail server says "later", the email is kept as **Waiting** and resent after 1, 5, 15 and 30 minutes, then hourly, for about 13 hours.
+- **No lost events.** Billing, Claims and Enrollments publish through a **transactional outbox**: an event exists exactly when its change was committed.
+- **Safe content.** Customer-entered text is HTML-encoded, and every email also has a plain-text version.
+- **One name.** Every email uses `EmailBuilder.Brand`, so the brand is changed in one place.
+
+## Configuration reference
+
+Every setting can also be given as an environment variable (`:` becomes `__`), which is how Docker Compose and Azure configure the containers. **Never commit secrets:** use `deploy/.env` (ignored by Git), user secrets, or Container App secrets.
+
+| Setting | Used by | Notes |
+|---|---|---|
+| `ConnectionStrings:Database` | Each service | That service's own database, never shared |
+| `Jwt:Key`, `Jwt:Issuer`, `Jwt:Audience`, `Jwt:ExpiryMinutes` | Every service and the gateway | **Secret.** The key is at least 32 characters and the same everywhere; tokens last 60 minutes by default |
+| `RabbitMq:Host`, `Username`, `Password` | Services with events | The local event bus |
+| `ServiceBus:ConnectionString` | Same services | **Secret.** When set, the event bus is Azure Service Bus (Standard tier) |
+| `Email:Host`, `Port`, `Security`, `Username`, `Password` | Notifications | The SMTP server; `Security` is `None`, `StartTls` or `SslOnConnect`. An empty `Host` only logs emails |
+| `Email:FromAddress`, `FromName`, `SupportEmail`, `AppBaseUrl` | Notifications | The sender, where customers get help, and where links in emails point |
+| `Email:SkipDomains`, `Email:SkipReservedDomains` | Notifications | Recipient domains never emailed; `true` on a real mail server for `example.com`, `*.test` and similar |
+| `BusinessTimeZone` | Every service | The insurer's time zone (default `America/New_York`) |
+| `Reminders:Enabled`, `Interval` | Billing | The payment reminder job (default on, hourly) |
+| `Payments:Provider`, `Payments:Mock:LatencyMs` | Billing | Only `Mock` (the simulated processor) exists today |
+| `Services:<Name>` | Callers of another service | Base address of that service's internal API |
+| `ReverseProxy:Clusters:<name>:Destinations:d1:Address`, `Cors:AllowedOrigins` | Gateway | Where each service runs; which frontends may call the API |
+| `apiUrl` | `insurance-web/src/environments/` | The gateway's address (development and production builds) |
+
+## API overview
+
+Every endpoint is reached through the gateway at `/api`. Statuses follow REST conventions: `201` created, `202` enrollment accepted but still being set up, `204` updated, `400` validation or business rule, `401` not signed in, `403` wrong role or email not verified, `404` not found **or not yours**, `409` state conflict, `429` too many verification emails, `503` a service the request needs is down.
+
+| Area (service) | Endpoints | Access |
+|---|---|---|
+| **Auth** (Identity) | `POST /auth/register`, `POST /auth/login`, `POST /auth/verify-email` | Public |
+| | `GET /auth/me`, `POST /auth/resend-verification`, `POST /auth/change-email`, `POST /auth/change-password`, `POST /auth/choose-new-password` | Signed in |
+| **Plans** (Catalog) | `GET /policies`, `GET /policies/{id}` | Signed in |
+| | `POST /policies`, `PUT /policies/{id}`, `DELETE /policies/{id}` (soft delete) | Admin |
+| **Quotes** (Quotes) | `GET /quotes/questions/{policyId}`, `POST /quotes`, `GET /quotes/{id}` | Customer |
+| **Enrollments** (Enrollments) | `GET /enrollments/mine`, `POST /enrollments`, `PUT /enrollments/{id}/cancel` | Customer |
+| | `GET /enrollments/{id}` | Owner or admin |
+| **Payments** (Billing) | `GET /enrollments/{id}/payments` | Owner or admin |
+| | `POST /payments/{id}/pay` (a token or saved method, plus an idempotency key) | Customer |
+| | `GET /payments/transactions`, `GET /payments/transactions/{id}` | Own attempts, or everyone's for admins |
+| | `GET /payment-methods`, `DELETE /payment-methods/{id}` | Customer |
+| **Claims** (Claims) | `POST /claims`, `GET /claims/mine`, `POST /claims/{id}/send-to-reviewer`, `POST /claims/{id}/documents` | Customer |
+| | `GET /claims/{id}`, `GET /claims/{id}/documents`, `GET /claims/{id}/documents/{documentId}` | Owner or admin |
+| | `GET /claims?status=`, `PUT /claims/{id}/review` | Admin |
+| **Notifications** | `GET /notifications/preferences`, `PUT /notifications/preferences` | Customer |
+| **Customers** (gateway BFF) | `GET /admin/customers`, `GET /admin/customers/{id}`, `PUT /admin/customers/{id}`, `POST /admin/customers/{id}/reset-password`, `PUT /admin/customers/{id}/active` | Admin |
+
+Services also expose `/internal/*` endpoints to each other. The gateway never routes them.
 
 ## Project structure
 
 ```
-insurance-management-system/
+Insurance-Full-Stack-App-MSA/
 ├── Insurance.sln
 ├── src/
-│   ├── Gateway/Insurance.Gateway/   API gateway + BFF: YARP routes, JWT and active-account check, /api/admin/customers
-│   ├── BuildingBlocks/              Shared plumbing: hosting defaults, JWT, database migrator, HTTP clients, messaging, outbox
-│   └── Services/                    One folder per microservice
-│       ├── Identity/                Users, sign-in, JWT
-│       ├── Catalog/                 Plans
-│       ├── Quotes/                  Rating engine and quotes
-│       ├── Enrollments/             Policies and the enrollment saga
-│       ├── Billing/                 Premium schedules and payments
-│       ├── Claims/                  Claims and the review workflow
-│       └── Notifications/           Emails: event consumers, templates, SMTP, preferences
-│           ├── Insurance.Claims/            The service: Program.cs, Controllers, Services, Repositories,
-│           │                                Messaging (consumers), Database/ (its own SQL scripts)
-│           └── Insurance.Claims.Contracts/  What other services may use: events, internal API shapes, HTTP client
-├── tests/                           xUnit tests per service, plus Insurance.Architecture.Tests
+│   ├── Gateway/Insurance.Gateway/   API gateway + BFF
+│   ├── BuildingBlocks/              Shared plumbing: hosting defaults, JWT, database migrator,
+│   │                                HTTP clients, messaging, outbox, business time
+│   └── Services/                    One folder per microservice:
+│       └── <Service>/               Identity, Catalog, Quotes, Enrollments, Billing, Claims, Notifications
+│           ├── Insurance.<Service>/            Controllers, Services, Repositories, Messaging,
+│           │                                   Database/ (the service's own SQL scripts)
+│           └── Insurance.<Service>.Contracts/  What other services may use: events, internal
+│                                               API shapes, a typed HTTP client
+├── tests/                           xUnit tests per service, architecture tests, e2e/ (Python)
 ├── deploy/
-│   ├── docker-compose.yml           SQL Server, RabbitMQ, Mailpit, seven services, gateway
+│   ├── docker-compose.yml           The whole system locally
+│   ├── docker-compose.release.yml   Run the published images instead of building
 │   ├── Dockerfile                   One image recipe for every service
-│   └── seed/                        Dev-only demo data
-├── insurance-web/                   Angular client
-│   └── src/app/
-│       ├── core/                    Services, models, guards, interceptor, utilities
-│       ├── features/                auth (incl. verify-email), dashboard, policies, enrollments, payments,
-│       │                            claims, customers, profiles (incl. email settings)
-│       └── layout/                  App shell and navigation
+│   ├── azure/                       First-time Azure setup (script and guide)
+│   └── seed/                        Development-only demo data
+├── insurance-web/                   Angular app: core/ (services, models, guards, payments),
+│                                    features/ (one folder per area), layout/, shared/
+├── .github/workflows/               CI and CD
 └── docs/                            Architecture document and screenshots
 ```
 
-## Deploying to Azure
-
-The containers built by `deploy/Dockerfile` run on **Azure Container Apps** (or AKS), one container app per service plus the gateway:
-
-1. Create one **Azure SQL database per service** (any names: each service uses the one named in its `ConnectionStrings__Database`). The services create their tables on first start.
-2. Create an **Azure Service Bus** namespace (Standard tier: Basic has no topics) and give every service except the gateway its connection string as `ServiceBus__ConnectionString`. With it set, the services use Service Bus instead of RabbitMQ and create their topics and queues on first start.
-3. Push the images to Azure Container Registry. Give only the **gateway** external ingress; the seven services get internal ingress, so they are reachable only from inside the environment.
-4. Set each container's settings as in `deploy/docker-compose.yml`: its own `ConnectionStrings__Database`, the shared `Jwt__Key` (from Key Vault), `RabbitMq__*`, `Services__*` and, for the gateway, the `ReverseProxy__Clusters__*` addresses and `Cors__AllowedOrigins__0`. The Notifications service also needs an SMTP provider in `Email__*` (password from Key Vault) and `Email__AppBaseUrl` set to the deployed frontend; without a host it only logs emails.
-5. Point `apiUrl` in `insurance-web/src/environments/environment.ts` (the production build) at the gateway, run `ng build`, and host the output (for example Azure Static Web Apps). Angular's client-side routes need a fallback to `index.html`.
-
-The previous single-API deployment used one database. Its data is not migrated automatically; the services start with empty databases (plus the plan catalog).
-
-## Email notifications
-
-The **Notifications service** sends every email. It listens to events the other services already publish on RabbitMQ, so no service waits for an email and none of them knows it exists. If the mail server is down, MassTransit retries the event and nothing else is affected.
-
-```mermaid
-flowchart LR
-    ID["Identity"] -- "CustomerRegistered<br/>EmailVerificationRequested<br/>PasswordResetByAdmin<br/>AccountDeactivated, AccountReactivated" --> BUS[["RabbitMQ"]]
-    EN["Enrollments"] -- "EnrollmentActivated<br/>EnrollmentCancelled" --> BUS
-    BI["Billing<br/>(checkout + hourly reminder job)"] -- "PaymentReceived, PaymentDeclined<br/>PaymentReminderDue" --> BUS
-    CL["Claims"] -- "ClaimSubmitted<br/>ClaimStatusChanged" --> BUS
-    BUS --> NO["Notifications"]
-    NO -- "recipient, plan name (HTTP)" --> LOOK["Identity, Enrollments, Catalog"]
-    NO -- "SMTP (MailKit)" --> MAIL[["Mail server / Mailpit"]]
-```
-
-| Email | Sent when | Can be turned off |
-|---|---|---|
-| Verify your email / Confirm your new email address / Verify your new email address | Sign-up, resend, email change. When an administrator changed it at the customer's request, the email simply asks them to verify the new address | No |
-| Your email address was changed | To the **old** address after a change (when an administrator made it at the customer's request, it says so): "if this was you, ignore it; if not, contact support immediately" | No |
-| Your password was changed | After a password change, with the same warning | No |
-| Your account has been deactivated | An admin deactivated the account: no more sign-ins, and "contact support to have it reactivated". Sent once per deactivation, to the deactivated account | No |
-| Your account has been reactivated | An admin reactivated the account: they can sign in again. Sent once per reactivation | No |
-| Your password has been reset | An admin reset the password: the one-time password, "enter it the next time you sign in", and when its 30 minutes run out | No |
-| Policy active / Policy cancelled | The enrollment saga completes, the customer cancels | No |
-| Payment receipt | Every installment paid at checkout (receipt number, payment method, installment *n* of *N*, next payment, link to the in-app receipt) | No |
-| Payment didn't go through | A declined or failed checkout attempt (the reason, nothing charged, a "try again" link) | No |
-| Payment reminder | 3 days before, on the due date, when Overdue, +5 days, +10 days | **Yes**: at sign-up, and in the profile's "Email settings" |
-| Claim received / needs more information / approved / rejected (with the reason) / payment sent | Filed: the customer's copy of the claim, listing its documents with **copies attached** (sent at once when no files were added; with files, as soon as they've all uploaded, or 2 minutes after filing at the latest; up to 15 MB of attachments, larger files are listed with a link to My claims), "allow 5-7 business days for a decision"; approved ("payment goes out in about 2-3 business days"); rejected ("We apologize, but…", the reviewer's reason, and the support address to dispute the decision); needs more information (the reviewer's questions, and a suggestion to add images or documents and answer them; sent every time it's asked); paid ("your check arrives in about 5-10 business days"). Moving to "under review" sends nothing | No |
-
-How it stays reliable:
-
-- **Exactly once.** Each email has a key (e.g. `receipt:123`, `reminder:123:DueToday`). A repeated event finds the key already sent and does nothing; a failed send is recorded and retried.
-- **Waits out sending limits.** When the mail server says "later" (its hourly sending limit, a temporary error, no connection), the finished email is saved as **Waiting** and resent after 1, 5, 15 and 30 minutes, then hourly and longer: about 13 hours in all before it's given up. An address the server refuses for good is marked Failed at once.
-- **No lost events.** Billing and Claims publish through the same **transactional outbox** as Enrollments, so an event exists exactly when its change committed. The receipt is saved in the same database transaction that marks the installment paid, and the declined notice with the declined outcome; a replayed checkout request (same idempotency key) sends nothing new.
-- **Reminders once per stage.** Billing records each (installment, stage) under a primary key before publishing, so several Billing instances never double-send.
-- **Background calls.** Consumers and the reminder job have no signed-in user, so they call other services' internal APIs with a short-lived **service token** (role `Service`, no user id: useless on public endpoints and refused by the gateway).
-- **One name.** Every email (subjects, text, footer and sender name) uses `EmailBuilder.Brand`, currently **KVBInsurance**: change it there to rebrand them all.
-- **Safe content.** All customer-entered text (names, reviewer notes) is HTML-encoded in the templates, and every email also has a plain-text version.
-
 ## Known limitations
 
-- **Simulated payments.** The payment processor is a simulation (`MockPaymentGateway`): no money moves. Everything around it is built as for a real processor (tokens instead of card numbers, idempotency keys, a transaction log, refunds, saved methods), so connecting one is a new `IPaymentGateway` class plus its browser library. Not yet simulated: webhooks for asynchronous confirmations, 3-D Secure, disputes, and a reconciliation job for a charge that succeeds while the service crashes before recording it. Cancelling a policy removes its unpaid installments instead of voiding them.
-- **Illustrative pricing.** Rating multipliers are hard-coded in the strategy classes. They are not actuarial data and cannot be edited from the UI.
-- **One business time zone.** "Today" (due dates, overdue premiums, coverage and claim dates) is US Eastern for every customer, wherever they are (`BusinessTimeZone`). Screens show timestamps in the browser's own time zone.
-- **Existing sessions survive a password change.** Tokens already issued stay valid until they expire (60 minutes); there is no "sign out everywhere".
-- **Token storage.** The JWT is kept in `localStorage` with no refresh-token flow. Production systems often use httpOnly cookies.
-- **Per-request account check.** The gateway asks the Identity service, on every request, whether the account is still active with the same role. Deactivation is immediate, but it costs one internal HTTP call per request.
-- **Eventual consistency.** The premium schedule is created by Billing a moment after the enrollment is saved, and unpaid installments are removed a moment after a cancellation. The API hides both gaps (it waits for the saga, and treats a cancelled policy's unpaid installments as gone), but other services' views of each other can briefly lag.
-- **Shared JWT key.** All services validate tokens with one symmetric key. Asymmetric keys (Identity signs, everyone else only verifies) would be stronger.
-- **Synchronous queries between services.** Claims needs Enrollments, Billing, Catalog and Identity to be up to file a claim. Policy cards degrade gracefully without Billing; other screens return `503` if a service they need is down.
-- **No pagination, file attachments or push notifications** yet.
-- **Development emails go to Mailpit.** Sending to real inboxes needs an SMTP provider (see `Email:*` in the configuration reference); the live demo doesn't send email yet.
-- **Reminders are not sent late.** The reminder job runs hourly and sends a reminder on its day or the day after. If Billing is down for longer, that reminder is skipped rather than sent late (the next stage still goes out).
-- **Test scope.** Business logic is unit-tested, and CI runs the frontend tests and the end-to-end test against the full Docker Compose stack on every pull request. Frontend test coverage is still minimal.
-- **Single admin role** with no admin-management screen. Admins are promoted by SQL.
-
-## CI/CD
-
-- **CI** (`.github/workflows/ci.yml`) runs on every pull request and push to `main`: .NET build and unit tests,
-  Angular tests and build, then the end-to-end test against the whole system in Docker Compose.
-- **CD** (`.github/workflows/cd.yml`) runs after CI passes on `main`: it publishes an image of every service to
-  `ghcr.io/organizedanvrchy/insurance-<service>` (tags `latest` and `sha-<commit>`) and the Angular build as an artifact.
-  When the Azure settings exist (see `deploy/azure/README.md`, "Continuous deployment"), it also pushes the images to
-  the Azure container registry, switches every container app to the new version, and deploys the Angular app to the
-  Static Web App.
-- Run the published images instead of building: `docker login ghcr.io`, then
-  `docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.release.yml up -d`.
+- **Simulated payments.** No money moves. Everything around the processor is built as for a real one (tokens, idempotency keys, a transaction log, refunds, saved methods), so connecting Stripe or similar is a new `IPaymentGateway` class plus its browser library. Webhooks, 3-D Secure and disputes are not simulated.
+- **Illustrative pricing.** Rating multipliers are demo values in code, not actuarial data, and can't be edited from the UI.
+- **Sessions.** The JWT is kept in `localStorage` with no refresh token, and existing sessions survive a password change until they expire (60 minutes).
+- **One symmetric JWT key** is shared by every service; asymmetric signing would be stronger.
+- **Synchronous queries.** Some screens need several services to be up; they return `503` when one is down (policy cards degrade gracefully without Billing).
+- **No pagination** on the large admin lists, and no malware scanning of uploaded documents.
+- **Single admin role**, promoted by SQL; there is no admin-management screen.
 
 ## Roadmap
 
+- **Virtual assistant:** a Python/FastAPI chatbot service that answers questions about plans, the customer's own policies and claims (in development)
+- A real payment processor (Stripe) with webhooks
 - Admin-editable rating factors stored in the database
-- Pagination and sorting on the large lists
-- A "My quotes" screen and admin dashboard statistics
-- Claim attachments
-- Email delivery for the live demo through an SMTP provider, and SMS or push notifications
-- Refresh tokens or httpOnly cookie sessions
-- A GitHub Actions pipeline that builds the images and runs the end-to-end suite against Docker Compose
+- Pagination and sorting, an admin analytics dashboard and a "My quotes" screen
+- Refresh tokens or httpOnly cookie sessions, and asymmetric JWT signing
 - Distributed tracing (OpenTelemetry) across the gateway, services and the bus
-- Asymmetric JWT signing, and a refresh-token flow
+- SMS or push notifications
 
-## Documentation
+## Team
 
-- [Architecture document](docs/ARCHITECTURE.md): services, the enrollment saga, the outbox, data model, workflows, rating engine, security, **error-number registry**
-- Each service's Swagger UI at `/swagger` (Development environment)
+Built by a team of three as a full-stack microservices project:
 
-## Author
-
-Built by Vimal Ramnarain as a full-stack portfolio project. [GitHub](https://github.com/<your-username>) · [LinkedIn](https://www.linkedin.com/in/YOUR-PROFILE)
+- **Vimal Ramnarain** ([@organizedanvrchy](https://github.com/organizedanvrchy))
+- **Khalon** ([@KR-Techno](https://github.com/KR-Techno))
+- [@BigFigsCode](https://github.com/BigFigsCode)
