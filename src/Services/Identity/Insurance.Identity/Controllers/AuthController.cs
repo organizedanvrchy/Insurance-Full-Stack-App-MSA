@@ -38,6 +38,7 @@ public class AuthController : ControllerBase
     [HttpPost("login")]
     [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<AuthResponse>> Login(LoginRequest request)
     {
         AuthResponse? result;
@@ -48,6 +49,10 @@ public class AuthController : ControllerBase
         catch (Exceptions.OneTimePasswordExpiredException ex)
         {
             return Unauthorized(new ProblemDetails { Title = ex.Message, Status = 401 });
+        }
+        catch (Exceptions.AccountDeactivatedException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new ProblemDetails { Title = ex.Message, Status = 403 });
         }
         if (result is null)
             return Unauthorized(new ProblemDetails { Title = "Invalid email or password.", Status = 401 });

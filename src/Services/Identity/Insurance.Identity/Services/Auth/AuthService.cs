@@ -59,9 +59,13 @@ public class AuthService : IAuthService
     {
         var user = await _users.GetByEmailAsync(request.Email.Trim().ToLowerInvariant());
 
-        // Same null result for "no such user", "disabled" and "wrong password" so attackers can't probe which emails exist.
-        if (user is null || !user.IsActive || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+        // Same null result for "no such user" and "wrong password" so attackers can't probe which emails exist.
+        if (user is null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
             return null;
+
+        // The right password for a deactivated account: only its owner gets this far, so say what happened.
+        if (!user.IsActive)
+            throw new AccountDeactivatedException();
 
         // The right one-time password, but too late. Only someone who has it learns this, so it's safe to say.
         if (OneTimePasswordExpired(user))

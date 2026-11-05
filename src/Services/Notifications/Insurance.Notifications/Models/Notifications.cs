@@ -9,6 +9,7 @@ public enum NotificationKind
     PasswordChanged,
     PasswordResetByAdmin,
     AccountDeactivated,
+    AccountReactivated,
     PolicyActivated,
     PolicyCancelled,
     ClaimSubmitted,

@@ -96,6 +96,25 @@ public class AccountDeactivatedConsumer : IConsumer<AccountDeactivated>
             ToEmail: context.Message.Email), context.CancellationToken);
 }
 
+/// <summary>The account was reactivated: the customer can sign in again.</summary>
+public class AccountReactivatedConsumer : IConsumer<AccountReactivated>
+{
+    private readonly INotificationDispatcher _dispatcher;
+    private readonly EmailTemplates _templates;
+
+    public AccountReactivatedConsumer(INotificationDispatcher dispatcher, EmailTemplates templates)
+    {
+        _dispatcher = dispatcher;
+        _templates = templates;
+    }
+
+    public Task Consume(ConsumeContext<AccountReactivated> context) =>
+        _dispatcher.SendAsync(new Notification(
+            $"account-reactivated:{context.MessageId}", context.Message.UserId, NotificationKind.AccountReactivated,
+            _ => Task.FromResult(_templates.AccountReactivated(context.Message)),
+            ToEmail: context.Message.Email), context.CancellationToken);
+}
+
 public class PasswordResetByAdminConsumer : IConsumer<PasswordResetByAdmin>
 {
     private readonly INotificationDispatcher _dispatcher;

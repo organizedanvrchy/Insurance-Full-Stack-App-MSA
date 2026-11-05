@@ -367,4 +367,16 @@ public class TemplateTests
         Assert.Contains("KVBInsurance", reset.Html);
         Assert.DoesNotContain("RAINsurance", reset.Text + reset.Html);
     }
+
+    [Fact]
+    public void The_reactivation_email_says_they_can_sign_in_again()
+    {
+        var email = _templates.AccountReactivated(new AccountReactivated(1, "Jane Doe", "jane@example.com",
+            new DateTime(2026, 11, 6, 15, 30, 0, DateTimeKind.Utc)));
+
+        Assert.Equal("Your KVBInsurance account has been reactivated", email.Subject);
+        Assert.Contains("Good news: your KVBInsurance account was reactivated on November 6, 2026 at 10:30 AM EST. You can sign in again", email.Text);
+        Assert.Contains("Sign in: http://app.test/login", email.Text);
+        Assert.Contains("This is an automated message. Please don't reply", email.Text);
+    }
 }
