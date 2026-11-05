@@ -1,0 +1,939 @@
+diff --git a/insurance-web/public/favicon.ico b/insurance-web/public/favicon.ico
+index 57614f9c967596fad0a3989bec2b1deff33034f6..15c26c18e85ace4dafc9a6ae7df678a5a2340358 100644
+GIT binary patch
+literal 7275
+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
+bAkuzBd<|C*`aR~QT~f`#vasO)i{t+XA=Z%*
+
+literal 15086
+zcmd^G33O9Omi+`8$@{|M-I6TH3wzF-p5CV8o}7f~KxR60LK+ApEFB<$bcciv%@SmA
+zV{n>g85YMFFeU*Uvl=i4v)C*qgnb;$GQ=3XTe9{Y%c`mO<tM&Bl57ox;hfPqkLUVT
+zzv|vsua^I+V3=M^Z)U^@hH5cWC})^|W*9~+?o5X>%su)noNCCQ*@t1WXn|B(hQ7i~
+zrUK8|pUkD6#lNo!bt$6)jR!&C?`P5G(`e((P($RaLeq+o0Vd~f11;qB05kdbAOm?r
+zXv~GYr_sibQO9NGTCdT;+G(!{4Xs@4fPak8#L8PjgJwcs-Mm#nR_Z0s&u?nDX5^~@
+z+A6?}g0|=4e_LoE69pPFO`yCD@BCjgKpzMH0O4Xs{Ahc?K3<?BQv_-<UC>HC5;l=f
+zg>}alhBXX&);z$E-wai+9TTRtBX-bWYY@cl$@YN#gMd~tM_5lj6W%8ah4;uZ;jP@Q
+zVbuel1rPA?2@x9Y+u?e`l{Z4ngfG5q5BLH5QsEu4GVpt{KIp1?U)=3+KQ;%7ec8l*
+zdV=zZgN5>O3G(3L2fqj3;oBbZZw$Ij@`Juz@?+yy#OPw)>#wsTewVgTK9BGt5Ab<U
+ze$Tf(VBZpa!SSqoXlj(c_>Z&?K&B3GVF&yu?@(Xj3fR3n+ZP0%+wo)D9_xp>Z$`A4
+zfV>}NWjO#3lqumR0`gvnffd9Ka}JJMuHS&|55-*mCD#8e^anA<+sFZVaJe7{=p*oX
+zE_Uv?1>e~ga=seYzh{9P+n5<+7&9}<n&VL-3~Og{<S)TZE4h*#P`v^L#_Z0pidV7T
+z|Ib<xXZ+do&R-q5D%lf8SW`2_x^ho>&(kwqSaz;1aD|YM3HBiy<))4~QJSIryyqp|
+z8nGc(8<b%O&Bp|DVqS`wWF{E*^YfmUv_Uw3r7mDGG4`GR*q(1;f_^;UhdzKc_IbgK
+zICR2{aDBicoldxr=tGynCuo=7-^G>>3(_nEI4n)n7j(&d4idW1tVLjZ7QbNLXg;LB
+ziHsS5pXHEjGJZb59K<i<Ee&OtiLJ`)M3V_+b)4D=vLUwF0FoC|YuFKcTMx1?`byI+
+z(a~UU_3@v>cvS~wv;uZR-+4qEq<Dv4CQD>ow`;JCfB*+b^UL^3!?;-^F%yt=VjU|v
+z39SSqKcRu_NVvz!zJzL0CceJaS6%!(eMshPv_0U5G`~!a#I$qI5Ic(>IONej@aH=f
+z)($TAT#1I{iCS4f{D2+ApS=$3E7}5=+y(rA9mM#;Cky%b*Gi0KfFA`ofKTzu`AV-9
+znW|y@19rrZ*!N2AvDi<_ZeR3O2R{#dh1#3-d%$k${Rx42h+i&GZo5!C^dSL34*AKp
+z27mTd>k>?V&X;Nl%GZ(>0s`1UN~Hfyj>KPjtnc|)xM@{H_B9rNr~LuH`Gr5_am&Ep
+zTjZA8hljNj5H1Ipm-uD9rC}U{-vR!eay5&6x6FkfupdpT*84MVwGpdd(}ib)zZ3Ky
+z7C$p<Hy;Do`sgqRiyt`v4|vWm>njc82(W_y_F{PhYj?o!@3__UUvpX)v69aBSzYj3
+zdi}YQkKs^SyXyFG2LTRz9{(w}y~!`{EuAaUr6G1M{*%c+kP1olW9z23dSH!G4_HSK
+zzae-DF$OGR{ofP*!$a(r^5Go>I3SObVI6FLY)N@o<*gl0&kLo-OT{Tl*7nCz>Iq=?
+zcigIDHtj|H;6sR?or8Wd_a4996GI*CXGU}o;D9`^FM!AT1pBY~?|4h^61BY#_yIfO
+zKO?E0<gGmaIqZ?!V)C4TU)ygD!7%{#2Z4PA_Z^sH&W~^s5a8g62h300cYOT~^&L-X
+zs{`!igBqM?Qtqn#Sxdn7fL{~!Wf%O|2f%?lFT#H9GR1z8V(0SU_6798%0zpQ{r8}>
+zJ{Pc`9rVEI&$xxXu`<5E)&+m(7zX^v0rqofLs&bnQT(1baQkAr^kEsk)15vlzAZ-l
+z@OO9RF<+IiJ*O@HE256gCt!bF=NM*vh|WVWmjVawcNoksRTMvR03H{p@cjwKh(CL4
+z7_<J2TUZ-fC3|#k{4sefes&DdKHzfT?xA7by!j#_$N_mE2QCko-_cgxX^3a~Gj3bO
+zh1n|c9@3V$%VmFxUpsIkI|le1U~R+pH;ZhUcPM`3fIK|;(}}_D7Jv5E*hY66_Q+s+
+z#P99{^dX#!I{SgUhb|CXHv)d-aD(~|p96PnL;3FT_?zD%*}XuSbdV?|`-w_aMBMmk
+zAF%Tf?FSeO*bj6Zxc5<ek}UfWKXSmnKwrYX0H1<B@Mk{kjtk6%P4be4R_PHJevS{Z
+z<Jc1i`aOpA!o0%8j~uxDfIOfdKn_W?8TkH_>PB(dM=kO)!s4fW!1p0f93YN@?ZSG`
+z$B!JaAJCtW$B97}HNO9(x-t30&E}Mo1UPi@Av%uHj~?T|!4JLwV;KCx8xO#b9IlUW
+zI6+{a@Wj|<2Y=U;a@vXbxqZNngH8^}LleE_4*0&O7#3iGxfJ%Id>+sb;7{L=aIic8
+z|EW|{{S)J-wr@;3PmlxRXU8!e2gm_%s|ReH!reFcY8%$Hl4M5>;6^UDUUae?kOy#h
+zk~6Ee_@ZAn48Bab__^bN<q%(Zo;%n3!t5yz_MM01_UnKdcmN0F0eu1cG*9pK<QcVj
+zCE`a8h+jo<1HYcs(~~mrT~Z>mQ~+k=02<Q%#1pWs`lOPf^+T!%;71PNLrT%U!`!_M
+zmVa6r&e&kR0N(-pH(zWg=abv~iYWk=#*}l%06$1$+68m7_~<rIaoMMZn_myiS+E9N
+z9c(rN2Y<c|)w1&Vx}i7Q>jz)e0d9Z3>G?RGG!65?d1>9}7iG17?P*=GUV-#<F7Z__
+zAx;G$3`2-b<kGq@m#*mT(vU~R!7%BdZ44s<O~2s6xM_Tj<xo2rMgis6-y^Msw3T5{
+zH$%FaVNln1rq2?J<6DL~?bi1NWI4lB5UMjlQ@p)7TA>SbLRw)Hu{zx*azHxWk<Mz7
+zBi#mR)L~AA4$`Ovgxsg;4Aj&LY?|r{c;1U@deR6wgX#*<0*0}Hl|&5V1g)SvGZfBV
+z!27<!DFAItcd&MIraQRyfO}eED!-xPzNh8>GNTWl@HeWjA?39Ia|sCi{e;!^`1Oec
+zb>Z|b65OM*;eC=ZLSy?_fg$&^2xI>qSLA2G*$nA3GEnp3$N-)46`|36m*sc#4%C|h
+zBN<2U;7k>&G_wL4=Ve5z`ubVD&*Hxi)r@{4RCDw7U_D`lbC(9&pG5C*z#W>8>HU)h
+z!h3g?2UL&sS!oY5$3?VlA0Me9W5e~V;2jds*fz^updz#AJ%G8w2V}AEE?E^=MK%Xt
+z__Bx1cr7+DQmuHmzn*|hh%~eEc9@m05@clWfpEFcr+06%0&dZJH&@8^&@*$qR@}o3
+z@Tuuh2FsLz^zH+dN&T&?0G3I?MpmYJ;GP$J!Ez<EAfkuO_$)Rv+PDYrG)x<4BOp`h
+zJq(cPAzCs!NJ-`dHj*yfLn^oUtkjRp8S#4g%oyu5l=laiCeIjXeRo!v{vD9N4p5I@
+z98&uSkbeYJjm-`IZftS%xyQ~@eKol<O7B;BUv+ht$L|-IQxpmM{O;a+TKU@GrHk8w
+zzHpzF&yO{vu9KTAfa7Vk;jJEMR~wk2GzTtlp9L?7)Bfw`R5Qtl*RJvQ-qU)n30^u|
+zAMiOntNttv>jeM#YLJ!W$}MVNb0^HfOA>5Fe~UNn%Zk(PT@~9}1d<z7w`*I>t)1UQ
+zU*B5K?Dl#G74qmg|2>^>0WtLX#Jz{lO4NT`NYB*(L#D|5IpXr9v&7a@YsGp3vLR7L
+zHYGHZg7{ie6n~2p$6Yz>=^cEg7tEgk-1YRl%-s7^cbqFb(U7&Dp78+&ut5!Tn(hER
+z|Gp4Ed@CnOPeAe|N>U(dB;SZ?NU^AzoD^UAH_vamp6Ws}{|mSq`^+VP1<S4$8S@Se
+zdq@Do?xA+FBFXjv=6TY2GV_CcsfKO8P|`pSB>g~2B{%N-!mWz<`)G)<vVBk6H#4){
+z=Vu$l=6$8~d<`)`{hr#zXE}+Q>>V-<`9`L4?3dM%Qh6<@kba+m`JS{Ya@9Fq*m6$$
+zA1%Ogc~VRH33|S9l%CNb4zM%k^EIpqY}@h{w(aBcJ9c05oiZx#SK9t->5lSI`=&l~
+z+-Ic)a{FbBhXV$Xt!WRd`R#Jk-$+_Z52rS>?Vpt2IK<84|E-SBEoIw>cs=a{BlQ7O
+z-?{Fy_M&84&9|KM5wt~)*!~i~E=(6m8(uCO)I=)M?)&sRbzH$9Rovzd?ZEY}GqX+~
+zFbEbLz`BZ49=2Yh-|<`waK-_4!7`ro@zlC|r&I4fc4oyb+m=|c8)8%tZ-z5FwhzDt
+zL5kB@u53`d@%nHl0Sp)Dw`(QU&>vujEn?GPEXUW!Wi<+4e%BORl&BIH+SwRcbS}X@
+z01Pk|vA%OdJKAs17zSXtO55k!;%m9>1eW9LnyAX4uj7@${O6cfii`49qTNItzny5J
+zH&Gj`e}o}?xjQ}r?LrI%FjUd@xflT3|7LA|ka%Q3i}a8gVm<D-KiB{<ME*mIIJvPX
+z_?wI2B8`LWm6;zq*T#3f=@x16x)y0E8#iX#r#5i)1K5F{J<#z8^A*_d?BI4g#=_WG
+z(g+s@><`HIWoJGH=$EGClX^C0lysQJ>UO(q&;`T#8txuoQ_{l^kEV9CAdXuU1Ghg8
+zN_6hHFuy&1x<z(mSz}ryX-+vs&<1V{v0JO#2INfkHdp6~?c+=2jv8nmG2EbI;k%(W
+z3#`BVw)knNw=uO+>24q5-(Z7;!poYdt*`UTdrQOIQ!2O7_+AHV2hgXaEz7)>$LEdG
+z<8vE^T<d5Y^c`tRKI2e{51fJd7xVqqF#b=-4dqqC+dHlfHtM^3zdr491GL{FId%-@
+zzV6ERH2;j~e#`|~>w$|YwZHZDPM!SNOAWG$?J)MdmEk{U!!$M#fp7<eLLj6-0}zjd
+zxPG-%QE9&hq6;&EEVqg3K{9Qkvzd<c(@PxbOO`klOER2_UKxZ64OOs`?&y_4<-W)!
+zu!(5=B+RBDtM!Cvtpwr}u;~?3amOjT^)gzx^Y@#+ZK)%L=92#qnvVRTuhG4y#C&gh
+zOh`k&Q6cJ8uLT)xqv-#~qA>*Wo}jJ$Q(=8>R`Ats?e|VU?Zt7Cdh%AdnfyN3MBWw{
+z$OnREvPf7%z6`#2##_7id|H%Y{vV^vWXb?5d5?a_y&t3@p9t$ncHj-NBdo&X{wrfJ
+zamN)VMYROYh_SvjJ=Xd!Ga?PY_$;*L=SxFte!4O6%0HEh%iZ4=gvns7IWIyJHa|hT
+z2;1+e)`TvbNb3-0z&DD_)Jomsg-7p_Uh`wjGnU1urmv1_oVqRg#=C?e?!7DgtqojU
+zWoAB($&53;TsXu^@2;8M`#z{=rPy?JqgYM0CDf4v@z=ZD|ItJ&8%_7A#K?S{wjxgd
+z?xA6JdJojrWpB7fr2p_MSsU4(R7=XGS0+Eg#xR=j>`H@R9<ea9ez7LeH1EXlc5;O7
+ztyW0w<FMRxhWuo2a;v&b{)6_e><EpxxqhnnP3hXmmGoW-y_ed1?&u9-%Np39lvDXS
+zwf#1h1ARzZx2-}}-Q{~*8MpP6hORNjkfroq+=9v5#P(g+JNFl`x5yD$U&cDhl4|7V
+zQZBh;Xw6B5KUF5~r1wPVo`qsCge>{XjwBm<mI-HNm*^V3KiPH_-{<RAX>qAiOxOL`
+zt?XK-iTEOWV}f<c$uy@9)|c<;`&Ve3zDTSb!GBjJDNSifJ=LyEDrVO#x^Jk`^;`W4
+zmdh78CX~tTHPw_uMY8rRK1basFF)9ndd}G@+ILMGyZH@#&esP-no*U>>Pz3H-s*>W
+z4~8C&Xq25UQ^xH6H9kY_RM1$ch+%YLF72AA7^b{~VNTG}Tj#qZltz5Q=qxR`&oIlW
+Nr__JTFzvMr^FKp4S3v*(
+
+diff --git a/insurance-web/public/favicon.svg b/insurance-web/public/favicon.svg
+index 52daa78..feedd3b 100644
+--- a/insurance-web/public/favicon.svg
++++ b/insurance-web/public/favicon.svg
+@@ -1,16 +1,16 @@
+ <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+   <style>
+-    .m { fill: #01497c; }
+-    .h { fill: none; stroke: #01497c; stroke-width: 2.4; stroke-linecap: round; }
+-    .d { fill: #2c7da0; }
++    .m { fill: #12544f; }
++    .h { fill: none; stroke: #12544f; stroke-width: 2.4; stroke-linecap: round; }
++    .a { fill: #c0672a; }
++    .b { fill: #d98c3a; }
+     @media (prefers-color-scheme: dark) {
+-      .m { fill: #89c2d9; }
+-      .h { stroke: #89c2d9; }
+-      .d { fill: #61a5c2; }
++      .m { fill: #8bbb92; }
++      .h { stroke: #8bbb92; }
+     }
+   </style>
+   <path class="m" d="M4 16C4 9.37 9.37 4 16 4s12 5.37 12 12H4z"/>
+   <path class="h" d="M16 16v8.5a3 3 0 0 1-6 0"/>
+-  <path class="d" d="M22 19.5c1.3 1.8 2 3 2 4a2 2 0 0 1-4 0c0-1 .7-2.2 2-4z"/>
+-  <path class="d" d="M27 22c.9 1.2 1.4 2 1.4 2.7a1.4 1.4 0 0 1-2.8 0c0-.7.5-1.5 1.4-2.7z"/>
++  <path class="a" d="M19.5 27.5c0-4.4 2.9-7.3 7.3-7.5-.2 4.4-3 7.3-7.3 7.5z"/>
++  <path class="b" d="M25.6 31c.3-2.6 2.2-4.2 4.7-4.1-.3 2.5-2.2 4.1-4.7 4.1z"/>
+ </svg>
+diff --git a/insurance-web/src/app/core/brand.ts b/insurance-web/src/app/core/brand.ts
+index 7ad0606..9dfd6b0 100644
+--- a/insurance-web/src/app/core/brand.ts
++++ b/insurance-web/src/app/core/brand.ts
+@@ -1,5 +1,5 @@
+ export const BRAND = {
+-  name: 'RAINsurance',
++  name: 'KVB Insurance',
+   slogan: 'We’ve got you covered, even on rainy days.',
+   shortSlogan: 'Rain or shine, you’re covered.',
+ } as const;
+diff --git a/insurance-web/src/app/layout/shell-component.css b/insurance-web/src/app/layout/shell-component.css
+index fdd046d..6897a3f 100644
+--- a/insurance-web/src/app/layout/shell-component.css
++++ b/insurance-web/src/app/layout/shell-component.css
+@@ -1,4 +1,4 @@
+-/* App shell: navigation bar (centered links, account menu, hamburger, rain), page area and footer. */
++/* App shell: navigation bar (centered links, account menu, hamburger, falling leaves), page area and footer. */
+ 
+ /* Keep the footer at the bottom even on short pages */
+ :host {
+@@ -27,7 +27,7 @@
+   border-bottom: 1px solid var(--border);
+ }
+ 
+-/* Everything in the bar sits above the rain */
++/* Everything in the bar sits above the leaves */
+ .brand,
+ .links,
+ .actions {
+@@ -147,37 +147,26 @@
+   color: var(--text-muted);
+ }
+ 
+-/* ---- Rain in the nav bar ---- */
+-.nav-rain {
++/* ---- Falling leaves in the nav bar ---- */
++.nav-leaves {
+   position: absolute;
+   inset: 0;
+   z-index: 0;
+   overflow: hidden;
+-  /* drops are clipped to the bar */
++  /* leaves are clipped to the bar */
+   pointer-events: none;
+   /* never blocks clicks */
+ }
+ 
+-.drop {
+-  position: absolute;
+-  top: -30px;
+-  width: 1.5px;
+-  border-radius: 2px;
+-  background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--accent) 55%, transparent));
+-  animation: nav-fall linear infinite;
+-}
+-
+-@keyframes nav-fall {
+-  to {
+-    transform: translateY(150px);
+-  }
++/* The shape and movement are in shared/styles/falling-leaves.css */
++.leaf {
++  top: -20px;
++  opacity: var(--leaf-opacity-nav);
++  --fall: 130px;
++  --sway: 12px;
+ }
+ 
+ @media (prefers-reduced-motion: reduce) {
+-  .nav-rain {
+-    display: none;
+-  }
+-
+   .dropdown {
+     animation: none;
+   }
+diff --git a/insurance-web/src/app/layout/shell.component.ts b/insurance-web/src/app/layout/shell.component.ts
+index 7568446..0575243 100644
+--- a/insurance-web/src/app/layout/shell.component.ts
++++ b/insurance-web/src/app/layout/shell.component.ts
+@@ -14,7 +14,7 @@ import { VerifyEmailBannerComponent } from '../shared/components/verify-email-ba
+   selector: 'app-shell',
+   imports: [RouterOutlet, RouterLink, RouterLinkActive, ThemeToggleComponent, BrandLogoComponent, VerifyEmailBannerComponent],
+   templateUrl: "shell.html",
+-  styleUrl: "./shell-component.css",
++  styleUrls: ["./shell-component.css", "../shared/styles/falling-leaves.css"],
+ })
+ export class ShellComponent {
+   auth = inject(AuthService);
+@@ -33,13 +33,15 @@ export class ShellComponent {
+   private userMenu = viewChild<ElementRef<HTMLElement>>('userMenu');
+   private userButton = viewChild<ElementRef<HTMLButtonElement>>('userButton');
+ 
+-  // Fixed (not random) values so the rain looks the same on every visit.
+-  // Negative delays mean the rain is already falling when the page loads.
+-  readonly drops = Array.from({ length: 44 }, (_, i) => ({
+-    left: (i * 23.7) % 100,
+-    delay: -(((i * 37) % 19) / 10),
+-    duration: 1.2 + ((i * 53) % 10) / 10,
+-    length: 10 + ((i * 29) % 12),
++  // Fixed (not random) values so the leaves look the same on every visit.
++  // Negative delays mean the leaves are already falling when the page loads.
++  readonly leaves = Array.from({ length: 18 }, (_, i) => ({
++    left: (i * 37.3) % 100,
++    delay: -(((i * 53) % 70) / 10),
++    duration: 6 + ((i * 29) % 40) / 10,     // 6 to 10 seconds: leaves drift, rain falls
++    size: 8 + ((i * 7) % 6),                // 8 to 13 px
++    color: `var(--leaf-${(i % 4) + 1})`,
++    alt: i % 2 === 1,                       // every other leaf sways the opposite way
+   }));
+ 
+   constructor() {
+diff --git a/insurance-web/src/app/layout/shell.html b/insurance-web/src/app/layout/shell.html
+index d2a7801..21bb6b2 100644
+--- a/insurance-web/src/app/layout/shell.html
++++ b/insurance-web/src/app/layout/shell.html
+@@ -1,9 +1,9 @@
+ <header class="nav" #header>
+-  <!-- Decorative rain behind the nav content -->
+-  <div class="nav-rain" aria-hidden="true">
+-    @for (d of drops; track $index) {
+-    <span class="drop" [style.left.%]="d.left" [style.height.px]="d.length" [style.animation-delay.s]="d.delay"
+-      [style.animation-duration.s]="d.duration"></span>
++  <!-- Decorative falling leaves behind the nav content -->
++  <div class="nav-leaves" aria-hidden="true">
++    @for (l of leaves; track $index) {
++    <span class="leaf" [class.alt]="l.alt" [style.left.%]="l.left" [style.width.px]="l.size" [style.height.px]="l.size"
++      [style.--leaf-color]="l.color" [style.animation-delay.s]="l.delay" [style.animation-duration.s]="l.duration"></span>
+     }
+   </div>
+ 
+diff --git a/insurance-web/src/app/shared/components/auth-brand-panel.component.css b/insurance-web/src/app/shared/components/auth-brand-panel.component.css
+index d24ce7e..5f28064 100644
+--- a/insurance-web/src/app/shared/components/auth-brand-panel.component.css
++++ b/insurance-web/src/app/shared/components/auth-brand-panel.component.css
+@@ -64,31 +64,17 @@
+   font-weight: 700;
+ }
+ 
+-/* Falling rain */
+-.rain {
++/* Falling leaves: the shape and movement are in shared/styles/falling-leaves.css */
++.leaves {
+   position: absolute;
+   inset: 0;
++  overflow: hidden;
+   pointer-events: none;
+ }
+ 
+-.drop {
+-  position: absolute;
+-  top: -12%;
+-  width: 2px;
+-  height: 46px;
+-  border-radius: 2px;
+-  background: linear-gradient(to bottom, transparent, var(--hero-drop));
+-  animation: fall linear infinite;
+-}
+-
+-@keyframes fall {
+-  to {
+-    transform: translateY(125vh);
+-  }
+-}
+-
+-@media (prefers-reduced-motion: reduce) {
+-  .rain {
+-    display: none;
+-  }
++.leaf {
++  top: -5%;
++  opacity: var(--leaf-opacity-hero);
++  --fall: 120vh;
++  --sway: 28px;
+ }
+diff --git a/insurance-web/src/app/shared/components/auth-brand-panel.component.html b/insurance-web/src/app/shared/components/auth-brand-panel.component.html
+index 4421ce7..002615c 100644
+--- a/insurance-web/src/app/shared/components/auth-brand-panel.component.html
++++ b/insurance-web/src/app/shared/components/auth-brand-panel.component.html
+@@ -1,8 +1,8 @@
+ <aside class="panel">
+-  <div class="rain" aria-hidden="true">
+-    @for (d of drops; track d.left) {
+-    <span class="drop" [style.left.%]="d.left" [style.animation-delay.s]="d.delay"
+-      [style.animation-duration.s]="d.duration"></span>
++  <div class="leaves" aria-hidden="true">
++    @for (l of leaves; track l.left) {
++    <span class="leaf" [class.alt]="l.alt" [style.left.%]="l.left" [style.width.px]="l.size" [style.height.px]="l.size"
++      [style.--leaf-color]="l.color" [style.animation-delay.s]="l.delay" [style.animation-duration.s]="l.duration"></span>
+     }
+   </div>
+ 
+diff --git a/insurance-web/src/app/shared/components/auth-brand-panel.component.ts b/insurance-web/src/app/shared/components/auth-brand-panel.component.ts
+index f31e7b1..4cd5f92 100644
+--- a/insurance-web/src/app/shared/components/auth-brand-panel.component.ts
++++ b/insurance-web/src/app/shared/components/auth-brand-panel.component.ts
+@@ -7,7 +7,7 @@ import { BrandLogoComponent } from './brand-logo.component';
+   selector: 'app-auth-brand-panel',
+   imports: [BrandLogoComponent],
+   templateUrl: "./auth-brand-panel.component.html",
+-  styleUrl: './auth-brand-panel.component.css',
++  styleUrls: ['./auth-brand-panel.component.css', '../styles/falling-leaves.css'],
+ })
+ export class AuthBrandPanelComponent {
+   readonly slogan = BRAND.slogan;
+@@ -18,21 +18,20 @@ export class AuthBrandPanelComponent {
+     'File and track claims online, with clear updates at every step',
+   ];
+ 
+-  // Fixed values (not random) so the rain looks the same on every visit.
+-  // Negative delays mean the rain is already falling when the page loads.
+-  readonly drops = [
+-    { left: 5, delay: -0.4, duration: 2.8 },
+-    { left: 12, delay: -2.1, duration: 3.4 },
+-    { left: 19, delay: -1.2, duration: 2.5 },
+-    { left: 27, delay: -2.9, duration: 3.1 },
+-    { left: 34, delay: -0.8, duration: 2.7 },
+-    { left: 42, delay: -1.9, duration: 3.6 },
+-    { left: 49, delay: -0.1, duration: 2.4 },
+-    { left: 57, delay: -2.5, duration: 3.2 },
+-    { left: 64, delay: -1.5, duration: 2.9 },
+-    { left: 72, delay: -0.6, duration: 3.5 },
+-    { left: 79, delay: -2.3, duration: 2.6 },
+-    { left: 86, delay: -1.0, duration: 3.3 },
+-    { left: 93, delay: -1.7, duration: 2.8 },
+-  ];
++  // Fixed values (not random) so the leaves look the same on every visit.
++  // Negative delays mean the leaves are already falling when the page loads.
++  readonly leaves = [
++    { left: 5, delay: -1.0, duration: 9.0, size: 16 },
++    { left: 13, delay: -6.2, duration: 11.5, size: 12 },
++    { left: 21, delay: -3.4, duration: 8.5, size: 18 },
++    { left: 30, delay: -8.1, duration: 10.5, size: 14 },
++    { left: 38, delay: -2.2, duration: 9.5, size: 20 },
++    { left: 47, delay: -5.6, duration: 12.0, size: 13 },
++    { left: 55, delay: -0.4, duration: 8.0, size: 17 },
++    { left: 63, delay: -7.3, duration: 10.0, size: 15 },
++    { left: 71, delay: -4.1, duration: 11.0, size: 19 },
++    { left: 79, delay: -1.8, duration: 9.0, size: 12 },
++    { left: 87, delay: -6.9, duration: 10.5, size: 16 },
++    { left: 94, delay: -3.0, duration: 8.5, size: 14 },
++  ].map((l, i) => ({ ...l, color: `var(--leaf-${(i % 4) + 1})`, alt: i % 2 === 1 }));
+ }
+diff --git a/insurance-web/src/app/shared/components/brand-logo.component.ts b/insurance-web/src/app/shared/components/brand-logo.component.ts
+index 1813630..b49fbdf 100644
+--- a/insurance-web/src/app/shared/components/brand-logo.component.ts
++++ b/insurance-web/src/app/shared/components/brand-logo.component.ts
+@@ -1,6 +1,6 @@
+ import { Component, input } from '@angular/core';
+ 
+-// Umbrella mark + "RAINsurance" wordmark. Colors come from CSS variables, so it works in both themes.
++// Umbrella mark with two autumn leaves + "KVB Insurance" wordmark. Colors come from CSS variables, so it works in both themes.
+ // A parent can override --logo-mark, --logo-text and --logo-accent (the sign-in panel does).
+ @Component({
+   selector: 'app-brand-logo',
+@@ -9,10 +9,10 @@ import { Component, input } from '@angular/core';
+       <svg class="mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+         <path class="canopy" d="M4 16C4 9.37 9.37 4 16 4s12 5.37 12 12H4z" />
+         <path class="handle" d="M16 16v8.5a3 3 0 0 1-6 0" />
+-        <path class="drop" d="M22 19.5c1.3 1.8 2 3 2 4a2 2 0 0 1-4 0c0-1 .7-2.2 2-4z" />
+-        <path class="drop" d="M27 22c.9 1.2 1.4 2 1.4 2.7a1.4 1.4 0 0 1-2.8 0c0-.7.5-1.5 1.4-2.7z" />
++        <path class="leaf leaf-a" d="M19.5 27.5c0-4.4 2.9-7.3 7.3-7.5-.2 4.4-3 7.3-7.3 7.5z" />
++        <path class="leaf leaf-b" d="M25.6 31c.3-2.6 2.2-4.2 4.7-4.1-.3 2.5-2.2 4.1-4.7 4.1z" />
+       </svg>
+-      <span class="word"><span class="rain">RAIN</span>surance</span>
++      <span class="word"><span class="accent">KVB</span> Insurance</span>
+     </span>
+   `,
+   styles: [
+@@ -46,13 +46,16 @@ import { Component, input } from '@angular/core';
+         stroke-width: 2.4;
+         stroke-linecap: round;
+       }
+-      .drop {
+-        fill: var(--logo-accent, var(--accent));
++      .leaf-a {
++        fill: var(--leaf-1);
++      }
++      .leaf-b {
++        fill: var(--leaf-2);
+       }
+       .word {
+         color: var(--logo-text, var(--text));
+       }
+-      .rain {
++      .accent {
+         color: var(--logo-accent, var(--accent));
+       }
+     `,
+diff --git a/insurance-web/src/app/shared/styles/falling-leaves.css b/insurance-web/src/app/shared/styles/falling-leaves.css
+new file mode 100644
+index 0000000..8d760ae
+--- /dev/null
++++ b/insurance-web/src/app/shared/styles/falling-leaves.css
+@@ -0,0 +1,43 @@
++/*
++Falling autumn leaves: the nav bar (layout/shell) and the sign-in panel (shared/components/auth-brand-panel).
++Each place sets its container, where the leaves start (top), how far they fall (--fall), how far they
++sway (--sway) and how strong they are (opacity). Each leaf gets its size, color and timing from the template.
++*/
++.leaf {
++  position: absolute;
++  /* Two rounded corners make the leaf shape; the thin diagonal line is its middle vein. */
++  border-radius: 0 100% 0 100%;
++  background:
++    linear-gradient(135deg, transparent 46%, rgb(0 0 0 / 0.22) 50%, transparent 54%),
++    var(--leaf-color);
++  animation: leaf-fall ease-in-out infinite;
++}
++
++/* Every other leaf sways and turns the opposite way */
++.leaf.alt {
++  animation-name: leaf-fall-alt;
++}
++
++/* Drift down while swaying side to side and turning */
++@keyframes leaf-fall {
++  0%   { transform: translate(0, 0) rotate(0deg); }
++  25%  { transform: translate(var(--sway), calc(var(--fall) * 0.25)) rotate(70deg); }
++  50%  { transform: translate(calc(var(--sway) * -0.5), calc(var(--fall) * 0.5)) rotate(150deg); }
++  75%  { transform: translate(calc(var(--sway) * 0.8), calc(var(--fall) * 0.75)) rotate(225deg); }
++  100% { transform: translate(0, var(--fall)) rotate(310deg); }
++}
++
++@keyframes leaf-fall-alt {
++  0%   { transform: translate(0, 0) rotate(0deg); }
++  25%  { transform: translate(calc(var(--sway) * -1), calc(var(--fall) * 0.25)) rotate(-60deg); }
++  50%  { transform: translate(calc(var(--sway) * 0.5), calc(var(--fall) * 0.5)) rotate(-140deg); }
++  75%  { transform: translate(calc(var(--sway) * -0.8), calc(var(--fall) * 0.75)) rotate(-215deg); }
++  100% { transform: translate(0, var(--fall)) rotate(-290deg); }
++}
++
++/* Motion is decoration only: people who ask their system for less motion don't get it */
++@media (prefers-reduced-motion: reduce) {
++  .leaf {
++    display: none;
++  }
++}
+diff --git a/insurance-web/src/index.html b/insurance-web/src/index.html
+index e99b607..6834323 100644
+--- a/insurance-web/src/index.html
++++ b/insurance-web/src/index.html
+@@ -13,7 +13,7 @@
+     })();
+   </script>
+   <meta charset="utf-8">
+-  <title>RAINsurance | Rain or shine, you’re covered</title>
++  <title>KVB Insurance | Rain or shine, you’re covered</title>
+   <link rel="icon" type="image/svg+xml" href="favicon.svg">
+   <base href="/">
+   <meta name="viewport" content="width=device-width, initial-scale=1">
+diff --git a/insurance-web/src/styles.css b/insurance-web/src/styles.css
+index f7143d5..e4ed0df 100644
+--- a/insurance-web/src/styles.css
++++ b/insurance-web/src/styles.css
+@@ -21,40 +21,34 @@ Global theme and shared UI kit
+ /*
+ --------------------------------------------------------------------------
+ 1. Palettes
+-Both palettes reuse some names (deep-space-blue, yale-blue)
+-with different values, so light swatches are prefixed lt-
+-and dark swatches dk-. Currently, Not every swatch is used.
++Light swatches are prefixed lt- and dark swatches dk-. The four given
++colors of each theme come first; the rest are derived from them, where a
++theme needs a color its four don't provide (readable text, raised cards).
++Both themes share the autumn leaf colors.
+ --------------------------------------------------------------------------
+ */
+ :root {
+   /* Light palette */
+-  --lt-deep-space-blue: #012a4a;
+-  --lt-yale-blue: #013a63;
+-  --lt-yale-blue-2: #01497c;
+-  --lt-yale-blue-3: #014f86;
+-  --lt-rich-cerulean: #2a6f97;
+-  --lt-cerulean: #2c7da0;
+-  --lt-air-force-blue: #468faf;
+-  --lt-steel-blue: #61a5c2;
+-  --lt-sky-blue-light: #89c2d9;
+-  --lt-light-blue: #a9d6e5;
++  --lt-sage: #8b9a6e;
++  --lt-cream: #f7f2eb;
++  --lt-sand: #eae2d6;
++  --lt-mist: #eeeeee;
++  --lt-paper: #fcfaf6;          /* derived: cards, a touch lighter than the cream page */
++  --lt-olive: #5e6b45;          /* derived: sage darkened enough to read as text on cream */
+ 
+   /* Dark palette */
+-  --dk-ink-black: #000e14;
+-  --dk-ink-black-2: #00111a;
+-  --dk-ink-black-3: #00141f;
+-  --dk-ink-black-4: #001824;
+-  --dk-ink-black-5: #001b29;
+-  --dk-deep-space-blue: #002233;
+-  --dk-deep-space-blue-2: #00293d;
+-  --dk-deep-space-blue-3: #003047;
+-  --dk-deep-space-blue-4: #003652;
+-  --dk-yale-blue: #003d5c;
+-  /*
+-  The dark palette has no light text color,
+-  so this is derived (a pale blue-white).
+-  */
+-  --dk-text: #e8f3f8;
++  --dk-ink: #092328;
++  --dk-pine: #12544f;
++  --dk-green: #2a835f;
++  --dk-mint: #8bbb92;
++  --dk-ink-raised: #0f3337;     /* derived: cards, between ink and pine */
++  --dk-ink-deep: #061a1e;       /* derived: form fields, a step darker than the page */
++
++  /* Autumn leaves (both themes): the falling leaves and the logo */
++  --leaf-1: #c0672a;            /* burnt orange */
++  --leaf-2: #d98c3a;            /* amber */
++  --leaf-3: #8b5a2b;            /* brown */
++  --leaf-4: #a4471f;            /* rust */
+ }
+ 
+ /*
+@@ -72,9 +66,9 @@ and dark swatches dk-. Currently, Not every swatch is used.
+ 
+ /*
+ --------------------------------------------------------------------------
+-3. Light theme (default): white background,
+-   dark blue text and borders,
+-   light blues for highlights and accents
++3. Light theme (default): cream page, sand and sage for surfaces,
++   borders and highlights. The four light colors are all light, so
++   text and buttons use the dark palette's deep greens.
+ --------------------------------------------------------------------------
+ */
+ :root {
+@@ -82,43 +76,43 @@ and dark swatches dk-. Currently, Not every swatch is used.
+   accent-color: var(--primary); /* checkboxes and progress bars */
+ 
+   /* surfaces */
+-  --bg: #ffffff;
+-  --surface: #ffffff;
+-  --surface-alt: color-mix(in srgb, var(--lt-light-blue) 20%, transparent);   /* table headers */
+-  --input-bg: #ffffff;
+-  --hover-bg: color-mix(in srgb, var(--lt-light-blue) 15%, transparent);
++  --bg: var(--lt-cream);
++  --surface: var(--lt-paper);
++  --surface-alt: var(--lt-sand);                                               /* table headers */
++  --input-bg: var(--lt-paper);
++  --hover-bg: color-mix(in srgb, var(--lt-sand) 70%, transparent);
+ 
+   /* text */
+-  --text: var(--lt-deep-space-blue);
+-  --text-soft: var(--lt-yale-blue);
+-  --text-muted: var(--lt-rich-cerulean);
+-  --text-disabled: var(--lt-air-force-blue);
+-  --link: var(--lt-yale-blue-3);
++  --text: var(--dk-ink);
++  --text-soft: var(--dk-pine);
++  --text-muted: var(--lt-olive);
++  --text-disabled: var(--lt-sage);
++  --link: var(--dk-pine);
+ 
+   /*
+   borders: light for outlines,
+   darker for interactive controls
+   */
+-  --border: var(--lt-light-blue);
+-  --border-subtle: color-mix(in srgb, var(--lt-light-blue) 40%, transparent);
+-  --border-strong: var(--lt-air-force-blue);
++  --border: color-mix(in srgb, var(--lt-sage) 35%, var(--lt-sand));
++  --border-subtle: var(--lt-mist);
++  --border-strong: var(--lt-sage);
+ 
+   /* brand */
+-  --primary: var(--lt-yale-blue-2);
+-  --primary-hover: var(--lt-yale-blue);
+-  --primary-contrast: #ffffff;
+-  --primary-tint: color-mix(in srgb, var(--lt-light-blue) 25%, transparent);   /* selected row */
+-  --accent: var(--lt-cerulean);                                                /* focus ring, active nav */
++  --primary: var(--dk-pine);
++  --primary-hover: var(--dk-ink);
++  --primary-contrast: var(--lt-cream);
++  --primary-tint: color-mix(in srgb, var(--lt-sage) 22%, transparent);        /* selected row */
++  --accent: var(--dk-green);                                                   /* focus ring, active nav */
+ 
+   /*
+   status colors (background and text pairs)
+   */
+   --success-bg: #e1f3e8;
+   --success-text: #1b6b3a;
+-  --neutral-bg: color-mix(in srgb, var(--lt-light-blue) 25%, transparent);
+-  --neutral-text: var(--lt-rich-cerulean);
+-  --info-bg: var(--lt-light-blue);
+-  --info-text: var(--lt-deep-space-blue);
++  --neutral-bg: color-mix(in srgb, var(--lt-sage) 18%, transparent);
++  --neutral-text: var(--lt-olive);
++  --info-bg: var(--lt-sand);
++  --info-text: var(--dk-ink);
+   --warning-bg: #fff3d6;
+   --warning-text: #8a5a00;
+   --warning-text-strong: #6b4600;
+@@ -132,21 +126,24 @@ and dark swatches dk-. Currently, Not every swatch is used.
+   hero and brand surfaces
+   (dashboard banner, sign-in panel)
+   */
+-  --hero-from: var(--lt-deep-space-blue);
+-  --hero-to: var(--lt-yale-blue-3);
+-  --hero-text: #ffffff;
+-  --hero-text-soft: var(--lt-light-blue);
+-  --hero-drop: color-mix(in srgb, var(--lt-light-blue) 45%, transparent);
++  --hero-from: var(--dk-pine);
++  --hero-to: color-mix(in srgb, var(--dk-pine) 55%, var(--lt-sage));
++  --hero-text: var(--lt-cream);
++  --hero-text-soft: var(--lt-sand);
++  --hero-drop: color-mix(in srgb, var(--dk-mint) 45%, transparent);           /* the soft glow on the dashboard banner */
++
++  /* the falling leaves: softer on the nav bar than on the sign-in panel */
++  --leaf-opacity-nav: 0.6;
++  --leaf-opacity-hero: 0.9;
+ 
+   /* elevation */
+-  --shadow-card: 0 4px 24px color-mix(in srgb, var(--lt-deep-space-blue) 12%, transparent);
++  --shadow-card: 0 4px 24px color-mix(in srgb, var(--dk-ink) 12%, transparent);
+ }
+ 
+ /*
+ --------------------------------------------------------------------------
+-4. Dark theme: darkest swatch as the page,
+-   lighter swatches for surfaces,
+-   light blues for text and accents
++4. Dark theme: ink as the page, pine and green for surfaces and
++   borders, mint for accents. Text uses the light palette's cream.
+ --------------------------------------------------------------------------
+ */
+ :root[data-theme='dark'] {
+@@ -156,38 +153,38 @@ and dark swatches dk-. Currently, Not every swatch is used.
+   surfaces: stepped from darkest (page)
+   to lighter (cards, headers, highlights)
+   */
+-  --bg: var(--dk-ink-black);
+-  --surface: var(--dk-ink-black-4);
+-  --surface-alt: var(--dk-deep-space-blue);
+-  --input-bg: var(--dk-ink-black-2);
+-  --hover-bg: var(--dk-deep-space-blue-3);
++  --bg: var(--dk-ink);
++  --surface: var(--dk-ink-raised);
++  --surface-alt: color-mix(in srgb, var(--dk-pine) 55%, var(--dk-ink));
++  --input-bg: var(--dk-ink-deep);
++  --hover-bg: color-mix(in srgb, var(--dk-pine) 70%, var(--dk-ink));
+ 
+   /* text */
+-  --text: var(--dk-text);
+-  --text-soft: var(--lt-light-blue);
+-  --text-muted: var(--lt-steel-blue);
+-  --text-disabled: var(--lt-air-force-blue);
+-  --link: var(--lt-sky-blue-light);
++  --text: var(--lt-cream);
++  --text-soft: var(--lt-sand);
++  --text-muted: var(--dk-mint);
++  --text-disabled: color-mix(in srgb, var(--dk-mint) 55%, var(--dk-ink));
++  --link: var(--dk-mint);
+ 
+   /* borders */
+-  --border: var(--dk-deep-space-blue-4);
+-  --border-subtle: var(--dk-deep-space-blue-2);
+-  --border-strong: var(--lt-rich-cerulean);
++  --border: var(--dk-pine);
++  --border-subtle: color-mix(in srgb, var(--dk-pine) 50%, var(--dk-ink));
++  --border-strong: var(--dk-green);
+ 
+   /* brand */
+-  --primary: var(--lt-steel-blue);
+-  --primary-hover: var(--lt-sky-blue-light);
+-  --primary-contrast: var(--dk-ink-black);
+-  --primary-tint: var(--dk-deep-space-blue-3);
+-  --accent: var(--lt-steel-blue);
++  --primary: var(--dk-mint);
++  --primary-hover: color-mix(in srgb, var(--dk-mint) 70%, var(--lt-cream));
++  --primary-contrast: var(--dk-ink);
++  --primary-tint: color-mix(in srgb, var(--dk-pine) 70%, var(--dk-ink));
++  --accent: var(--dk-mint);
+ 
+   /* status colors */
+   --success-bg: #0e3a2b;
+   --success-text: #8fd9ae;
+-  --neutral-bg: var(--dk-deep-space-blue-2);
+-  --neutral-text: var(--lt-sky-blue-light);
+-  --info-bg: var(--dk-deep-space-blue-4);
+-  --info-text: var(--lt-light-blue);
++  --neutral-bg: color-mix(in srgb, var(--dk-pine) 60%, var(--dk-ink));
++  --neutral-text: var(--dk-mint);
++  --info-bg: var(--dk-pine);
++  --info-text: var(--lt-sand);
+   --warning-bg: #3a2c06;
+   --warning-text: #f2c66b;
+   --warning-text-strong: #f2c66b;
+@@ -200,11 +197,14 @@ and dark swatches dk-. Currently, Not every swatch is used.
+   /*
+   hero and brand surfaces
+   */
+-  --hero-from: var(--dk-ink-black-4);
+-  --hero-to: var(--dk-deep-space-blue-4);
+-  --hero-text: var(--dk-text);
+-  --hero-text-soft: var(--lt-sky-blue-light);
+-  --hero-drop: color-mix(in srgb, var(--lt-steel-blue) 40%, transparent);
++  --hero-from: var(--dk-ink-raised);
++  --hero-to: var(--dk-pine);
++  --hero-text: var(--lt-cream);
++  --hero-text-soft: color-mix(in srgb, var(--dk-mint) 50%, var(--lt-cream));
++  --hero-drop: color-mix(in srgb, var(--dk-mint) 35%, transparent);
++
++  --leaf-opacity-nav: 0.7;
++  --leaf-opacity-hero: 0.9;
+ 
+   /* elevation */
+   --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.55);
+diff --git a/src/Services/Notifications/Insurance.Notifications/Templates/EmailBuilder.cs b/src/Services/Notifications/Insurance.Notifications/Templates/EmailBuilder.cs
+index e920702..f7eb2c6 100644
+--- a/src/Services/Notifications/Insurance.Notifications/Templates/EmailBuilder.cs
++++ b/src/Services/Notifications/Insurance.Notifications/Templates/EmailBuilder.cs
+@@ -19,10 +19,10 @@ public sealed class EmailBuilder
+ {
+     /// <summary>The company name in every email (subjects, text and footer). Change it here to rebrand them all.</summary>
+     public const string Brand = "KVBInsurance";
+-    private const string Primary = "#01497c";
+-    private const string Ink = "#0b2233";
+-    private const string Muted = "#52677a";
+-    private const string Border = "#d6e4ee";
++    private const string Primary = "#12544f";   // the website's pine green
++    private const string Ink = "#092328";
++    private const string Muted = "#5e6b45";
++    private const string Border = "#eae2d6";
+ 
+     private readonly string _subject;
+     private readonly string _preheader;
+@@ -60,7 +60,7 @@ public sealed class EmailBuilder
+     /// <summary>A highlighted box, for the one thing the customer must not miss (e.g. a rejection reason).</summary>
+     public EmailBuilder Callout(string title, string text, bool warning = false)
+     {
+-        var (bg, edge) = warning ? ("#fff4e5", "#b45309") : ("#eaf3f9", Primary);
++        var (bg, edge) = warning ? ("#fff4e5", "#b45309") : ("#eef1e8", Primary);
+         _html.Append($"""
+             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;border-collapse:collapse;">
+               <tr><td style="background:{bg};border-left:4px solid {edge};padding:12px 16px;border-radius:4px;">
+@@ -79,7 +79,7 @@ public sealed class EmailBuilder
+     {
+         _html.Append($"""
+             <p style="margin:0 0 6px;font-size:13px;color:{Muted};">{E(label)}</p>
+-            <p style="margin:0 0 20px;padding:14px 16px;background:#eaf3f9;border-radius:6px;text-align:center;font-family:Consolas,Menlo,monospace;font-size:22px;letter-spacing:2px;color:{Ink};">{E(code)}</p>
++            <p style="margin:0 0 20px;padding:14px 16px;background:#eef1e8;border-radius:6px;text-align:center;font-family:Consolas,Menlo,monospace;font-size:22px;letter-spacing:2px;color:{Ink};">{E(code)}</p>
+             """);
+         _text.AppendLine($"{label}: {code}").AppendLine();
+         return this;
+@@ -109,7 +109,7 @@ public sealed class EmailBuilder
+         _html.Append($"""
+             <table role="presentation" cellpadding="0" cellspacing="0" style="margin:4px 0 24px;">
+               <tr><td style="background:{Primary};border-radius:6px;">
+-                <a href="{E(url)}" style="display:inline-block;padding:12px 22px;font-size:15px;font-weight:bold;color:#ffffff;text-decoration:none;">{E(label)}</a>
++                <a href="{E(url)}" style="display:inline-block;padding:12px 22px;font-size:15px;font-weight:bold;color:#f7f2eb;text-decoration:none;">{E(label)}</a>
+               </td></tr>
+             </table>
+             <p style="margin:0 0 16px;font-size:12px;line-height:1.5;color:{Muted};">If the button doesn't work, copy this link into your browser:<br><a href="{E(url)}" style="color:{Primary};word-break:break-all;">{E(url)}</a></p>
+@@ -143,13 +143,13 @@ public sealed class EmailBuilder
+             <!doctype html>
+             <html lang="en">
+             <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{E(_subject)}</title></head>
+-            <body style="margin:0;padding:0;background:#f2f6f9;font-family:Segoe UI,Helvetica,Arial,sans-serif;">
++            <body style="margin:0;padding:0;background:#f7f2eb;font-family:Segoe UI,Helvetica,Arial,sans-serif;">
+               <span style="display:none;max-height:0;overflow:hidden;opacity:0;">{E(_preheader)}</span>
+-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f2f6f9;padding:24px 12px;">
++              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f7f2eb;padding:24px 12px;">
+                 <tr><td align="center">
+                   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border:1px solid {Border};border-radius:10px;overflow:hidden;">
+                     <tr><td style="background:{Primary};padding:18px 28px;">
+-                      <span style="font-size:20px;font-weight:bold;color:#ffffff;letter-spacing:0.3px;">&#9730; {Brand}</span>
++                      <span style="font-size:20px;font-weight:bold;color:#f7f2eb;letter-spacing:0.3px;">&#127810; {Brand}</span>
+                     </td></tr>
+                     <tr><td style="padding:28px;">{_html}</td></tr>
+                     <tr><td style="padding:18px 28px;border-top:1px solid {Border};font-size:12px;line-height:1.5;color:{Muted};">

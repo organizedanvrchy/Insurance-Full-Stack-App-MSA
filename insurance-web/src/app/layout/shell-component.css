@@ -1,4 +1,4 @@
-/* App shell: navigation bar (centered links, account menu, hamburger, rain), page area and footer. */
+/* App shell: navigation bar (centered links, account menu, hamburger, falling leaves), page area and footer. */
 
 /* Keep the footer at the bottom even on short pages */
 :host {
@@ -27,7 +27,7 @@
   border-bottom: 1px solid var(--border);
 }
 
-/* Everything in the bar sits above the rain */
+/* Everything in the bar sits above the leaves */
 .brand,
 .links,
 .actions {
@@ -147,37 +147,26 @@
   color: var(--text-muted);
 }
 
-/* ---- Rain in the nav bar ---- */
-.nav-rain {
+/* ---- Falling leaves in the nav bar ---- */
+.nav-leaves {
   position: absolute;
   inset: 0;
   z-index: 0;
   overflow: hidden;
-  /* drops are clipped to the bar */
+  /* leaves are clipped to the bar */
   pointer-events: none;
   /* never blocks clicks */
 }
 
-.drop {
-  position: absolute;
-  top: -30px;
-  width: 1.5px;
-  border-radius: 2px;
-  background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--accent) 55%, transparent));
-  animation: nav-fall linear infinite;
-}
-
-@keyframes nav-fall {
-  to {
-    transform: translateY(150px);
-  }
+/* The shape and movement are in shared/styles/falling-leaves.css */
+.leaf {
+  top: -20px;
+  opacity: var(--leaf-opacity-nav);
+  --fall: 130px;
+  --sway: 12px;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .nav-rain {
-    display: none;
-  }
-
   .dropdown {
     animation: none;
   }

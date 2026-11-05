@@ -1,16 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
   <style>
-    .m { fill: #01497c; }
-    .h { fill: none; stroke: #01497c; stroke-width: 2.4; stroke-linecap: round; }
-    .d { fill: #2c7da0; }
+    .m { fill: #12544f; }
+    .h { fill: none; stroke: #12544f; stroke-width: 2.4; stroke-linecap: round; }
+    .a { fill: #c0672a; }
+    .b { fill: #d98c3a; }
     @media (prefers-color-scheme: dark) {
-      .m { fill: #89c2d9; }
-      .h { stroke: #89c2d9; }
-      .d { fill: #61a5c2; }
+      .m { fill: #8bbb92; }
+      .h { stroke: #8bbb92; }
     }
   </style>
   <path class="m" d="M4 16C4 9.37 9.37 4 16 4s12 5.37 12 12H4z"/>
   <path class="h" d="M16 16v8.5a3 3 0 0 1-6 0"/>
-  <path class="d" d="M22 19.5c1.3 1.8 2 3 2 4a2 2 0 0 1-4 0c0-1 .7-2.2 2-4z"/>
-  <path class="d" d="M27 22c.9 1.2 1.4 2 1.4 2.7a1.4 1.4 0 0 1-2.8 0c0-.7.5-1.5 1.4-2.7z"/>
+  <path class="a" d="M19.5 27.5c0-4.4 2.9-7.3 7.3-7.5-.2 4.4-3 7.3-7.3 7.5z"/>
+  <path class="b" d="M25.6 31c.3-2.6 2.2-4.2 4.7-4.1-.3 2.5-2.2 4.1-4.7 4.1z"/>
 </svg>

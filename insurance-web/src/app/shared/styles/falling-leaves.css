@@ -1,0 +1,43 @@
+/*
+Falling autumn leaves: the nav bar (layout/shell) and the sign-in panel (shared/components/auth-brand-panel).
+Each place sets its container, where the leaves start (top), how far they fall (--fall), how far they
+sway (--sway) and how strong they are (opacity). Each leaf gets its size, color and timing from the template.
+*/
+.leaf {
+  position: absolute;
+  /* Two rounded corners make the leaf shape; the thin diagonal line is its middle vein. */
+  border-radius: 0 100% 0 100%;
+  background:
+    linear-gradient(135deg, transparent 46%, rgb(0 0 0 / 0.22) 50%, transparent 54%),
+    var(--leaf-color);
+  animation: leaf-fall ease-in-out infinite;
+}
+
+/* Every other leaf sways and turns the opposite way */
+.leaf.alt {
+  animation-name: leaf-fall-alt;
+}
+
+/* Drift down while swaying side to side and turning */
+@keyframes leaf-fall {
+  0%   { transform: translate(0, 0) rotate(0deg); }
+  25%  { transform: translate(var(--sway), calc(var(--fall) * 0.25)) rotate(70deg); }
+  50%  { transform: translate(calc(var(--sway) * -0.5), calc(var(--fall) * 0.5)) rotate(150deg); }
+  75%  { transform: translate(calc(var(--sway) * 0.8), calc(var(--fall) * 0.75)) rotate(225deg); }
+  100% { transform: translate(0, var(--fall)) rotate(310deg); }
+}
+
+@keyframes leaf-fall-alt {
+  0%   { transform: translate(0, 0) rotate(0deg); }
+  25%  { transform: translate(calc(var(--sway) * -1), calc(var(--fall) * 0.25)) rotate(-60deg); }
+  50%  { transform: translate(calc(var(--sway) * 0.5), calc(var(--fall) * 0.5)) rotate(-140deg); }
+  75%  { transform: translate(calc(var(--sway) * -0.8), calc(var(--fall) * 0.75)) rotate(-215deg); }
+  100% { transform: translate(0, var(--fall)) rotate(-290deg); }
+}
+
+/* Motion is decoration only: people who ask their system for less motion don't get it */
+@media (prefers-reduced-motion: reduce) {
+  .leaf {
+    display: none;
+  }
+}
