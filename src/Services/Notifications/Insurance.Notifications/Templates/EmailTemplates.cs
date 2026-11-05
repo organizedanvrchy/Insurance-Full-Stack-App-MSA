@@ -144,6 +144,16 @@ public class EmailTemplates
             .Callout("Want your account back?", $"If you'd like your account reactivated, contact support at {_links.SupportEmail}.")
             .Build();
 
+    /// <summary>An administrator reactivated the account: the customer can sign in again.</summary>
+    public RenderedEmail AccountReactivated(AccountReactivated e) =>
+        Email($"Your {Brand} account has been reactivated", "You can sign in to your account again.")
+            .Heading("Your account has been reactivated")
+            .Paragraph($"Hi {FirstName(e.FullName)},")
+            .Paragraph($"Good news: your {Brand} account was reactivated on {DateTimeText(e.ReactivatedAtUtc)}. You can sign in again with your email and password, and your policies and claims are just as you left them.")
+            .Button("Sign in", _links.SignIn)
+            .Small($"Didn't ask for this? Contact us right away at {_links.SupportEmail}.")
+            .Build();
+
     public RenderedEmail PasswordChanged(PasswordChanged e) =>
         Email($"Your {Brand} password was changed", "Your password was just changed.")
             .Heading("Your password was changed")

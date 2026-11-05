@@ -169,7 +169,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the enrollment saga, the ou
 | Claims | Active policy only. The incident must fall inside the coverage period and not be in the future. No overdue premiums. The amount cannot exceed the remaining coverage (policy coverage minus approved and paid claims). |
 | Claim workflow | Submitted, Under review, then Approved or Rejected, then (approved only) Paid. A reviewer can also ask for more information, and the customer sends the claim back after responding. A rejection or a request for more information needs a note. Concurrent edits are detected. |
 | Claim documents | PDF, JPG or PNG, up to 10 MB each and 5 per claim. Customers can add them until a decision is made. They can't be deleted. |
-| Accounts | Deactivated accounts cannot sign in and existing tokens stop working, and the customer is emailed that support can reactivate them. Admin accounts cannot be deactivated from the UI. |
+| Accounts | Deactivated accounts cannot sign in and existing tokens stop working, and the customer is emailed that support can reactivate them (and emailed again when it is). Signing in with the right password to a deactivated account says it's deactivated; a wrong password only ever says "Invalid email or password." Admin accounts cannot be deactivated from the UI. |
 | Admin password reset | The customer's password stops working right away, and a 14-character **one-time password** valid for **30 minutes** is emailed to them (only its hash is stored). Signing in with it takes them straight to "Choose a new password" (the new password twice; the one-time password isn't asked for again), and the gateway answers `403` to every other request until they do. Sessions that were open before the reset are signed out. They must sign in and choose the password within the 30 minutes; after that, signing in gets a `401` saying it expired, and the admin presses "Reset password" again. |
 
 ## Getting started
@@ -424,7 +424,7 @@ The **Notifications service** sends every email. It listens to events the other 
 
 ```mermaid
 flowchart LR
-    ID["Identity"] -- "CustomerRegistered<br/>EmailVerificationRequested<br/>PasswordResetByAdmin<br/>AccountDeactivated" --> BUS[["RabbitMQ"]]
+    ID["Identity"] -- "CustomerRegistered<br/>EmailVerificationRequested<br/>PasswordResetByAdmin<br/>AccountDeactivated, AccountReactivated" --> BUS[["RabbitMQ"]]
     EN["Enrollments"] -- "EnrollmentActivated<br/>EnrollmentCancelled" --> BUS
     BI["Billing<br/>(checkout + hourly reminder job)"] -- "PaymentReceived, PaymentDeclined<br/>PaymentReminderDue" --> BUS
     CL["Claims"] -- "ClaimSubmitted<br/>ClaimStatusChanged" --> BUS
@@ -439,6 +439,7 @@ flowchart LR
 | Your email address was changed | To the **old** address after a change (when an administrator made it at the customer's request, it says so): "if this was you, ignore it; if not, contact support immediately" | No |
 | Your password was changed | After a password change, with the same warning | No |
 | Your account has been deactivated | An admin deactivated the account: no more sign-ins, and "contact support to have it reactivated". Sent once per deactivation, to the deactivated account | No |
+| Your account has been reactivated | An admin reactivated the account: they can sign in again. Sent once per reactivation | No |
 | Your password has been reset | An admin reset the password: the one-time password, "enter it the next time you sign in", and when its 30 minutes run out | No |
 | Policy active / Policy cancelled | The enrollment saga completes, the customer cancels | No |
 | Payment receipt | Every installment paid at checkout (receipt number, payment method, installment *n* of *N*, next payment, link to the in-app receipt) | No |

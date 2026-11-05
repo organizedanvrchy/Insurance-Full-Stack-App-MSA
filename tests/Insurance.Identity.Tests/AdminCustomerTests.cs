@@ -151,14 +151,29 @@ public class AdminCustomerTests
     }
 
     [Fact]
-    public async Task Reactivating_sends_no_deactivation_notice()
+    public async Task Reactivating_tells_the_customer_once()
     {
         var user = await CustomerAsync();
         await _sut.SetActiveAsync(user.UserId, false);
 
+        var info = await _sut.SetActiveAsync(user.UserId, true);
+        await _sut.SetActiveAsync(user.UserId, true);                  // already active: no second email
+
+        Assert.True(info.IsActive);
+        Assert.Single(_events.OfType<AccountDeactivated>());
+        var e = Assert.Single(_events.OfType<AccountReactivated>());
+        Assert.Equal((user.UserId, user.Email), (e.UserId, e.Email));
+    }
+
+    [Fact]
+    public async Task Activating_an_account_that_was_never_deactivated_sends_nothing()
+    {
+        var user = await CustomerAsync();
+
         await _sut.SetActiveAsync(user.UserId, true);
 
-        Assert.Single(_events.OfType<AccountDeactivated>());
+        Assert.Empty(_events.OfType<AccountReactivated>());
+        Assert.Empty(_events.OfType<AccountDeactivated>());
     }
 
     [Fact]

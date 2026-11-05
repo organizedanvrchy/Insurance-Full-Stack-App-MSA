@@ -41,5 +41,8 @@ public record PasswordResetByAdmin(int UserId, string FullName, string Email, st
 /// </summary>
 public record AccountDeactivated(int UserId, string FullName, string Email, DateTime DeactivatedAtUtc);
 
+/// <summary>An administrator reactivated a deactivated account: the customer can sign in again.</summary>
+public record AccountReactivated(int UserId, string FullName, string Email, DateTime ReactivatedAtUtc);
+
 /// <summary>The password was changed. Email is told, in case it wasn't the account's owner.</summary>
 public record PasswordChanged(int UserId, string FullName, string Email, DateTime ChangedAtUtc);

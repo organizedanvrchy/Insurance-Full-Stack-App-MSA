@@ -44,20 +44,13 @@ public class CustomerService : ICustomerService
         var before = await GetAsync(userId);   // 404 for admins and unknown ids
         var customer = await _customers.SetActiveAsync(userId, isActive) ?? throw NotACustomer();
 
-        // Tell the customer, once: only when an active account is switched off. The deactivation stands even if the
-        // event can't be published.
+        // Tell the customer, once: only when the account actually changes. The change stands even if the event can't
+        // be published.
+        var now = _clock.GetUtcNow().UtcDateTime;
         if (before.IsActive && !customer.IsActive)
-        {
-            try
-            {
-                await _events.PublishAsync(new AccountDeactivated(customer.UserId, customer.FullName, customer.Email,
-                    _clock.GetUtcNow().UtcDateTime));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Could not publish AccountDeactivated for customer {UserId}.", userId);
-            }
-        }
+            await PublishQuietlyAsync(new AccountDeactivated(customer.UserId, customer.FullName, customer.Email, now));
+        else if (!before.IsActive && customer.IsActive)
+            await PublishQuietlyAsync(new AccountReactivated(customer.UserId, customer.FullName, customer.Email, now));
         return customer;
     }
 
@@ -91,6 +84,19 @@ public class CustomerService : ICustomerService
             oneTimePassword, expires, (int)Math.Round(_options.OneTimePasswordLifetime.TotalMinutes)));
         _logger.LogInformation("An administrator reset the password of customer {UserId}.", userId);
         return customer;
+    }
+
+    // Typed, so the event goes out as its own type (MassTransit routes by the compile-time type).
+    private async Task PublishQuietlyAsync<T>(T message) where T : class
+    {
+        try
+        {
+            await _events.PublishAsync(message);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not publish {Event}.", typeof(T).Name);
+        }
     }
 
     private static NotFoundException NotACustomer() => new("Customer not found.");   // a 404
