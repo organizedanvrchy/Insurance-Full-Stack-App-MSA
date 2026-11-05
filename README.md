@@ -278,6 +278,7 @@ Every setting can also be given as an environment variable (`:` becomes `__`), w
 | `Email:SupportEmail` | Notifications | Where customers get help. Every email says it's automated ("don't reply") and points here |
 | `BusinessTimeZone` | Every service | The insurer's time zone (IANA id, default `America/New_York`, i.e. EST/EDT): what "today" means for due dates, overdue premiums, coverage and claims, and the zone emails show times in |
 | `Email:SkipDomains` | Notifications | Recipient domains never emailed (e.g. `demo.example` against a real mail server) |
+| `Email:SkipReservedDomains` | Notifications | `true` on a real mail server: never email domains reserved for testing (`example.com`, `*.example`, `*.test`, ...), which it would refuse. Off locally, where Mailpit catches everything |
 | `Reminders:Enabled`, `Interval` | Billing | The payment reminder job (default on, every hour) |
 | `EmailVerification:LinkLifetime`, `ResendCooldown`, `MaxEmailsPerDay` | Identity | Defaults 15 minutes, 1 minute, 10 |
 | `Customers:OneTimePasswordLifetime` | Identity | How long an admin-reset one-time password works (default 30 minutes) |

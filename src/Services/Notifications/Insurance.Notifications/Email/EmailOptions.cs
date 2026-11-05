@@ -36,4 +36,12 @@ public class EmailOptions
     /// The email is recorded as Skipped instead.
     /// </summary>
     public string[] SkipDomains { get; set; } = Array.Empty<string>();
+
+    /// <summary>
+    /// Also skip the domains reserved for documentation and testing (RFC 2606 / 6761: example.com, example.net,
+    /// example.org and anything under .example, .test, .invalid or .localhost). A real mail server refuses them
+    /// ("Recipient address reserved by RFC 2606"), so test and demo accounts would only produce failures. Off by
+    /// default, because the local catch-all (Mailpit) and the end-to-end tests deliberately use such addresses.
+    /// </summary>
+    public bool SkipReservedDomains { get; set; }
 }

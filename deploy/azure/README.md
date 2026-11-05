@@ -47,7 +47,41 @@ The Container Apps environment needs the share registered first (environment →
 2. **Application → Containers → Edit and deploy**, select the container → **Volume mounts** → add `claimdocs` at
    `/data/claim-documents` → **Save**, then **Create** to deploy the new revision.
 
-## 4. Check it
+## 4. Email (Azure Communication Services)
+
+The Notifications service sends over SMTP, so Azure Communication Services needs no code, only settings.
+
+1. Create an **Email Communication Service** and, in it, an **Azure managed domain** (`<id>.azurecomm.net`, sender
+   `DoNotReply@<id>.azurecomm.net`). Create a **Communication Service** and connect the domain to it
+   (Communication Service → Email → Domains).
+2. Create the SMTP login: an Entra app whose client secret is the password, allowed to send through the
+   Communication Service:
+
+   ```bash
+   SMTP_APP=$(az ad app create --display-name kvbinsurance-smtp --query appId -o tsv)
+   az ad sp create --id "$SMTP_APP" -o none
+   az ad app credential reset --id "$SMTP_APP" --display-name smtp --years 1 --query password -o tsv   # the password, shown once
+   az role assignment create --assignee "$SMTP_APP" --role "Communication and Email Service Owner" \
+     --scope "$(az resource show --resource-group KVBInsurance-RG --name KVBInsurance-Communication --resource-type Microsoft.Communication/communicationServices --query id -o tsv)"
+   ```
+
+   Then Communication Service → Settings → **SMTP Usernames** → add one for `kvbinsurance-smtp`.
+3. Give the settings to the Notifications app (the script asks for them on a first deployment):
+
+   ```bash
+   read -rsp "SMTP password (hidden): " SMTP_PASSWORD; echo
+   az containerapp secret set --resource-group KVBInsurance-RG --name notifications --secrets smtp-password="$SMTP_PASSWORD" -o none; unset SMTP_PASSWORD
+   az containerapp update --resource-group KVBInsurance-RG --name notifications -o none --set-env-vars \
+     Email__Host=smtp.azurecomm.net Email__Port=587 Email__Security=StartTls Email__Username="<SMTP username>" \
+     Email__Password=secretref:smtp-password Email__FromAddress="DoNotReply@<domain>.azurecomm.net" Email__SkipReservedDomains=true
+   ```
+
+`Email__SkipReservedDomains=true` skips addresses at domains reserved for testing (`example.com`, `*.example`,
+`*.test`, ...), which Azure refuses with "Recipient address reserved by RFC 2606"; those emails are recorded as
+Skipped. The client secret expires after a year: run `credential reset` again and repeat the `secret set`.
+Azure managed domains have low sending limits (Email Communication Service → Quotas); a custom domain raises them.
+
+## 5. Check it
 
 ```bash
 curl https://<gateway fqdn>/health
@@ -57,7 +91,7 @@ az containerapp logs show --resource-group KVBInsurance-RG --name identity --tai
 Each service creates its tables on first start. A serverless database that was paused can take up to a minute to
 wake up: the first start may fail and restart once.
 
-## 5. Point the Angular app at the gateway
+## 6. Point the Angular app at the gateway
 
 Set `apiUrl` in `insurance-web/src/environments/environment.ts` to `https://<gateway fqdn>/api`. The Static Web App
 gets the build (`insurance-web/dist/insurance-web/browser`); `public/staticwebapp.config.json` sends every app

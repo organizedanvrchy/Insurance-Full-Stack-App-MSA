@@ -79,6 +79,11 @@ public class NotificationDispatcher : INotificationDispatcher
                 await SkipAsync(n, $"Recipient domain is in Email:SkipDomains ({to}).");
                 return;
             }
+            if (_options.SkipReservedDomains && IsReservedDomain(to))
+            {
+                await SkipAsync(n, $"Recipient domain is reserved for testing and can't receive email ({to}).");
+                return;
+            }
 
             var email = await n.Render(user);
             await _sender.SendAsync(new EmailMessage(to, user.FullName, email.Subject, email.Html, email.Text, email.Attachments), ct);
@@ -104,5 +109,17 @@ public class NotificationDispatcher : INotificationDispatcher
         if (at < 0) return false;
         var domain = address[(at + 1)..];
         return _options.SkipDomains.Any(d => domain.Equals(d.Trim().TrimStart('@'), StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static readonly string[] ReservedDomains = { "example.com", "example.net", "example.org" };
+    private static readonly string[] ReservedTopLevelDomains = { "example", "test", "invalid", "localhost" };
+
+    /// <summary>A domain reserved for documentation and testing (RFC 2606, RFC 6761), or one under it.</summary>
+    public static bool IsReservedDomain(string address)
+    {
+        var at = address.LastIndexOf('@');
+        var domain = (at < 0 ? address : address[(at + 1)..]).Trim().TrimEnd('.').ToLowerInvariant();
+        static bool IsOrUnder(string domain, string reserved) => domain == reserved || domain.EndsWith("." + reserved);
+        return ReservedDomains.Any(d => IsOrUnder(domain, d)) || ReservedTopLevelDomains.Any(t => IsOrUnder(domain, t));
     }
 }

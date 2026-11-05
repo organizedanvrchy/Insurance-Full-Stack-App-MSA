@@ -28,6 +28,13 @@ read -rp  "SQL admin username: " SQL_USER
 read -rsp "SQL admin password (hidden): " SQL_PASSWORD; echo
 read -rsp "Service Bus connection string (hidden): " SB_CONNECTION; echo
 read -rsp "JWT key, at least 32 characters (hidden): " JWT_KEY; echo
+echo "Email through Azure Communication Services (deploy/azure/README.md, \"Email\"). Leave the username empty"
+echo "to only write emails to the Notifications log for now."
+read -rp  "SMTP username: " SMTP_USER
+if [[ -n $SMTP_USER ]]; then
+  read -rsp "SMTP password, the Entra app's client secret (hidden): " SMTP_PASSWORD; echo
+  read -rp  "Sender address (DoNotReply@<your domain>.azurecomm.net): " MAIL_FROM
+fi
 SITE_URL=${SITE_URL%/}
 
 [[ $SITE_URL == https://* ]] || { echo "The site URL should start with https://"; exit 1; }
@@ -86,11 +93,33 @@ create_service claims Claims \
   ClaimDocuments__RootPath=/data/claim-documents \
   Services__Identity=http://identity/ Services__Catalog=http://catalog/ Services__Enrollments=http://enrollments/ \
   Services__Billing=http://billing/
-# No mail server yet: an empty Email__Host makes the service write each email to its log instead of sending it.
-create_service notifications Notifications \
-  "Email__Host= " Email__AppBaseUrl="$SITE_URL" \
-  Services__Identity=http://identity/ Services__Catalog=http://catalog/ Services__Enrollments=http://enrollments/ \
-  Services__Claims=http://claims/
+# Without an SMTP username, an empty Email__Host makes the service write each email to its log instead of sending it.
+# Addresses at domains reserved for testing (example.com, .example, ...) are skipped: a real mail server refuses them.
+if [[ -n $SMTP_USER ]]; then
+  mail_settings=(Email__Host=smtp.azurecomm.net Email__Port=587 Email__Security=StartTls Email__Username="$SMTP_USER"
+                 Email__Password=secretref:smtp-password Email__FromAddress="$MAIL_FROM")
+  mail_secrets=("smtp-password=$SMTP_PASSWORD")
+else
+  mail_settings=("Email__Host= ")
+  mail_secrets=()
+fi
+if exists notifications; then
+  echo "  notifications already exists, skipped"
+else
+  echo "  creating notifications..."
+  az containerapp create --resource-group "$RG" --environment "$ENV_NAME" --name notifications \
+    --image "$ACR_SERVER/notifications:$TAG" --registry-server "$ACR_SERVER" --registry-identity "$IDENTITY_ID" \
+    --user-assigned "$IDENTITY_ID" \
+    --ingress internal --target-port 8080 \
+    --cpu 0.25 --memory 0.5Gi --min-replicas 1 --max-replicas 1 \
+    --secrets "database=$(connection_string Notifications)" "jwt-key=$JWT_KEY" "service-bus=$SB_CONNECTION" "${mail_secrets[@]}" \
+    --env-vars ConnectionStrings__Database=secretref:database Jwt__Key=secretref:jwt-key \
+               ServiceBus__ConnectionString=secretref:service-bus BusinessTimeZone="$TIME_ZONE" \
+               "${mail_settings[@]}" Email__SkipReservedDomains=true Email__AppBaseUrl="$SITE_URL" \
+               Services__Identity=http://identity/ Services__Catalog=http://catalog/ Services__Enrollments=http://enrollments/ \
+               Services__Claims=http://claims/ \
+    -o none
+fi
 
 echo "Creating the gateway (public)..."
 if exists gateway; then
