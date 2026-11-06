@@ -393,5 +393,5 @@ Insurance-Full-Stack-App-MSA/
 Built by a team of three as a full-stack microservices project:
 
 - **Vimal Ramnarain** ([@organizedanvrchy](https://github.com/organizedanvrchy))
-- **Khalon** ([@KR-Techno](https://github.com/KR-Techno))
-- [@BigFigsCode](https://github.com/BigFigsCode)
+- **Khalon Rodney** ([@KR-Techno](https://github.com/KR-Techno))
+- **Brandon Figueroa** [@BigFigsCode](https://github.com/BigFigsCode)
