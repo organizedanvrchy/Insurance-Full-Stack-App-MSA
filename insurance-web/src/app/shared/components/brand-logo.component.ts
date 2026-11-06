@@ -6,14 +6,9 @@ import { Component, input } from '@angular/core';
   selector: 'app-brand-logo',
   template: `
     <span class="logo" [class.large]="size() === 'lg'">
-      <svg class="mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
-        <path class="canopy" d="M4 16C4 9.37 9.37 4 16 4s12 5.37 12 12H4z" />
-        <path class="handle" d="M16 16v8.5a3 3 0 0 1-6 0" />
-        <path class="leaf leaf-a" d="M19.5 27.5c0-4.4 2.9-7.3 7.3-7.5-.2 4.4-3 7.3-7.3 7.5z" />
-        <path class="leaf leaf-b" d="M25.6 31c.3-2.6 2.2-4.2 4.7-4.1-.3 2.5-2.2 4.1-4.7 4.1z" />
-      </svg>
-      <span class="word"><span class="accent">KVB</span> Insurance</span>
+      <img class="mark" src="favicon.png" alt="" aria-hidden="true" />
     </span>
+
   `,
   styles: [
     `
@@ -34,29 +29,8 @@ import { Component, input } from '@angular/core';
         gap: 0.65rem;
       }
       .mark {
-        width: 1.7em;
-        height: 1.7em;
-      }
-      .canopy {
-        fill: var(--logo-mark, var(--primary));
-      }
-      .handle {
-        fill: none;
-        stroke: var(--logo-mark, var(--primary));
-        stroke-width: 2.4;
-        stroke-linecap: round;
-      }
-      .leaf-a {
-        fill: var(--leaf-1);
-      }
-      .leaf-b {
-        fill: var(--leaf-2);
-      }
-      .word {
-        color: var(--logo-text, var(--text));
-      }
-      .accent {
-        color: var(--logo-accent, var(--accent));
+        width: auto;
+        height: 3em;
       }
     `,
   ],
